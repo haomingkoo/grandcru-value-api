@@ -62,4 +62,3 @@ def compute_deal_score(
     confidence_component = min(math.log10(rating_count + 1) / 3.0, 1.0) * 10.0
 
     return round(discount_component + rating_component + confidence_component, 2)
-

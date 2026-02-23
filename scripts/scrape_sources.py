@@ -1,0 +1,411 @@
+"""Scrape Grand Cru base site and Platinum portal into CSV files.
+
+This refactor replaces notebook-only scraping with a reusable script:
+- Source A: grandcruwines.com (catalog reference)
+- Source B: platinum portal domain (configurable)
+"""
+
+import argparse
+import csv
+import json
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from urllib.parse import urljoin
+
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+
+
+GRANDCRU_NAME_SELECTORS = [
+    "a.boost-pfs-filter-product-item-title",
+    "a.full-unstyled-link",
+    "a.card__heading-link",
+]
+GRANDCRU_PRICE_SELECTORS = [
+    "span.boost-pfs-filter-product-item-sale-price",
+    "span.boost-pfs-filter-product-item-regular-price",
+    "span.price-item--sale",
+    "span.price-item--regular",
+]
+
+PLATINUM_NAME_SELECTORS = [
+    "a.title",
+    "a[href*='/wines/']",
+    "a[href*='/wine/']",
+    "a[href*='/products/']",
+]
+PLATINUM_PRICE_SELECTORS = [
+    "strong > span.item-price",
+    "span.item-price",
+    "span[class*='price']",
+    "[itemprop='price']",
+]
+
+
+@dataclass
+class ScrapeResult:
+    rows: list[dict[str, str]]
+    pages_scraped: int
+
+
+def make_driver(*, headless: bool, page_load_timeout: int) -> webdriver.Chrome:
+    options = webdriver.ChromeOptions()
+    if headless:
+        options.add_argument("--headless=new")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    driver = webdriver.Chrome(options=options)
+    driver.set_page_load_timeout(page_load_timeout)
+    return driver
+
+
+def find_first_element(root, selectors: list[str]):
+    for selector in selectors:
+        try:
+            return root.find_element(By.CSS_SELECTOR, selector)
+        except NoSuchElementException:
+            continue
+    return None
+
+
+def first_non_empty_text(root, selectors: list[str]) -> str:
+    for selector in selectors:
+        try:
+            element = root.find_element(By.CSS_SELECTOR, selector)
+            text = (element.text or "").strip()
+            if text:
+                return text
+        except NoSuchElementException:
+            continue
+    return "N/A"
+
+
+def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = ["name", "price", "url"]
+    if any("in_stock" in row for row in rows):
+        fieldnames.append("in_stock")
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def save_page_html(driver: webdriver.Chrome, debug_dir: Path | None, source: str, page: int) -> None:
+    if debug_dir is None:
+        return
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    filename = debug_dir / f"{source}_page_{page}.html"
+    filename.write_text(driver.page_source, encoding="utf-8")
+
+
+def scrape_grandcru(
+    driver: webdriver.Chrome,
+    *,
+    base_url: str,
+    max_pages: int | None,
+    sleep_seconds: float,
+    debug_dir: Path | None,
+) -> ScrapeResult:
+    rows: list[dict[str, str]] = []
+    seen_names: set[str] = set()
+    page = 1
+    pages_scraped = 0
+
+    base = base_url.rstrip("/")
+    while True:
+        if max_pages is not None and page > max_pages:
+            break
+
+        url = f"{base}/collections/all?pf_st_stock_status=true&page={page}"
+        print(f"[grandcru] page {page}: {url}")
+        try:
+            driver.get(url)
+        except (TimeoutException, WebDriverException) as exc:
+            print(f"[grandcru] page load error on page {page}: {exc}")
+            break
+
+        time.sleep(sleep_seconds)
+        save_page_html(driver, debug_dir, "grandcru", page)
+
+        items = driver.find_elements(By.CSS_SELECTOR, "div.boost-pfs-filter-product-item")
+        if not items:
+            items = driver.find_elements(By.CSS_SELECTOR, "li.grid__item")
+        if not items:
+            print(f"[grandcru] no items found on page {page}; stopping.")
+            break
+
+        page_new_rows = 0
+        for item in items:
+            link_element = find_first_element(item, GRANDCRU_NAME_SELECTORS)
+            if link_element is None:
+                continue
+
+            name = (link_element.text or "").strip()
+            href = (link_element.get_attribute("href") or "").strip()
+            if not name or not href:
+                continue
+
+            canonical_url = urljoin(base + "/", href).replace("/collections/all", "")
+            price = first_non_empty_text(item, GRANDCRU_PRICE_SELECTORS)
+
+            key = name.lower()
+            if key in seen_names:
+                continue
+
+            seen_names.add(key)
+            rows.append({"name": name, "price": price, "url": canonical_url, "in_stock": "true"})
+            page_new_rows += 1
+
+        print(f"[grandcru] captured {page_new_rows} new rows on page {page}.")
+        pages_scraped += 1
+        page += 1
+
+    return ScrapeResult(rows=rows, pages_scraped=pages_scraped)
+
+
+def click_in_stock_filter(driver: webdriver.Chrome, wait: WebDriverWait) -> None:
+    try:
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "a[href='#']")))
+        element = driver.execute_script(
+            """
+            return [...document.querySelectorAll("a[href='#']")].find(
+                a => a.textContent.trim().toLowerCase() === "in stock"
+            );
+            """
+        )
+        if element:
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
+            time.sleep(0.4)
+            driver.execute_script("arguments[0].click();", element)
+            time.sleep(1.8)
+            print("[platinum] clicked 'In stock' filter.")
+        else:
+            print("[platinum] 'In stock' filter not found; continuing.")
+    except Exception as exc:
+        print(f"[platinum] failed to click 'In stock' filter: {exc}")
+
+
+def click_next_page(driver: webdriver.Chrome) -> bool:
+    candidates = driver.find_elements(By.CSS_SELECTOR, "li.ais-Pagination-item--nextPage a")
+    if not candidates:
+        return False
+
+    next_button = candidates[0]
+    parent = next_button.find_element(By.XPATH, "./..")
+    parent_class = (parent.get_attribute("class") or "").lower()
+    if "disabled" in parent_class:
+        return False
+
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", next_button)
+        time.sleep(0.3)
+        next_button.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", next_button)
+    return True
+
+
+def is_platinum_in_stock(card) -> bool:
+    oos_text_tokens = ("out of stock", "sold out")
+    oos_badges = card.find_elements(By.CSS_SELECTOR, "span.oos, .oos, .badge, [class*='oos']")
+    for badge in oos_badges:
+        text = (badge.text or "").strip().lower()
+        if any(token in text for token in oos_text_tokens):
+            return False
+
+    full_text = (card.text or "").strip().lower()
+    if any(token in full_text for token in oos_text_tokens):
+        return False
+
+    add_to_cart_buttons = card.find_elements(
+        By.CSS_SELECTOR,
+        "a.btn-add-to-cart, button.btn-add-to-cart, [onclick*='addToCart']",
+    )
+    return bool(add_to_cart_buttons)
+
+
+def scrape_platinum(
+    driver: webdriver.Chrome,
+    *,
+    base_url: str,
+    wines_path: str,
+    max_pages: int | None,
+    sleep_seconds: float,
+    debug_dir: Path | None,
+    include_oos: bool,
+) -> ScrapeResult:
+    rows: list[dict[str, str]] = []
+    seen_names: set[str] = set()
+    pages_scraped = 0
+
+    base = base_url.rstrip("/")
+    path = wines_path if wines_path.startswith("/") else f"/{wines_path}"
+    start_url = f"{base}{path}"
+    print(f"[platinum] opening {start_url}")
+    driver.get(start_url)
+    wait = WebDriverWait(driver, 20)
+    time.sleep(sleep_seconds)
+
+    click_in_stock_filter(driver, wait)
+
+    page = 1
+    while True:
+        if max_pages is not None and page > max_pages:
+            break
+
+        print(f"[platinum] page {page}")
+        try:
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "a.title, a[href*='/wines/']")))
+        except TimeoutException:
+            print(f"[platinum] no card links found on page {page}; stopping.")
+            break
+
+        save_page_html(driver, debug_dir, "platinum", page)
+
+        cards = driver.find_elements(By.CSS_SELECTOR, "div.card.col-6")
+        if not cards:
+            cards = driver.find_elements(By.CSS_SELECTOR, "div.card")
+        if not cards:
+            cards = driver.find_elements(By.CSS_SELECTOR, "article")
+        if not cards:
+            print(f"[platinum] no cards found on page {page}; stopping.")
+            break
+
+        page_new_rows = 0
+        page_oos_skipped = 0
+        for card in cards:
+            in_stock = is_platinum_in_stock(card)
+            if not in_stock and not include_oos:
+                page_oos_skipped += 1
+                continue
+
+            link_element = find_first_element(card, PLATINUM_NAME_SELECTORS)
+            if link_element is None:
+                continue
+
+            name = (link_element.text or "").strip()
+            href = (link_element.get_attribute("href") or "").strip()
+            if not name or not href:
+                continue
+
+            href = urljoin(base + "/", href)
+            price = first_non_empty_text(card, PLATINUM_PRICE_SELECTORS)
+            key = name.lower()
+            if key in seen_names:
+                continue
+
+            seen_names.add(key)
+            rows.append(
+                {
+                    "name": name,
+                    "price": price,
+                    "url": href,
+                    "in_stock": "true" if in_stock else "false",
+                }
+            )
+            page_new_rows += 1
+
+        if include_oos:
+            print(f"[platinum] captured {page_new_rows} new rows on page {page}.")
+        else:
+            print(
+                f"[platinum] captured {page_new_rows} new rows on page {page}; "
+                f"skipped {page_oos_skipped} out-of-stock cards."
+            )
+        pages_scraped += 1
+
+        if not click_next_page(driver):
+            break
+        page += 1
+        time.sleep(max(sleep_seconds, 1.5))
+
+    return ScrapeResult(rows=rows, pages_scraped=pages_scraped)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Scrape Grand Cru and Platinum wine catalogs")
+    parser.add_argument("--grandcru-base-url", default="https://grandcruwines.com")
+    parser.add_argument("--platinum-base-url", default="https://platinum.grandcruwines.com")
+    parser.add_argument("--platinum-wines-path", default="/wines")
+    parser.add_argument("--output-dir", default="seed")
+    parser.add_argument("--grandcru-csv", default="grandcru_wines.csv")
+    parser.add_argument("--platinum-csv", default="platinum_wines.csv")
+    parser.add_argument("--metadata-json", default="scrape_run.json")
+    parser.add_argument(
+        "--debug-dir",
+        default=None,
+        help="If set, saves fetched page HTML for selector debugging",
+    )
+    parser.add_argument("--max-pages", type=int, default=None, help="Optional page cap for both sources")
+    parser.add_argument("--sleep-seconds", type=float, default=2.0)
+    parser.add_argument("--page-load-timeout", type=int, default=60)
+    parser.add_argument(
+        "--include-oos",
+        action="store_true",
+        help="Include out-of-stock Platinum listings (default excludes them)",
+    )
+    parser.add_argument("--headed", action="store_true", help="Run with browser UI visible")
+    args = parser.parse_args()
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    debug_dir = Path(args.debug_dir) if args.debug_dir else None
+
+    driver = make_driver(headless=not args.headed, page_load_timeout=args.page_load_timeout)
+    try:
+        grandcru = scrape_grandcru(
+            driver,
+            base_url=args.grandcru_base_url,
+            max_pages=args.max_pages,
+            sleep_seconds=args.sleep_seconds,
+            debug_dir=debug_dir,
+        )
+        platinum = scrape_platinum(
+            driver,
+            base_url=args.platinum_base_url,
+            wines_path=args.platinum_wines_path,
+            max_pages=args.max_pages,
+            sleep_seconds=args.sleep_seconds,
+            debug_dir=debug_dir,
+            include_oos=args.include_oos,
+        )
+    finally:
+        driver.quit()
+
+    grandcru_path = output_dir / args.grandcru_csv
+    platinum_path = output_dir / args.platinum_csv
+    metadata_path = output_dir / args.metadata_json
+
+    write_csv(grandcru_path, grandcru.rows)
+    write_csv(platinum_path, platinum.rows)
+
+    metadata = {
+        "generated_at_utc": datetime.now(UTC).isoformat(),
+        "grandcru_base_url": args.grandcru_base_url,
+        "platinum_base_url": args.platinum_base_url,
+        "platinum_wines_path": args.platinum_wines_path,
+        "grandcru_rows": len(grandcru.rows),
+        "platinum_rows": len(platinum.rows),
+        "grandcru_pages_scraped": grandcru.pages_scraped,
+        "platinum_pages_scraped": platinum.pages_scraped,
+        "max_pages": args.max_pages,
+        "include_oos": args.include_oos,
+    }
+    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+
+    print(f"[done] wrote {len(grandcru.rows)} rows to {grandcru_path}")
+    print(f"[done] wrote {len(platinum.rows)} rows to {platinum_path}")
+    print(f"[done] wrote metadata to {metadata_path}")
+
+
+if __name__ == "__main__":
+    main()
