@@ -41,6 +41,8 @@ class HealthOut(BaseModel):
     status: str
     db_ok: bool
     total_deals: int
+    total_snapshots: int = 0
+    history_retention_days: int = 0
     ingestion_stale: bool | None = None
     latest_ingestion: IngestionRunOut | None = None
 
@@ -49,3 +51,18 @@ class LegalOut(BaseModel):
     title: str
     content: str
 
+
+class DealHistoryOut(BaseModel):
+    id: int
+    ingestion_run_id: int
+    captured_at: datetime
+    wine_name: str
+    price_platinum: float | None = None
+    price_grand_cru: float | None = None
+    price_diff: float | None = None
+    price_diff_pct: float | None = None
+    deal_score: float
+    vivino_rating: float | None = None
+    vivino_num_ratings: int | None = None
+
+    model_config = ConfigDict(from_attributes=True)

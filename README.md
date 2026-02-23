@@ -13,9 +13,11 @@ Refactor of the notebook scraper into a backend service that helps users find hi
 2. SQLAlchemy models for deals and ingestion health (`app/models.py`)
 3. Deal ranking logic (`app/scoring.py`)
 4. CSV to database import pipeline (`scripts/import_wine_data.py`)
+5. Reusable source scraper (`scripts/scrape_sources.py`)
 5. API endpoints:
    - `GET /deals`
    - `GET /deals/{deal_id}`
+   - `GET /deals/{deal_id}/history`
    - `GET /health`
    - `GET /legal`
 
@@ -35,6 +37,27 @@ Open:
 2. Health: `http://127.0.0.1:8000/health`
 3. Deals: `http://127.0.0.1:8000/deals?limit=20&only_platinum_cheaper=true`
 
+## Refreshing Source Data
+
+If website formatting changes, avoid notebook edits first. Run the refactored scraper with a small page cap and debug HTML output:
+
+```bash
+pip install -r requirements-scraper.txt
+python scripts/scrape_sources.py \
+  --grandcru-base-url https://grandcruwines.com \
+  --platinum-base-url https://platwineclub.wineportal.com \
+  --max-pages 2 \
+  --debug-dir seed/debug_html \
+  --headed
+```
+
+Outputs:
+
+1. `seed/grandcru_wines.csv`
+2. `seed/platinum_wines.csv`
+3. `seed/scrape_run.json`
+4. Debug HTML snapshots in `seed/debug_html/` (for selector troubleshooting)
+
 ## Data Model
 
 Primary table: `wine_deals`
@@ -48,6 +71,9 @@ Key fields:
 5. `vivino_rating`, `vivino_num_ratings`
 
 Health table: `ingestion_runs` tracks last import status/time so the app can expose freshness.
+
+History table: `wine_deal_snapshots` stores timestamped deal snapshots for each import run.
+Old history rows are auto-pruned using `HISTORY_RETENTION_DAYS`.
 
 ## Hosting Recommendation
 
@@ -65,11 +91,24 @@ If traffic grows, switch `DATABASE_URL` from SQLite to Railway Postgres without 
 2. Add environment variables:
    - `DATABASE_URL` (optional at first; default SQLite works)
    - `INGESTION_STALE_HOURS` (optional)
+   - `HISTORY_RETENTION_DAYS` (optional, default `90`)
+   - `CORS_ORIGINS` (set to your GitHub Pages domain in production)
+   - `RATE_LIMIT_ENABLED` (default `true`)
+   - `RATE_LIMIT_REQUESTS_PER_MINUTE` (default `120`)
 3. Start command:
    - Railway will usually pick up `Procfile`.
    - Fallback command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 4. Run ingestion after deploy:
    - `python scripts/import_wine_data.py`
+
+### API Abuse Controls
+
+The API includes in-app IP rate limiting with `429` responses when a client exceeds quota.
+For stronger protection and cost control, also configure:
+
+1. Railway spend alert and hard budget cap
+2. Edge/WAF protection (Cloudflare or similar)
+3. Strict `CORS_ORIGINS` (avoid `*` in production)
 
 ## Repository Recommendation
 

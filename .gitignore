@@ -4,4 +4,12 @@ __pycache__/
 *.pyc
 data/
 *.db
-
+.env
+.env.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+seed/*
+!seed/comparison_summary.csv
+!seed/vivino_results.csv

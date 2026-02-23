@@ -1,0 +1,301 @@
+"""Build comparison_summary.csv from scraped Grand Cru + Platinum catalog CSVs."""
+
+import argparse
+import csv
+import re
+from pathlib import Path
+
+
+def parse_price(value: str | None) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip().replace("$", "").replace(",", "")
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def parse_quantity_volume_year(url: str | None) -> tuple[int, str, int | None]:
+    if not url:
+        return 1, "750ml", None
+    lower = url.lower()
+    quantity = 1
+    volume = None
+    year = None
+
+    qty_match = re.search(r"(\d+)[-_]?bottle", lower)
+    if qty_match:
+        quantity = int(qty_match.group(1))
+
+    if "/products/" in lower:
+        tail = lower.split("/products/", 1)[1]
+    elif "/wines/" in lower:
+        tail = lower.split("/wines/", 1)[1]
+    else:
+        tail = lower.rsplit("/", 1)[-1]
+
+    vol_match = re.search(r"(\d+)-(\d+)-l", tail)
+    if vol_match:
+        volume = f"{vol_match.group(1)}.{vol_match.group(2)}l"
+    else:
+        vol_match = re.search(r"(\d+)[-_]?ml", tail)
+        if vol_match:
+            volume = f"{vol_match.group(1)}ml"
+
+    if "magnum" in tail and not volume:
+        volume = "1.5l"
+    if not volume:
+        volume = "750ml"
+
+    year_match = re.search(r"\b(19\d{2}|20[0-3]\d)\b", lower)
+    if year_match:
+        year = int(year_match.group(1))
+
+    return quantity, volume, year
+
+
+def normalize_name(name: str | None) -> str:
+    if not name:
+        return ""
+    text = name.lower()
+    text = re.sub(r"\b(red|white|rose|rosé)\b", "", text)
+    text = re.sub(r"\b(\d+(\.\d+)?\s*l|magnum|standard bottle|half bottle|case|bottles|ml)\b", "", text)
+    text = re.sub(r"\([^)]*\)", "", text)
+    text = re.sub(r"[^\w\s]", "", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def jaccard_similarity(a: str, b: str) -> float:
+    set_a = set(a.split())
+    set_b = set(b.split())
+    if not set_a and not set_b:
+        return 0.0
+    union = set_a | set_b
+    if not union:
+        return 0.0
+    return len(set_a & set_b) / len(union)
+
+
+def read_rows(path: Path) -> list[dict[str, str]]:
+    with path.open("r", newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def write_rows(path: Path, fieldnames: list[str], rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def year_matches(a: int | None, b: int | None) -> bool:
+    return (a is None and b is None) or (a == b)
+
+
+def prepare_rows(rows: list[dict[str, str]]) -> list[dict[str, object]]:
+    prepared: list[dict[str, object]] = []
+    for row in rows:
+        url = (row.get("url") or "").strip()
+        name = (row.get("name") or "").strip()
+        quantity, volume, year = parse_quantity_volume_year(url)
+        prepared.append(
+            {
+                "name": name,
+                "price": (row.get("price") or "").strip(),
+                "url": url,
+                "quantity": quantity,
+                "volume": volume,
+                "year": year,
+                "name_clean": normalize_name(name),
+            }
+        )
+    return prepared
+
+
+def build_matches(
+    grandcru: list[dict[str, object]],
+    platinum: list[dict[str, object]],
+    *,
+    threshold: float,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for plat in platinum:
+        best = None
+        best_score = 0.0
+        for main in grandcru:
+            if not year_matches(plat["year"], main["year"]):
+                continue
+            if plat["quantity"] != main["quantity"]:
+                continue
+            if plat["volume"] != main["volume"]:
+                continue
+
+            score = jaccard_similarity(str(plat["name_clean"]), str(main["name_clean"]))
+            if score > best_score:
+                best = main
+                best_score = score
+
+        if best is not None and best_score >= threshold:
+            rows.append(
+                {
+                    "name_plat": plat["name"],
+                    "year_plat": plat["year"],
+                    "quantity_plat": plat["quantity"],
+                    "volume_plat": plat["volume"],
+                    "price_plat": plat["price"],
+                    "url_plat": plat["url"],
+                    "name_main": best["name"],
+                    "year_main": best["year"],
+                    "quantity_main": best["quantity"],
+                    "volume_main": best["volume"],
+                    "price_main": best["price"],
+                    "url_main": best["url"],
+                    "match_score": round(best_score, 4),
+                }
+            )
+        else:
+            rows.append(
+                {
+                    "name_plat": plat["name"],
+                    "year_plat": plat["year"],
+                    "quantity_plat": plat["quantity"],
+                    "volume_plat": plat["volume"],
+                    "price_plat": plat["price"],
+                    "url_plat": plat["url"],
+                    "name_main": None,
+                    "year_main": None,
+                    "quantity_main": None,
+                    "volume_main": None,
+                    "price_main": None,
+                    "url_main": None,
+                    "match_score": round(best_score, 4),
+                }
+            )
+    return rows
+
+
+def build_summary(matched_rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    summary_rows: list[dict[str, object]] = []
+    for row in matched_rows:
+        price_plat_num = parse_price(row.get("price_plat"))
+        price_main_num = parse_price(row.get("price_main"))
+
+        price_diff = None
+        if price_plat_num is not None and price_main_num is not None:
+            price_diff = round(price_plat_num - price_main_num, 2)
+
+        price_diff_pct = None
+        if price_diff is not None and price_main_num not in (None, 0):
+            price_diff_pct = round((price_diff / price_main_num) * 100, 2)
+
+        if price_main_num is None:
+            cheaper_side = "No Match"
+        elif price_diff is None or price_diff == 0:
+            cheaper_side = "Same Price"
+        elif price_diff < 0:
+            cheaper_side = "Platinum Cheaper"
+        else:
+            cheaper_side = "Grand Cru Cheaper"
+
+        summary_rows.append(
+            {
+                "name_plat": row["name_plat"],
+                "year_plat": row["year_plat"],
+                "quantity_plat": row["quantity_plat"],
+                "volume_plat": row["volume_plat"],
+                "price_plat": row["price_plat"],
+                "price_main": row["price_main"],
+                "price_diff": price_diff,
+                "price_diff_pct": price_diff_pct,
+                "cheaper_side": cheaper_side,
+                "url_plat": row["url_plat"],
+                "url_main": row["url_main"],
+            }
+        )
+
+    priority = {
+        "Platinum Cheaper": 0,
+        "Grand Cru Cheaper": 1,
+        "Same Price": 2,
+        "No Match": 3,
+    }
+
+    def sort_key(row: dict[str, object]) -> tuple[float, float, float]:
+        p = priority.get(str(row["cheaper_side"]), 99)
+        pct = row["price_diff_pct"]
+        pct_key = -pct if isinstance(pct, (int, float)) else float("inf")
+        plat = parse_price(row.get("price_plat"))
+        plat_key = plat if plat is not None else float("inf")
+        return (p, pct_key, plat_key)
+
+    summary_rows.sort(key=sort_key)
+    return summary_rows
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Build comparison_summary from raw scraped catalogs")
+    parser.add_argument("--grandcru-csv", required=True, type=Path)
+    parser.add_argument("--platinum-csv", required=True, type=Path)
+    parser.add_argument("--output-comparison", required=True, type=Path)
+    parser.add_argument("--output-matched", default=None, type=Path)
+    parser.add_argument("--match-threshold", type=float, default=0.6)
+    args = parser.parse_args()
+
+    grandcru_rows = prepare_rows(read_rows(args.grandcru_csv))
+    platinum_rows = prepare_rows(read_rows(args.platinum_csv))
+    matched = build_matches(grandcru_rows, platinum_rows, threshold=args.match_threshold)
+    summary = build_summary(matched)
+
+    if args.output_matched:
+        write_rows(
+            args.output_matched,
+            [
+                "name_plat",
+                "year_plat",
+                "quantity_plat",
+                "volume_plat",
+                "price_plat",
+                "url_plat",
+                "name_main",
+                "year_main",
+                "quantity_main",
+                "volume_main",
+                "price_main",
+                "url_main",
+                "match_score",
+            ],
+            matched,
+        )
+    write_rows(
+        args.output_comparison,
+        [
+            "name_plat",
+            "year_plat",
+            "quantity_plat",
+            "volume_plat",
+            "price_plat",
+            "price_main",
+            "price_diff",
+            "price_diff_pct",
+            "cheaper_side",
+            "url_plat",
+            "url_main",
+        ],
+        summary,
+    )
+
+    print(
+        f"Built {len(summary)} comparison rows from "
+        f"{len(grandcru_rows)} grandcru rows and {len(platinum_rows)} platinum rows."
+    )
+
+
+if __name__ == "__main__":
+    main()
+

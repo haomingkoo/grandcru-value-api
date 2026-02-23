@@ -1,8 +1,9 @@
 import argparse
 import csv
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+import os
 
 from sqlalchemy import delete
 
@@ -11,8 +12,16 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.database import Base, SessionLocal, engine  # noqa: E402
+from app.config import settings  # noqa: E402
 from app.models import IngestionRun, WineDeal  # noqa: E402
+from app.models import WineDealSnapshot  # noqa: E402
 from app.scoring import compute_deal_score, parse_float, parse_int  # noqa: E402
+
+PLATINUM_LEGACY_HOSTS = (
+    "https://platinum.grandcruwines.com",
+    "http://platinum.grandcruwines.com",
+)
+PLATINUM_BASE_URL_OVERRIDE = os.getenv("PLATINUM_BASE_URL_OVERRIDE", "").strip()
 
 
 def normalize_key(value: str | None) -> str:
@@ -40,6 +49,27 @@ def to_optional_int(value: str | None) -> int | None:
     return number
 
 
+def normalize_platinum_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    normalized = url.strip()
+    if not PLATINUM_BASE_URL_OVERRIDE:
+        return normalized or None
+
+    for legacy_host in PLATINUM_LEGACY_HOSTS:
+        if normalized.startswith(legacy_host):
+            suffix = normalized[len(legacy_host):]
+            normalized = f"{PLATINUM_BASE_URL_OVERRIDE.rstrip('/')}{suffix}"
+            break
+    return normalized
+
+
+def normalize_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    return url.strip() or None
+
+
 def import_data(comparison_path: Path, vivino_path: Path) -> None:
     if not comparison_path.exists():
         raise FileNotFoundError(f"comparison_summary missing: {comparison_path}")
@@ -60,6 +90,8 @@ def import_data(comparison_path: Path, vivino_path: Path) -> None:
 
     try:
         merged_records: list[WineDeal] = []
+        snapshot_records: list[WineDealSnapshot] = []
+        snapshot_time = datetime.now(UTC)
 
         for row in comparison_rows:
             wine_name = (row.get("name_plat") or "").strip()
@@ -80,35 +112,47 @@ def import_data(comparison_path: Path, vivino_path: Path) -> None:
             if price_diff_pct is None and price_diff is not None and price_grand_cru not in (None, 0):
                 price_diff_pct = round((price_diff / price_grand_cru) * 100.0, 2)
 
-            merged_records.append(
-                WineDeal(
-                    wine_name=wine_name,
-                    vintage=to_optional_int(row.get("year_plat")),
-                    quantity=to_optional_int(row.get("quantity_plat")),
-                    volume=(row.get("volume_plat") or "").strip() or None,
-                    price_platinum=price_platinum,
-                    price_grand_cru=price_grand_cru,
-                    price_diff=price_diff,
-                    price_diff_pct=price_diff_pct,
-                    cheaper_side=(row.get("cheaper_side") or "").strip() or None,
-                    platinum_url=(row.get("url_plat") or "").strip() or None,
-                    grand_cru_url=(row.get("url_main") or "").strip() or None,
-                    vivino_url=(vivino.get("vivino_url") or "").strip() or None,
-                    vivino_rating=vivino_rating,
-                    vivino_num_ratings=vivino_num_ratings,
-                    deal_score=compute_deal_score(price_diff_pct, vivino_rating, vivino_num_ratings),
+            deal_payload = {
+                "wine_name": wine_name,
+                "vintage": to_optional_int(row.get("year_plat")),
+                "quantity": to_optional_int(row.get("quantity_plat")),
+                "volume": (row.get("volume_plat") or "").strip() or None,
+                "price_platinum": price_platinum,
+                "price_grand_cru": price_grand_cru,
+                "price_diff": price_diff,
+                "price_diff_pct": price_diff_pct,
+                "cheaper_side": (row.get("cheaper_side") or "").strip() or None,
+                "platinum_url": normalize_platinum_url(row.get("url_plat")),
+                "grand_cru_url": normalize_url(row.get("url_main")),
+                "vivino_url": normalize_url(vivino.get("vivino_url")),
+                "vivino_rating": vivino_rating,
+                "vivino_num_ratings": vivino_num_ratings,
+                "deal_score": compute_deal_score(price_diff_pct, vivino_rating, vivino_num_ratings),
+            }
+            merged_records.append(WineDeal(**deal_payload))
+            snapshot_records.append(
+                WineDealSnapshot(
+                    ingestion_run_id=run.id,
+                    captured_at=snapshot_time,
+                    **deal_payload,
                 )
             )
 
         session.execute(delete(WineDeal))
         session.add_all(merged_records)
+        session.add_all(snapshot_records)
+
+        cutoff = snapshot_time - timedelta(days=settings.history_retention_days)
+        prune_result = session.execute(delete(WineDealSnapshot).where(WineDealSnapshot.captured_at < cutoff))
+        deleted_snapshots = int(prune_result.rowcount or 0)
 
         run.status = "success"
         run.finished_at = datetime.now(UTC)
         run.merged_rows = len(merged_records)
         run.details = (
             f"Loaded {len(comparison_rows)} comparison rows and {len(vivino_rows)} vivino rows "
-            f"into {len(merged_records)} merged deal records."
+            f"into {len(merged_records)} current deals and {len(snapshot_records)} snapshots; "
+            f"pruned {deleted_snapshots} snapshots older than {settings.history_retention_days} days."
         )
         session.commit()
         print(run.details)

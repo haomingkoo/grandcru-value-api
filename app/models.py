@@ -55,3 +55,38 @@ class IngestionRun(Base):
     vivino_rows: Mapped[int] = mapped_column(Integer, default=0)
     merged_rows: Mapped[int] = mapped_column(Integer, default=0)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class WineDealSnapshot(Base):
+    __tablename__ = "wine_deal_snapshots"
+    __table_args__ = (
+        Index("ix_wine_deal_snapshots_name_captured", "wine_name", "captured_at"),
+        Index("ix_wine_deal_snapshots_run", "ingestion_run_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ingestion_run_id: Mapped[int] = mapped_column(Integer, index=True)
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        index=True,
+    )
+
+    wine_name: Mapped[str] = mapped_column(String(255), index=True)
+    vintage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    volume: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    price_platinum: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_grand_cru: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_diff: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_diff_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cheaper_side: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    platinum_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    grand_cru_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    vivino_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    vivino_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vivino_num_ratings: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deal_score: Mapped[float] = mapped_column(Float, default=0.0, index=True)
