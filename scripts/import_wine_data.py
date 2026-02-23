@@ -1,9 +1,13 @@
 import argparse
 import csv
-import sys
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
 import os
+import re
+import sys
+import unicodedata
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from difflib import SequenceMatcher
+from pathlib import Path
 
 from sqlalchemy import delete
 
@@ -11,10 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.config import settings  # noqa: E402
-from app.models import IngestionRun, WineDeal  # noqa: E402
-from app.models import WineDealSnapshot  # noqa: E402
+from app.database import Base, SessionLocal, engine  # noqa: E402
+from app.models import IngestionRun, WineDeal, WineDealSnapshot  # noqa: E402
 from app.scoring import compute_deal_score, parse_float, parse_int  # noqa: E402
 
 PLATINUM_LEGACY_HOSTS = (
@@ -23,11 +26,70 @@ PLATINUM_LEGACY_HOSTS = (
 )
 PLATINUM_BASE_URL_OVERRIDE = os.getenv("PLATINUM_BASE_URL_OVERRIDE", "").strip()
 
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9\s]")
+_SPACE_RE = re.compile(r"\s+")
+_YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
+_DROP_TOKENS = {
+    "and",
+    "the",
+    "de",
+    "la",
+    "le",
+    "du",
+    "standard",
+    "bottle",
+    "magnum",
+    "jeroboam",
+    "double",
+    "red",
+    "white",
+    "rose",
+    "blanc",
+    "rouge",
+    "ml",
+    "l",
+}
+
 
 def normalize_key(value: str | None) -> str:
     if not value:
         return ""
-    return " ".join(value.lower().strip().split())
+    text = unicodedata.normalize("NFKD", str(value))
+    text = text.encode("ascii", "ignore").decode("ascii")
+    text = text.lower().strip()
+    text = text.replace("&", " and ")
+    text = text.replace("’", "'")
+    text = text.replace("'", "")
+    text = _NON_ALNUM_RE.sub(" ", text)
+    return _SPACE_RE.sub(" ", text).strip()
+
+
+def extract_year(value: str | None) -> int | None:
+    if not value:
+        return None
+    match = _YEAR_RE.search(str(value))
+    if not match:
+        return None
+    return int(match.group(0))
+
+
+def canonicalize_key(value: str | None) -> str:
+    base = normalize_key(value)
+    if not base:
+        return ""
+
+    tokens: list[str] = []
+    for token in base.split():
+        if token in _DROP_TOKENS:
+            continue
+        if token.endswith("ml") and token[:-2].isdigit():
+            continue
+        if token.endswith("l") and token[:-1].isdigit():
+            continue
+        if token.isdigit() and len(token) <= 3:
+            continue
+        tokens.append(token)
+    return " ".join(tokens)
 
 
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -35,18 +97,119 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def build_vivino_lookup(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
-    lookup: dict[str, dict[str, str]] = {}
+@dataclass(frozen=True)
+class VivinoLookup:
+    exact: dict[str, dict[str, str]]
+    canonical: dict[str, list[dict[str, str]]]
+    by_year: dict[int, list[dict[str, str]]]
+    rows: list[dict[str, str]]
+
+
+def build_vivino_lookup(rows: list[dict[str, str]]) -> VivinoLookup:
+    exact: dict[str, dict[str, str]] = {}
+    canonical: dict[str, list[dict[str, str]]] = {}
+    by_year: dict[int, list[dict[str, str]]] = {}
+
     for row in rows:
-        key = normalize_key(row.get("wine_name"))
-        if key and key not in lookup:
-            lookup[key] = row
-    return lookup
+        wine_name = row.get("wine_name")
+        key = normalize_key(wine_name)
+        if key and key not in exact:
+            exact[key] = row
+
+        canonical_key = canonicalize_key(wine_name)
+        if canonical_key:
+            canonical.setdefault(canonical_key, []).append(row)
+
+        year = extract_year(wine_name)
+        if year is not None:
+            by_year.setdefault(year, []).append(row)
+
+    return VivinoLookup(exact=exact, canonical=canonical, by_year=by_year, rows=rows)
+
+
+def _token_set_ratio(target_tokens: set[str], candidate_tokens: set[str]) -> float:
+    intersection = sorted(target_tokens & candidate_tokens)
+    if not intersection:
+        return 0.0
+
+    intersection_text = " ".join(intersection)
+    target_text = " ".join(sorted(target_tokens))
+    candidate_text = " ".join(sorted(candidate_tokens))
+    ratio_to_target = SequenceMatcher(None, intersection_text, target_text).ratio()
+    ratio_to_candidate = SequenceMatcher(None, intersection_text, candidate_text).ratio()
+    return max(ratio_to_target, ratio_to_candidate)
+
+
+def _score_name_similarity(target: str, candidate: str) -> tuple[float, float, float, float, int]:
+    target_tokens = set(target.split())
+    candidate_tokens = set(candidate.split())
+    if not target_tokens or not candidate_tokens:
+        return (0.0, 0.0, 0.0, 0.0, 0)
+
+    overlap = len(target_tokens & candidate_tokens)
+    token_ratio = overlap / max(len(target_tokens), len(candidate_tokens))
+    seq_ratio = SequenceMatcher(None, target, candidate).ratio()
+    set_ratio = _token_set_ratio(target_tokens, candidate_tokens)
+    combined = (token_ratio * 0.45) + (seq_ratio * 0.20) + (set_ratio * 0.35)
+    return (combined, token_ratio, seq_ratio, set_ratio, overlap)
+
+
+def match_vivino_row(wine_name: str, lookup: VivinoLookup) -> tuple[dict[str, str], str]:
+    exact_key = normalize_key(wine_name)
+    if exact_key and exact_key in lookup.exact:
+        return lookup.exact[exact_key], "exact"
+
+    canonical_key = canonicalize_key(wine_name)
+    if canonical_key and canonical_key in lookup.canonical:
+        candidates = lookup.canonical[canonical_key]
+        target_year = extract_year(wine_name)
+        if target_year is not None:
+            for candidate in candidates:
+                if extract_year(candidate.get("wine_name")) == target_year:
+                    return candidate, "canonical"
+        return candidates[0], "canonical"
+
+    if not canonical_key:
+        return {}, "none"
+
+    target_year = extract_year(wine_name)
+    candidate_rows = lookup.by_year.get(target_year, []) if target_year is not None else []
+    if not candidate_rows:
+        candidate_rows = lookup.rows
+
+    scored_candidates: list[tuple[float, float, float, float, int, dict[str, str]]] = []
+    for candidate in candidate_rows:
+        candidate_key = canonicalize_key(candidate.get("wine_name"))
+        if not candidate_key:
+            continue
+
+        combined, token_ratio, seq_ratio, set_ratio, overlap = _score_name_similarity(canonical_key, candidate_key)
+        if combined <= 0:
+            continue
+        scored_candidates.append((combined, token_ratio, seq_ratio, set_ratio, overlap, candidate))
+
+    if not scored_candidates:
+        return {}, "none"
+
+    scored_candidates.sort(key=lambda item: item[0], reverse=True)
+    best = scored_candidates[0]
+    second_best = scored_candidates[1] if len(scored_candidates) > 1 else None
+
+    # Conservative gate to avoid linking the wrong wine.
+    if best[4] < 3:
+        return {}, "none"
+    if best[0] < 0.68 and best[3] < 0.90:
+        return {}, "none"
+    if best[1] < 0.45 and best[3] < 0.90:
+        return {}, "none"
+    if second_best is not None and (best[0] - second_best[0]) < 0.03 and best[3] < 0.92:
+        return {}, "none"
+
+    return best[5], "fuzzy"
 
 
 def to_optional_int(value: str | None) -> int | None:
-    number = parse_int(value)
-    return number
+    return parse_int(value)
 
 
 def normalize_platinum_url(url: str | None) -> str | None:
@@ -58,7 +221,7 @@ def normalize_platinum_url(url: str | None) -> str | None:
 
     for legacy_host in PLATINUM_LEGACY_HOSTS:
         if normalized.startswith(legacy_host):
-            suffix = normalized[len(legacy_host):]
+            suffix = normalized[len(legacy_host) :]
             normalized = f"{PLATINUM_BASE_URL_OVERRIDE.rstrip('/')}{suffix}"
             break
     return normalized
@@ -93,12 +256,26 @@ def import_data(comparison_path: Path, vivino_path: Path) -> None:
         snapshot_records: list[WineDealSnapshot] = []
         snapshot_time = datetime.now(UTC)
 
+        exact_matches = 0
+        canonical_matches = 0
+        fuzzy_matches = 0
+        unmatched = 0
+
         for row in comparison_rows:
             wine_name = (row.get("name_plat") or "").strip()
             if not wine_name:
                 continue
 
-            vivino = vivino_lookup.get(normalize_key(wine_name), {})
+            vivino, match_method = match_vivino_row(wine_name, vivino_lookup)
+            if match_method == "exact":
+                exact_matches += 1
+            elif match_method == "canonical":
+                canonical_matches += 1
+            elif match_method == "fuzzy":
+                fuzzy_matches += 1
+            else:
+                unmatched += 1
+
             vivino_rating = parse_float(vivino.get("vivino_rating"))
             vivino_num_ratings = parse_int(vivino.get("vivino_num_ratings")) or parse_int(vivino.get("vivino_raters"))
 
@@ -151,7 +328,9 @@ def import_data(comparison_path: Path, vivino_path: Path) -> None:
         run.merged_rows = len(merged_records)
         run.details = (
             f"Loaded {len(comparison_rows)} comparison rows and {len(vivino_rows)} vivino rows "
-            f"into {len(merged_records)} current deals and {len(snapshot_records)} snapshots; "
+            f"into {len(merged_records)} current deals and {len(snapshot_records)} snapshots "
+            f"(vivino matched: exact={exact_matches}, canonical={canonical_matches}, "
+            f"fuzzy={fuzzy_matches}, unmatched={unmatched}); "
             f"pruned {deleted_snapshots} snapshots older than {settings.history_retention_days} days."
         )
         session.commit()
@@ -173,13 +352,13 @@ def main() -> None:
     parser.add_argument(
         "--comparison",
         type=Path,
-        default=Path("comparison_summary.csv"),
+        default=Path("seed/comparison_summary.csv"),
         help="Path to comparison_summary.csv",
     )
     parser.add_argument(
         "--vivino",
         type=Path,
-        default=Path("vivino_results.csv"),
+        default=Path("seed/vivino_results.csv"),
         help="Path to vivino_results.csv",
     )
     args = parser.parse_args()

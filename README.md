@@ -150,3 +150,16 @@ gh repo create grandcru-value-api --private --source=. --remote=origin --push
 `LEGAL_NOTICE.md` contains a responsible scraping and usage statement for in-app display (`GET /legal`).
 
 Important: this is not legal advice. For enforceable terms and jurisdiction-specific compliance, work with counsel.
+
+## One-Command Refresh Pipeline
+
+Use this helper to import refreshed CSVs and optionally validate API health:
+
+```bash
+python scripts/refresh_pipeline.py \
+  --comparison seed/comparison_summary.csv \
+  --vivino seed/vivino_results.csv \
+  --health-url http://127.0.0.1:8010/health
+```
+
+For Railway production imports, run the same command with your production `DATABASE_URL` and Railway API health URL.
