@@ -146,12 +146,22 @@ def get_deal(deal_id: int, session: Session = Depends(get_session)) -> DealOut:
 def deal_history(
     deal_id: int,
     limit: int = Query(default=30, ge=1, le=365),
+    days: int = Query(default=90, ge=1, le=3650),
+    sort_order: str = Query(default="asc"),
     session: Session = Depends(get_session),
 ) -> list[DealHistoryOut]:
     deal = get_deal_by_id(session, deal_id)
     if deal is None:
         raise HTTPException(status_code=404, detail="Deal not found")
-    return get_deal_history(session, wine_name=deal.wine_name, limit=limit)
+    if sort_order not in {"asc", "desc"}:
+        raise HTTPException(status_code=400, detail="sort_order must be 'asc' or 'desc'")
+    return get_deal_history(
+        session,
+        wine_name=deal.wine_name,
+        limit=limit,
+        days=days,
+        sort_order=sort_order,
+    )
 
 
 @app.get("/legal", response_model=LegalOut)
