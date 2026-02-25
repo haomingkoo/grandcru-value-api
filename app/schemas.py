@@ -20,6 +20,14 @@ class DealOut(BaseModel):
     vivino_rating: float | None = None
     vivino_num_ratings: int | None = None
     deal_score: float
+    price_platinum_7d_ago: float | None = None
+    price_platinum_change_7d: float | None = None
+    price_grand_cru_7d_ago: float | None = None
+    price_grand_cru_change_7d: float | None = None
+    price_platinum_30d_ago: float | None = None
+    price_platinum_change_30d: float | None = None
+    price_grand_cru_30d_ago: float | None = None
+    price_grand_cru_change_30d: float | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -57,6 +65,9 @@ class DealHistoryOut(BaseModel):
     ingestion_run_id: int
     captured_at: datetime
     wine_name: str
+    vintage: int | None = None
+    quantity: int | None = None
+    volume: str | None = None
     price_platinum: float | None = None
     price_grand_cru: float | None = None
     price_diff: float | None = None
