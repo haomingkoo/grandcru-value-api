@@ -19,17 +19,31 @@ def parse_price(value: str | None) -> float | None:
         return None
 
 
-def parse_quantity_volume_year(url: str | None) -> tuple[int, str, int | None]:
-    if not url:
-        return 1, "750ml", None
-    lower = url.lower()
-    quantity = 1
+def extract_quantity(value: str | None) -> int | None:
+    if not value:
+        return None
+    lower = value.lower()
+    patterns = [
+        r"bundle[-_\s]?of[-_\s]?(\d+)",
+        r"case[-_\s]?of[-_\s]?(\d+)",
+        r"\b(\d+)[-_]?(?:bottles?|btls?)\b",
+        r"\b(\d+)[-_]?x\b",
+        r"\bx[-_\s]?(\d+)\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, lower)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def parse_quantity_volume_year(url: str | None, name: str | None = None) -> tuple[int, str, int | None]:
+    lower = (url or "").lower()
+    quantity = extract_quantity(lower) or 1
+    if quantity == 1:
+        quantity = extract_quantity(name) or 1
     volume = None
     year = None
-
-    qty_match = re.search(r"(\d+)[-_]?bottle", lower)
-    if qty_match:
-        quantity = int(qty_match.group(1))
 
     if "/products/" in lower:
         tail = lower.split("/products/", 1)[1]
@@ -45,6 +59,15 @@ def parse_quantity_volume_year(url: str | None) -> tuple[int, str, int | None]:
         vol_match = re.search(r"(\d+)[-_]?ml", tail)
         if vol_match:
             volume = f"{vol_match.group(1)}ml"
+    if not volume and name:
+        name_lower = name.lower()
+        name_vol_match = re.search(r"(\d+(?:\.\d+)?)\s*l\b", name_lower)
+        if name_vol_match:
+            volume = f"{name_vol_match.group(1)}l"
+        else:
+            name_vol_match = re.search(r"(\d+)\s*ml\b", name_lower)
+            if name_vol_match:
+                volume = f"{name_vol_match.group(1)}ml"
 
     if "magnum" in tail and not volume:
         volume = "1.5l"
@@ -52,6 +75,8 @@ def parse_quantity_volume_year(url: str | None) -> tuple[int, str, int | None]:
         volume = "750ml"
 
     year_match = re.search(r"\b(19\d{2}|20[0-3]\d)\b", lower)
+    if not year_match and name:
+        year_match = re.search(r"\b(19\d{2}|20[0-3]\d)\b", name)
     if year_match:
         year = int(year_match.group(1))
 
@@ -131,7 +156,7 @@ def prepare_rows(rows: list[dict[str, str]], *, enforce_in_stock: bool = False) 
             continue
         url = (row.get("url") or "").strip()
         name = (row.get("name") or "").strip()
-        quantity, volume, year = parse_quantity_volume_year(url)
+        quantity, volume, year = parse_quantity_volume_year(url, name)
         prepared.append(
             {
                 "name": name,
@@ -155,22 +180,28 @@ def build_matches(
     rows: list[dict[str, object]] = []
     grandcru_by_url = {str(row["url"]): row for row in grandcru if row.get("url")}
     for plat in platinum:
-        best = None
-        best_score = 0.0
+        best_same_pack = None
+        best_same_pack_score = 0.0
+        best_cross_pack = None
+        best_cross_pack_score = 0.0
+
         for main in grandcru:
             if not year_matches(plat["year"], main["year"]):
-                continue
-            if plat["quantity"] != main["quantity"]:
                 continue
             if plat["volume"] != main["volume"]:
                 continue
 
             score = jaccard_similarity(str(plat["name_clean"]), str(main["name_clean"]))
-            if score > best_score:
-                best = main
-                best_score = score
+            if plat["quantity"] == main["quantity"]:
+                if score > best_same_pack_score:
+                    best_same_pack = main
+                    best_same_pack_score = score
+            else:
+                if score > best_cross_pack_score:
+                    best_cross_pack = main
+                    best_cross_pack_score = score
 
-        if best is not None and best_score >= threshold:
+        if best_same_pack is not None and best_same_pack_score >= threshold:
             rows.append(
                 {
                     "name_plat": plat["name"],
@@ -179,19 +210,39 @@ def build_matches(
                     "volume_plat": plat["volume"],
                     "price_plat": plat["price"],
                     "url_plat": plat["url"],
-                    "name_main": best["name"],
-                    "year_main": best["year"],
-                    "quantity_main": best["quantity"],
-                    "volume_main": best["volume"],
-                    "price_main": best["price"],
-                    "url_main": best["url"],
-                    "match_method": "name",
-                    "match_score": round(best_score, 4),
+                    "name_main": best_same_pack["name"],
+                    "year_main": best_same_pack["year"],
+                    "quantity_main": best_same_pack["quantity"],
+                    "volume_main": best_same_pack["volume"],
+                    "price_main": best_same_pack["price"],
+                    "url_main": best_same_pack["url"],
+                    "match_method": "name_same_bundle",
+                    "match_score": round(best_same_pack_score, 4),
+                }
+            )
+        elif best_cross_pack is not None and best_cross_pack_score >= threshold:
+            rows.append(
+                {
+                    "name_plat": plat["name"],
+                    "year_plat": plat["year"],
+                    "quantity_plat": plat["quantity"],
+                    "volume_plat": plat["volume"],
+                    "price_plat": plat["price"],
+                    "url_plat": plat["url"],
+                    "name_main": best_cross_pack["name"],
+                    "year_main": best_cross_pack["year"],
+                    "quantity_main": best_cross_pack["quantity"],
+                    "volume_main": best_cross_pack["volume"],
+                    "price_main": best_cross_pack["price"],
+                    "url_main": best_cross_pack["url"],
+                    "match_method": "name_cross_bundle",
+                    "match_score": round(best_cross_pack_score, 4),
                 }
             )
         else:
             fallback_url = fallback_grandcru_url_from_platinum(str(plat.get("url") or ""))
             fallback_main = grandcru_by_url.get(fallback_url or "")
+            best_score = max(best_same_pack_score, best_cross_pack_score)
             rows.append(
                 {
                     "name_plat": plat["name"],
@@ -216,8 +267,31 @@ def build_matches(
 def build_summary(matched_rows: list[dict[str, object]]) -> list[dict[str, object]]:
     summary_rows: list[dict[str, object]] = []
     for row in matched_rows:
-        price_plat_num = parse_price(row.get("price_plat"))
-        price_main_num = parse_price(row.get("price_main"))
+        quantity_plat = int(row.get("quantity_plat") or 1)
+        quantity_main = int(row.get("quantity_main") or 1)
+
+        price_plat_total = parse_price(row.get("price_plat"))
+        price_main_total = parse_price(row.get("price_main"))
+        if (
+            price_plat_total is not None
+            and price_main_total is not None
+            and quantity_plat == quantity_main
+        ):
+            # Same pack size on both sides: compare direct listed totals.
+            price_plat_num = round(price_plat_total, 2)
+            price_main_num = round(price_main_total, 2)
+        else:
+            # Different pack sizes: compare normalized per-bottle price.
+            price_plat_num = (
+                round(price_plat_total / max(quantity_plat, 1), 2)
+                if price_plat_total is not None
+                else None
+            )
+            price_main_num = (
+                round(price_main_total / max(quantity_main, 1), 2)
+                if price_main_total is not None
+                else None
+            )
 
         price_diff = None
         if price_plat_num is not None and price_main_num is not None:
@@ -242,8 +316,8 @@ def build_summary(matched_rows: list[dict[str, object]]) -> list[dict[str, objec
                 "year_plat": row["year_plat"],
                 "quantity_plat": row["quantity_plat"],
                 "volume_plat": row["volume_plat"],
-                "price_plat": row["price_plat"],
-                "price_main": row["price_main"],
+                "price_plat": f"{price_plat_num:.2f}" if price_plat_num is not None else row["price_plat"],
+                "price_main": f"{price_main_num:.2f}" if price_main_num is not None else row["price_main"],
                 "price_diff": price_diff,
                 "price_diff_pct": price_diff_pct,
                 "cheaper_side": cheaper_side,
