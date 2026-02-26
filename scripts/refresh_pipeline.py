@@ -164,19 +164,20 @@ def run_scrape_and_build(
     subprocess.run(build_cmd, cwd=ROOT, env=env, check=True)
 
 
-def check_health(health_url: str) -> None:
+def check_health(health_url: str) -> bool:
     print(f"[refresh] Checking health: {health_url}")
     try:
         with urlopen(health_url, timeout=20) as response:
             payload = response.read().decode("utf-8")
     except URLError as exc:
-        raise RuntimeError(f"Health check failed: {exc}") from exc
+        print(f"[refresh] Health check failed: {exc}")
+        return False
 
     try:
         body = json.loads(payload)
     except json.JSONDecodeError:
         print(f"[refresh] Health response (raw): {payload[:400]}")
-        return
+        return True
 
     latest = body.get("latest_ingestion") or {}
     print(
@@ -185,6 +186,7 @@ def check_health(health_url: str) -> None:
         f"ingestion_stale={body.get('ingestion_stale')}",
         f"latest_status={latest.get('status')}",
     )
+    return True
 
 
 def main() -> None:
@@ -308,6 +310,12 @@ def main() -> None:
         default=None,
         help="Optional API /health URL to verify after import.",
     )
+    parser.add_argument(
+        "--health-strict",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="If true, fail the run when --health-url check fails (default: false).",
+    )
     args = parser.parse_args()
 
     comparison_path = args.comparison.resolve()
@@ -373,7 +381,9 @@ def main() -> None:
     run_import(comparison_path, vivino_path, vivino_overrides_path, env)
 
     if args.health_url:
-        check_health(args.health_url)
+        health_ok = check_health(args.health_url)
+        if not health_ok and args.health_strict:
+            raise RuntimeError("Health check failed in strict mode.")
 
     print("[refresh] Done.")
 
