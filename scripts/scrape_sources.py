@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
@@ -107,6 +108,13 @@ def save_page_html(driver: webdriver.Chrome, debug_dir: Path | None, source: str
     filename.write_text(driver.page_source, encoding="utf-8")
 
 
+def _fetch_json(url: str) -> dict:
+    request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urlopen(request, timeout=30) as response:
+        payload = response.read().decode("utf-8")
+    return json.loads(payload)
+
+
 def scrape_grandcru(
     driver: webdriver.Chrome,
     *,
@@ -115,59 +123,73 @@ def scrape_grandcru(
     sleep_seconds: float,
     debug_dir: Path | None,
 ) -> ScrapeResult:
+    # NOTE: Grand Cru catalog pages changed frequently. Shopify's products.json endpoint
+    # is significantly more stable than DOM selectors and captures full catalog pages.
+    _ = driver
+    _ = debug_dir
+
     rows: list[dict[str, str]] = []
     seen_names: set[str] = set()
     page = 1
     pages_scraped = 0
 
     base = base_url.rstrip("/")
+    limit = 250
+
     while True:
         if max_pages is not None and page > max_pages:
             break
 
-        url = f"{base}/collections/all?pf_st_stock_status=true&page={page}"
+        url = f"{base}/products.json?limit={limit}&page={page}"
         print(f"[grandcru] page {page}: {url}")
+
         try:
-            driver.get(url)
-        except (TimeoutException, WebDriverException) as exc:
-            print(f"[grandcru] page load error on page {page}: {exc}")
+            payload = _fetch_json(url)
+        except Exception as exc:
+            print(f"[grandcru] products.json fetch error on page {page}: {exc}")
             break
 
-        time.sleep(sleep_seconds)
-        save_page_html(driver, debug_dir, "grandcru", page)
-
-        items = driver.find_elements(By.CSS_SELECTOR, "div.boost-pfs-filter-product-item")
-        if not items:
-            items = driver.find_elements(By.CSS_SELECTOR, "li.grid__item")
-        if not items:
-            print(f"[grandcru] no items found on page {page}; stopping.")
+        products = payload.get("products") or []
+        if not products:
+            print(f"[grandcru] no products on page {page}; stopping.")
             break
 
         page_new_rows = 0
-        for item in items:
-            link_element = find_first_element(item, GRANDCRU_NAME_SELECTORS)
-            if link_element is None:
+        for product in products:
+            name = (product.get("title") or "").strip()
+            handle = (product.get("handle") or "").strip()
+            if not name or not handle:
                 continue
 
-            name = (link_element.text or "").strip()
-            href = (link_element.get_attribute("href") or "").strip()
-            if not name or not href:
-                continue
-
-            canonical_url = urljoin(base + "/", href).replace("/collections/all", "")
-            price = first_non_empty_text(item, GRANDCRU_PRICE_SELECTORS)
+            variants = product.get("variants") or []
+            available_variants = [variant for variant in variants if variant.get("available")]
+            in_stock = bool(available_variants)
+            price_variant = available_variants[0] if available_variants else (variants[0] if variants else {})
+            price = str(price_variant.get("price") or "N/A")
 
             key = name.lower()
             if key in seen_names:
                 continue
 
             seen_names.add(key)
-            rows.append({"name": name, "price": price, "url": canonical_url, "in_stock": "true"})
+            rows.append(
+                {
+                    "name": name,
+                    "price": price,
+                    "url": f"{base}/products/{handle}",
+                    "in_stock": "true" if in_stock else "false",
+                }
+            )
             page_new_rows += 1
 
         print(f"[grandcru] captured {page_new_rows} new rows on page {page}.")
         pages_scraped += 1
+
+        if len(products) < limit:
+            break
+
         page += 1
+        time.sleep(max(sleep_seconds, 0.3))
 
     return ScrapeResult(rows=rows, pages_scraped=pages_scraped)
 

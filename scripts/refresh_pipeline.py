@@ -116,6 +116,54 @@ def run_import(comparison_path: Path, vivino_path: Path, vivino_overrides_path: 
     subprocess.run(import_cmd, cwd=ROOT, env=env, check=True)
 
 
+def run_scrape_and_build(
+    *,
+    grandcru_base_url: str,
+    platinum_base_url: str,
+    output_dir: Path,
+    max_pages: int,
+    sleep_seconds: float,
+    headed: bool,
+    match_threshold: float,
+    comparison_path: Path,
+    env: dict[str, str],
+) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    scrape_cmd = [
+        sys.executable,
+        str(ROOT / "scripts" / "scrape_sources.py"),
+        "--grandcru-base-url",
+        grandcru_base_url,
+        "--platinum-base-url",
+        platinum_base_url,
+        "--output-dir",
+        str(output_dir),
+        "--max-pages",
+        str(max_pages),
+        "--sleep-seconds",
+        str(sleep_seconds),
+    ]
+    if headed:
+        scrape_cmd.append("--headed")
+    print(f"[refresh] Running scrape into {output_dir}")
+    subprocess.run(scrape_cmd, cwd=ROOT, env=env, check=True)
+
+    build_cmd = [
+        sys.executable,
+        str(ROOT / "scripts" / "build_comparison_summary.py"),
+        "--grandcru-csv",
+        str(output_dir / "grandcru_wines.csv"),
+        "--platinum-csv",
+        str(output_dir / "platinum_wines.csv"),
+        "--output-comparison",
+        str(comparison_path),
+        "--match-threshold",
+        str(match_threshold),
+    ]
+    print(f"[refresh] Building comparison summary into {comparison_path}")
+    subprocess.run(build_cmd, cwd=ROOT, env=env, check=True)
+
+
 def check_health(health_url: str) -> None:
     print(f"[refresh] Checking health: {health_url}")
     try:
@@ -228,6 +276,28 @@ def main() -> None:
         help="Optional DATABASE_URL override (useful for direct prod imports).",
     )
     parser.add_argument(
+        "--scrape-and-build",
+        action="store_true",
+        help="Scrape both websites and rebuild comparison summary before resolver/import.",
+    )
+    parser.add_argument(
+        "--grandcru-base-url",
+        default="https://grandcruwines.com",
+    )
+    parser.add_argument(
+        "--platinum-base-url",
+        default="https://platwineclub.wineportal.com",
+    )
+    parser.add_argument(
+        "--scrape-output-dir",
+        type=Path,
+        default=ROOT / "seed" / "latest_refresh",
+    )
+    parser.add_argument("--scrape-max-pages", type=int, default=50)
+    parser.add_argument("--scrape-sleep-seconds", type=float, default=1.0)
+    parser.add_argument("--scrape-headed", action="store_true")
+    parser.add_argument("--build-match-threshold", type=float, default=0.6)
+    parser.add_argument(
         "--pre-command",
         action="append",
         default=[],
@@ -262,6 +332,19 @@ def main() -> None:
 
     for command in args.pre_command:
         run_command(command, env)
+
+    if args.scrape_and_build:
+        run_scrape_and_build(
+            grandcru_base_url=args.grandcru_base_url,
+            platinum_base_url=args.platinum_base_url,
+            output_dir=args.scrape_output_dir.resolve(),
+            max_pages=args.scrape_max_pages,
+            sleep_seconds=args.scrape_sleep_seconds,
+            headed=args.scrape_headed,
+            match_threshold=args.build_match_threshold,
+            comparison_path=comparison_path,
+            env=env,
+        )
 
     if args.resolve_vivino:
         run_vivino_resolver(

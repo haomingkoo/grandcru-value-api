@@ -643,6 +643,13 @@ def score_candidate(identity: WineIdentity, title: str, url: str) -> tuple[float
 
 
 def resolve_matches(args: argparse.Namespace) -> None:
+    if args.provider == "brave" and not args.brave_api_key:
+        raise ValueError("BRAVE_API_KEY is required for --provider brave")
+    if args.provider == "serper" and not args.serper_api_key:
+        raise ValueError("SERPER_API_KEY is required for --provider serper")
+    if args.provider == "google_cse" and (not args.google_api_key or not args.google_cse_id):
+        raise ValueError("GOOGLE_API_KEY and GOOGLE_CSE_ID are required for --provider google_cse")
+
     comparison_rows = read_csv_rows(args.comparison)
     vivino_rows = read_csv_rows(args.vivino)
     override_rows = read_optional_csv_rows(args.vivino_overrides)
