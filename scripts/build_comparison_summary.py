@@ -4,6 +4,7 @@ import argparse
 import csv
 import re
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 
 def parse_price(value: str | None) -> float | None:
@@ -69,6 +70,31 @@ def normalize_name(name: str | None) -> str:
     return text.strip()
 
 
+def is_truthy_stock(value: str | None) -> bool:
+    text = (value or "").strip().lower()
+    if not text:
+        return True
+    return text in {"true", "1", "yes", "y", "in_stock", "in stock", "available"}
+
+
+def fallback_grandcru_url_from_platinum(url: str | None) -> str | None:
+    if not url:
+        return None
+    parts = urlsplit(url)
+    slug = unquote(parts.path.strip("/").split("/")[-1]).lower()
+    slug = slug.replace("’", "-").replace("'", "-")
+    slug = re.sub(r"[^a-z0-9-]+", "-", slug)
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    slug = re.sub(r"-(red|white|rose)-\d+(?:-\d+)?-(ml|l)-.*$", "", slug)
+    slug = re.sub(r"-(red|white|rose)-.*$", "", slug)
+    slug = re.sub(r"-\d+(?:-\d+)?-(ml|l)-.*$", "", slug)
+    slug = re.sub(r"-bundle-of-\d+$", "", slug)
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    if not slug:
+        return None
+    return f"https://grandcruwines.com/products/{slug}"
+
+
 def jaccard_similarity(a: str, b: str) -> float:
     set_a = set(a.split())
     set_b = set(b.split())
@@ -98,9 +124,11 @@ def year_matches(a: int | None, b: int | None) -> bool:
     return (a is None and b is None) or (a == b)
 
 
-def prepare_rows(rows: list[dict[str, str]]) -> list[dict[str, object]]:
+def prepare_rows(rows: list[dict[str, str]], *, enforce_in_stock: bool = False) -> list[dict[str, object]]:
     prepared: list[dict[str, object]] = []
     for row in rows:
+        if enforce_in_stock and not is_truthy_stock(row.get("in_stock")):
+            continue
         url = (row.get("url") or "").strip()
         name = (row.get("name") or "").strip()
         quantity, volume, year = parse_quantity_volume_year(url)
@@ -125,6 +153,7 @@ def build_matches(
     threshold: float,
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
+    grandcru_by_url = {str(row["url"]): row for row in grandcru if row.get("url")}
     for plat in platinum:
         best = None
         best_score = 0.0
@@ -156,10 +185,13 @@ def build_matches(
                     "volume_main": best["volume"],
                     "price_main": best["price"],
                     "url_main": best["url"],
+                    "match_method": "name",
                     "match_score": round(best_score, 4),
                 }
             )
         else:
+            fallback_url = fallback_grandcru_url_from_platinum(str(plat.get("url") or ""))
+            fallback_main = grandcru_by_url.get(fallback_url or "")
             rows.append(
                 {
                     "name_plat": plat["name"],
@@ -168,12 +200,13 @@ def build_matches(
                     "volume_plat": plat["volume"],
                     "price_plat": plat["price"],
                     "url_plat": plat["url"],
-                    "name_main": None,
-                    "year_main": None,
-                    "quantity_main": None,
-                    "volume_main": None,
-                    "price_main": None,
-                    "url_main": None,
+                    "name_main": fallback_main["name"] if fallback_main is not None else None,
+                    "year_main": fallback_main["year"] if fallback_main is not None else None,
+                    "quantity_main": fallback_main["quantity"] if fallback_main is not None else None,
+                    "volume_main": fallback_main["volume"] if fallback_main is not None else None,
+                    "price_main": fallback_main["price"] if fallback_main is not None else None,
+                    "url_main": fallback_url,
+                    "match_method": "url_fallback" if fallback_main is not None else "url_predicted",
                     "match_score": round(best_score, 4),
                 }
             )
@@ -248,7 +281,7 @@ def main() -> None:
     args = parser.parse_args()
 
     grandcru_rows = prepare_rows(read_rows(args.grandcru_csv))
-    platinum_rows = prepare_rows(read_rows(args.platinum_csv))
+    platinum_rows = prepare_rows(read_rows(args.platinum_csv), enforce_in_stock=True)
     matched = build_matches(grandcru_rows, platinum_rows, threshold=args.match_threshold)
     summary = build_summary(matched)
 
@@ -268,6 +301,7 @@ def main() -> None:
                 "volume_main",
                 "price_main",
                 "url_main",
+                "match_method",
                 "match_score",
             ],
             matched,
@@ -298,4 +332,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

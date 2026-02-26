@@ -13,3 +13,4 @@ data/
 seed/*
 !seed/comparison_summary.csv
 !seed/vivino_results.csv
+!seed/vivino_overrides.csv

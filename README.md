@@ -283,6 +283,42 @@ python scripts/refresh_pipeline.py \
   --health-url http://127.0.0.1:8010/health
 ```
 
+### Full Daily Refresh (Websites + Vivino + Import)
+
+Use this when you want fresh website data and fresh Vivino matching in one run:
+
+```bash
+export BRAVE_API_KEY="your_brave_api_key"
+python scripts/refresh_pipeline.py \
+  --scrape-and-build \
+  --grandcru-base-url https://grandcruwines.com \
+  --platinum-base-url https://platwineclub.wineportal.com \
+  --scrape-output-dir seed/latest_refresh \
+  --scrape-max-pages 50 \
+  --comparison seed/comparison_summary.csv \
+  --vivino seed/vivino_results.csv \
+  --vivino-overrides seed/vivino_overrides.csv \
+  --resolve-vivino \
+  --resolver-provider brave \
+  --resolver-max-api-queries 40 \
+  --resolver-only-new-unresolved \
+  --health-url http://127.0.0.1:8010/health
+```
+
+For one-time backfill (reprocess all unresolved rows):
+
+```bash
+python scripts/refresh_pipeline.py \
+  --scrape-and-build \
+  --comparison seed/comparison_summary.csv \
+  --vivino seed/vivino_results.csv \
+  --vivino-overrides seed/vivino_overrides.csv \
+  --resolve-vivino \
+  --resolver-provider brave \
+  --resolver-max-api-queries 200 \
+  --no-resolver-only-new-unresolved
+```
+
 ### Reset DB (Local or Railway)
 
 Reset schema and re-import from seed files:
