@@ -322,7 +322,7 @@ def main() -> None:
     vivino_path = args.vivino.resolve()
     vivino_overrides_path = args.vivino_overrides.resolve()
 
-    if not comparison_path.exists():
+    if not comparison_path.exists() and not args.scrape_and_build:
         raise FileNotFoundError(f"Missing comparison CSV: {comparison_path}")
     if not vivino_path.exists():
         raise FileNotFoundError(f"Missing vivino CSV: {vivino_path}")
@@ -330,13 +330,6 @@ def main() -> None:
     env = os.environ.copy()
     if args.database_url:
         env["DATABASE_URL"] = args.database_url
-
-    print(
-        "[refresh] Input rows:",
-        f"comparison={count_rows(comparison_path)}",
-        f"vivino={count_rows(vivino_path)}",
-        f"overrides={count_rows(vivino_overrides_path) if vivino_overrides_path.exists() else 0}",
-    )
 
     for command in args.pre_command:
         run_command(command, env)
@@ -353,6 +346,13 @@ def main() -> None:
             comparison_path=comparison_path,
             env=env,
         )
+
+    print(
+        "[refresh] Input rows:",
+        f"comparison={count_rows(comparison_path)}",
+        f"vivino={count_rows(vivino_path)}",
+        f"overrides={count_rows(vivino_overrides_path) if vivino_overrides_path.exists() else 0}",
+    )
 
     if args.resolve_vivino:
         run_vivino_resolver(

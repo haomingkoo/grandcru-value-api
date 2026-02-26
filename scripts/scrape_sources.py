@@ -8,6 +8,7 @@ This refactor replaces notebook-only scraping with a reusable script:
 import argparse
 import csv
 import json
+import os
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -56,6 +57,9 @@ class ScrapeResult:
 
 def make_driver(*, headless: bool, page_load_timeout: int) -> webdriver.Chrome:
     options = webdriver.ChromeOptions()
+    chrome_bin = os.getenv("CHROME_BIN", "").strip()
+    if chrome_bin:
+        options.binary_location = chrome_bin
     if headless:
         options.add_argument("--headless=new")
     options.add_argument("--window-size=1920,1080")
