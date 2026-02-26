@@ -9,7 +9,6 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -26,7 +25,80 @@ def run_command(command: str, env: dict[str, str]) -> None:
     subprocess.run(args, cwd=ROOT, env=env, check=True)
 
 
-def run_import(comparison_path: Path, vivino_path: Path, env: dict[str, str]) -> None:
+def run_vivino_resolver(
+    *,
+    comparison_path: Path,
+    vivino_path: Path,
+    vivino_overrides_path: Path,
+    provider: str,
+    auto_apply: bool,
+    max_results: int,
+    sleep_seconds: float,
+    min_confidence: float,
+    min_margin: float,
+    limit: int,
+    max_api_queries: int,
+    auto_provider_order: str,
+    query_cache: Path,
+    cache_ttl_hours: float,
+    only_new_unresolved: bool,
+    state_file: Path,
+    output_review: Path,
+    output_unmatched: Path,
+    output_suggestions: Path,
+    env: dict[str, str],
+) -> None:
+    resolver_cmd = [
+        sys.executable,
+        str(ROOT / "scripts" / "resolve_vivino_matches.py"),
+        "--comparison",
+        str(comparison_path),
+        "--vivino",
+        str(vivino_path),
+        "--vivino-overrides",
+        str(vivino_overrides_path),
+        "--provider",
+        provider,
+        "--max-results",
+        str(max_results),
+        "--sleep-seconds",
+        str(sleep_seconds),
+        "--min-confidence",
+        str(min_confidence),
+        "--min-margin",
+        str(min_margin),
+        "--limit",
+        str(limit),
+        "--max-api-queries",
+        str(max_api_queries),
+        "--auto-provider-order",
+        auto_provider_order,
+        "--query-cache",
+        str(query_cache),
+        "--cache-ttl-hours",
+        str(cache_ttl_hours),
+        "--state-file",
+        str(state_file),
+        "--output-review",
+        str(output_review),
+        "--output-unmatched",
+        str(output_unmatched),
+        "--output-suggestions",
+        str(output_suggestions),
+    ]
+    if only_new_unresolved:
+        resolver_cmd.append("--only-new-unresolved")
+    else:
+        resolver_cmd.append("--no-only-new-unresolved")
+
+    if auto_apply:
+        resolver_cmd.append("--auto-apply")
+
+    print(f"[refresh] Running vivino resolver ({provider})")
+    subprocess.run(resolver_cmd, cwd=ROOT, env=env, check=True)
+
+
+def run_import(comparison_path: Path, vivino_path: Path, vivino_overrides_path: Path, env: dict[str, str]) -> None:
     import_cmd = [
         sys.executable,
         str(ROOT / "scripts" / "import_wine_data.py"),
@@ -34,8 +106,13 @@ def run_import(comparison_path: Path, vivino_path: Path, env: dict[str, str]) ->
         str(comparison_path),
         "--vivino",
         str(vivino_path),
+        "--vivino-overrides",
+        str(vivino_overrides_path),
     ]
-    print(f"[refresh] Running import with {comparison_path.name} and {vivino_path.name}")
+    print(
+        f"[refresh] Running import with {comparison_path.name}, {vivino_path.name},"
+        f" overrides={vivino_overrides_path.name}"
+    )
     subprocess.run(import_cmd, cwd=ROOT, env=env, check=True)
 
 
@@ -79,6 +156,73 @@ def main() -> None:
         help="Path to vivino_results CSV.",
     )
     parser.add_argument(
+        "--vivino-overrides",
+        type=Path,
+        default=ROOT / "seed" / "vivino_overrides.csv",
+        help="Path to manual vivino overrides CSV.",
+    )
+    parser.add_argument(
+        "--resolve-vivino",
+        action="store_true",
+        help="Run deterministic vivino query generation and matching resolver before import.",
+    )
+    parser.add_argument(
+        "--resolver-provider",
+        choices=["none", "auto", "serper", "google_cse", "brave"],
+        default="none",
+        help="Search provider for resolver (none generates deterministic review queue only).",
+    )
+    parser.add_argument(
+        "--resolver-auto-apply",
+        action="store_true",
+        help="Auto-append high-confidence matches into --vivino-overrides.",
+    )
+    parser.add_argument("--resolver-max-results", type=int, default=8)
+    parser.add_argument("--resolver-sleep-seconds", type=float, default=1.2)
+    parser.add_argument("--resolver-min-confidence", type=float, default=0.82)
+    parser.add_argument("--resolver-min-margin", type=float, default=0.08)
+    parser.add_argument("--resolver-limit", type=int, default=0)
+    parser.add_argument("--resolver-max-api-queries", type=int, default=0)
+    parser.add_argument(
+        "--resolver-auto-provider-order",
+        default=os.getenv("VIVINO_AUTO_PROVIDER_ORDER", "google_cse,brave,serper"),
+    )
+    parser.add_argument(
+        "--resolver-query-cache",
+        type=Path,
+        default=ROOT / "data" / "vivino_query_cache.json",
+    )
+    parser.add_argument("--resolver-cache-ttl-hours", type=float, default=168.0)
+    parser.add_argument(
+        "--resolver-only-new-unresolved",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Only query newly unresolved rows (default: true).",
+    )
+    parser.add_argument(
+        "--resolver-state-file",
+        type=Path,
+        default=ROOT / "data" / "vivino_resolver_state.json",
+    )
+    parser.add_argument(
+        "--resolver-output-review",
+        type=Path,
+        default=ROOT / "data" / "vivino_review_queue.csv",
+        help="Resolver review queue output CSV path.",
+    )
+    parser.add_argument(
+        "--resolver-output-unmatched",
+        type=Path,
+        default=ROOT / "data" / "vivino_unmatched.csv",
+        help="Resolver unmatched output CSV path.",
+    )
+    parser.add_argument(
+        "--resolver-output-suggestions",
+        type=Path,
+        default=ROOT / "data" / "vivino_auto_overrides.csv",
+        help="Resolver auto-accepted suggestions output CSV path.",
+    )
+    parser.add_argument(
         "--database-url",
         default=None,
         help="Optional DATABASE_URL override (useful for direct prod imports).",
@@ -98,6 +242,7 @@ def main() -> None:
 
     comparison_path = args.comparison.resolve()
     vivino_path = args.vivino.resolve()
+    vivino_overrides_path = args.vivino_overrides.resolve()
 
     if not comparison_path.exists():
         raise FileNotFoundError(f"Missing comparison CSV: {comparison_path}")
@@ -112,12 +257,37 @@ def main() -> None:
         "[refresh] Input rows:",
         f"comparison={count_rows(comparison_path)}",
         f"vivino={count_rows(vivino_path)}",
+        f"overrides={count_rows(vivino_overrides_path) if vivino_overrides_path.exists() else 0}",
     )
 
     for command in args.pre_command:
         run_command(command, env)
 
-    run_import(comparison_path, vivino_path, env)
+    if args.resolve_vivino:
+        run_vivino_resolver(
+            comparison_path=comparison_path,
+            vivino_path=vivino_path,
+            vivino_overrides_path=vivino_overrides_path,
+            provider=args.resolver_provider,
+            auto_apply=args.resolver_auto_apply,
+            max_results=args.resolver_max_results,
+            sleep_seconds=args.resolver_sleep_seconds,
+            min_confidence=args.resolver_min_confidence,
+            min_margin=args.resolver_min_margin,
+            limit=args.resolver_limit,
+            max_api_queries=args.resolver_max_api_queries,
+            auto_provider_order=args.resolver_auto_provider_order,
+            query_cache=args.resolver_query_cache.resolve(),
+            cache_ttl_hours=args.resolver_cache_ttl_hours,
+            only_new_unresolved=args.resolver_only_new_unresolved,
+            state_file=args.resolver_state_file.resolve(),
+            output_review=args.resolver_output_review.resolve(),
+            output_unmatched=args.resolver_output_unmatched.resolve(),
+            output_suggestions=args.resolver_output_suggestions.resolve(),
+            env=env,
+        )
+
+    run_import(comparison_path, vivino_path, vivino_overrides_path, env)
 
     if args.health_url:
         check_health(args.health_url)
