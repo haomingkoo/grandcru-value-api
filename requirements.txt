@@ -4,3 +4,4 @@ sqlalchemy
 pydantic
 psycopg[binary]
 psycopg2-binary
+selenium

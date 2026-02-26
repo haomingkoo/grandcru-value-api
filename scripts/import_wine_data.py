@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -279,6 +279,9 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
     session.refresh(run)
 
     try:
+        existing_deals = list(session.scalars(select(WineDeal)).all())
+        existing_vivino_by_name = {normalize_key(deal.wine_name): deal for deal in existing_deals if deal.wine_name}
+
         merged_records: list[WineDeal] = []
         snapshot_records: list[WineDealSnapshot] = []
         snapshot_time = datetime.now(UTC)
@@ -287,6 +290,7 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
         canonical_matches = 0
         fuzzy_matches = 0
         unmatched = 0
+        db_fallback_matches = 0
 
         for row in comparison_rows:
             wine_name = (row.get("name_plat") or "").strip()
@@ -305,6 +309,19 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
 
             vivino_rating = parse_float(vivino.get("vivino_rating"))
             vivino_num_ratings = parse_int(vivino.get("vivino_num_ratings")) or parse_int(vivino.get("vivino_raters"))
+            vivino_url = normalize_url(vivino.get("vivino_url"))
+
+            if match_method == "none":
+                prior = existing_vivino_by_name.get(normalize_key(wine_name))
+                if prior is not None and (
+                    prior.vivino_url is not None
+                    or prior.vivino_rating is not None
+                    or prior.vivino_num_ratings is not None
+                ):
+                    vivino_url = prior.vivino_url
+                    vivino_rating = prior.vivino_rating
+                    vivino_num_ratings = prior.vivino_num_ratings
+                    db_fallback_matches += 1
 
             price_platinum = parse_float(row.get("price_plat"))
             price_grand_cru = parse_float(row.get("price_main"))
@@ -328,7 +345,7 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 "cheaper_side": (row.get("cheaper_side") or "").strip() or None,
                 "platinum_url": normalize_platinum_url(row.get("url_plat")),
                 "grand_cru_url": normalize_url(row.get("url_main")),
-                "vivino_url": normalize_url(vivino.get("vivino_url")),
+                "vivino_url": vivino_url,
                 "vivino_rating": vivino_rating,
                 "vivino_num_ratings": vivino_num_ratings,
                 "deal_score": compute_deal_score(price_diff_pct, vivino_rating, vivino_num_ratings),
@@ -357,7 +374,8 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
             f"Loaded {len(comparison_rows)} comparison rows and {len(vivino_rows_base)} vivino rows "
             f"(+{len(vivino_rows_override)} overrides) into {len(merged_records)} current deals and "
             f"{len(snapshot_records)} snapshots (vivino matched: exact={exact_matches}, "
-            f"canonical={canonical_matches}, fuzzy={fuzzy_matches}, unmatched={unmatched}); "
+            f"canonical={canonical_matches}, fuzzy={fuzzy_matches}, unmatched={unmatched}, "
+            f"db_fallback={db_fallback_matches}); "
             f"pruned {deleted_snapshots} snapshots older than {settings.history_retention_days} days."
         )
         session.commit()
