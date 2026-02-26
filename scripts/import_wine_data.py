@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from sqlalchemy import delete, select
 
@@ -251,6 +252,13 @@ def normalize_url(url: str | None) -> str | None:
     return url.strip() or None
 
 
+def build_vivino_search_url(query: str | None) -> str | None:
+    cleaned = (query or "").strip()
+    if not cleaned:
+        return None
+    return f"https://www.vivino.com/en/search/wines?q={quote_plus(cleaned)}"
+
+
 def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path: Path | None = None) -> None:
     if not comparison_path.exists():
         raise FileNotFoundError(f"comparison_summary missing: {comparison_path}")
@@ -310,6 +318,11 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
             vivino_rating = parse_float(vivino.get("vivino_rating"))
             vivino_num_ratings = parse_int(vivino.get("vivino_num_ratings")) or parse_int(vivino.get("vivino_raters"))
             vivino_url = normalize_url(vivino.get("vivino_url"))
+
+            if vivino_url is None and (vivino_rating is not None or vivino_num_ratings is not None):
+                vivino_url = build_vivino_search_url(
+                    vivino.get("wine_name") or vivino.get("match_name") or wine_name
+                )
 
             if match_method == "none":
                 prior = existing_vivino_by_name.get(normalize_key(wine_name))
