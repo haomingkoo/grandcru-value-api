@@ -141,12 +141,24 @@ def upsert_overrides(existing: list[dict[str, str]], new_rows: list[dict[str, st
     for row in existing:
         key = (row.get("match_name") or "").strip()
         if key:
-            by_name[key] = row
+            by_name[key] = row.copy()
 
     for row in new_rows:
         key = (row.get("match_name") or "").strip()
-        if key:
-            by_name[key] = row
+        if not key:
+            continue
+        prior = by_name.get(key)
+        if prior is None:
+            by_name[key] = row.copy()
+            continue
+
+        merged = prior.copy()
+        for field in _OVERRIDE_FIELDS:
+            incoming = (row.get(field) or "").strip()
+            if incoming:
+                merged[field] = incoming
+        merged["match_name"] = key
+        by_name[key] = merged
 
     merged = list(by_name.values())
     merged.sort(key=lambda r: (r.get("match_name") or ""))
@@ -661,13 +673,22 @@ def resolve_matches(args: argparse.Namespace) -> None:
 
     initial_lookup = build_vivino_lookup(vivino_rows + override_rows)
     unresolved_rows: list[dict[str, str]] = []
+    unresolved_none_count = 0
+    missing_url_enrichment_count = 0
     for row in comparison_rows:
         wine_name = (row.get("name_plat") or "").strip()
         if not wine_name:
             continue
-        _, match_method = match_vivino_row(wine_name, initial_lookup)
+        matched_row, match_method = match_vivino_row(wine_name, initial_lookup)
         if match_method == "none":
             unresolved_rows.append(row)
+            unresolved_none_count += 1
+            continue
+
+        matched_url = normalize_vivino_url((matched_row or {}).get("vivino_url"))
+        if not matched_url:
+            unresolved_rows.append(row)
+            missing_url_enrichment_count += 1
 
     total_unresolved_before_filter = len(unresolved_rows)
     skipped_seen = 0
@@ -690,6 +711,8 @@ def resolve_matches(args: argparse.Namespace) -> None:
         f"vivino={len(vivino_rows)}",
         f"overrides={len(override_rows)}",
         f"unresolved_before_filter={total_unresolved_before_filter}",
+        f"unresolved_none={unresolved_none_count}",
+        f"missing_url_enrichment={missing_url_enrichment_count}",
         f"skipped_seen={skipped_seen}",
         f"unresolved={len(unresolved_rows)}",
     )
@@ -710,6 +733,7 @@ def resolve_matches(args: argparse.Namespace) -> None:
         seen_unresolved[row_fingerprint] = int(time.time())
 
         identity = parse_identity(row)
+        existing_match_row, _ = match_vivino_row(identity.wine_name, initial_lookup)
         queries = build_queries(identity, row)
         vivino_search_url = build_vivino_search_url(identity)
 
@@ -824,13 +848,21 @@ def resolve_matches(args: argparse.Namespace) -> None:
         )
 
         if decision == "auto_accept" and best is not None:
+            existing_rating = (existing_match_row.get("vivino_rating") or "").strip()
+            existing_count = (
+                (existing_match_row.get("vivino_num_ratings") or "").strip()
+                or (existing_match_row.get("vivino_raters") or "").strip()
+            )
+            existing_price = (existing_match_row.get("vivino_price") or "").strip()
+            existing_name = (existing_match_row.get("wine_name") or "").strip()
+
             accepted_rows.append(
                 {
                     "match_name": identity.wine_name,
-                    "wine_name": best.title,
-                    "vivino_rating": "",
-                    "vivino_num_ratings": "",
-                    "vivino_price": "",
+                    "wine_name": existing_name or best.title,
+                    "vivino_rating": existing_rating,
+                    "vivino_num_ratings": existing_count,
+                    "vivino_price": existing_price,
                     "vivino_url": best.url,
                     "notes": (
                         f"auto_resolved provider={best.provider or args.provider} "
