@@ -1,5 +1,6 @@
 import argparse
 import csv
+import logging
 import os
 import re
 import sys
@@ -19,6 +20,13 @@ from app.config import settings  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models import IngestionRun, WineDeal, WineDealSnapshot  # noqa: E402
 from app.scoring import compute_deal_score, parse_float, parse_int  # noqa: E402
+
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("grandcru.import")
 
 PLATINUM_LEGACY_HOSTS = (
     "https://platinum.grandcruwines.com",
@@ -97,6 +105,12 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def read_optional_csv_rows(path: Path | None) -> list[dict[str, str]]:
+    if path is None or not path.exists():
+        return []
+    return read_csv_rows(path)
+
+
 @dataclass(frozen=True)
 class VivinoLookup:
     exact: dict[str, dict[str, str]]
@@ -111,18 +125,20 @@ def build_vivino_lookup(rows: list[dict[str, str]]) -> VivinoLookup:
     by_year: dict[int, list[dict[str, str]]] = {}
 
     for row in rows:
-        wine_name = row.get("wine_name")
-        key = normalize_key(wine_name)
-        if key and key not in exact:
-            exact[key] = row
+        candidate_names = [row.get("wine_name"), row.get("match_name")]
+        for candidate_name in candidate_names:
+            key = normalize_key(candidate_name)
+            if key:
+                # Latest row wins, so overrides can replace stale base records.
+                exact[key] = row
 
-        canonical_key = canonicalize_key(wine_name)
-        if canonical_key:
-            canonical.setdefault(canonical_key, []).append(row)
+            canonical_key = canonicalize_key(candidate_name)
+            if canonical_key:
+                canonical.setdefault(canonical_key, []).append(row)
 
-        year = extract_year(wine_name)
-        if year is not None:
-            by_year.setdefault(year, []).append(row)
+            year = extract_year(candidate_name)
+            if year is not None:
+                by_year.setdefault(year, []).append(row)
 
     return VivinoLookup(exact=exact, canonical=canonical, by_year=by_year, rows=rows)
 
@@ -165,7 +181,8 @@ def match_vivino_row(wine_name: str, lookup: VivinoLookup) -> tuple[dict[str, st
         target_year = extract_year(wine_name)
         if target_year is not None:
             for candidate in candidates:
-                if extract_year(candidate.get("wine_name")) == target_year:
+                candidate_name = candidate.get("match_name") or candidate.get("wine_name")
+                if extract_year(candidate_name) == target_year:
                     return candidate, "canonical"
         return candidates[0], "canonical"
 
@@ -179,7 +196,8 @@ def match_vivino_row(wine_name: str, lookup: VivinoLookup) -> tuple[dict[str, st
 
     scored_candidates: list[tuple[float, float, float, float, int, dict[str, str]]] = []
     for candidate in candidate_rows:
-        candidate_key = canonicalize_key(candidate.get("wine_name"))
+        candidate_name = candidate.get("match_name") or candidate.get("wine_name")
+        candidate_key = canonicalize_key(candidate_name)
         if not candidate_key:
             continue
 
@@ -233,7 +251,7 @@ def normalize_url(url: str | None) -> str | None:
     return url.strip() or None
 
 
-def import_data(comparison_path: Path, vivino_path: Path) -> None:
+def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path: Path | None = None) -> None:
     if not comparison_path.exists():
         raise FileNotFoundError(f"comparison_summary missing: {comparison_path}")
     if not vivino_path.exists():
@@ -242,8 +260,17 @@ def import_data(comparison_path: Path, vivino_path: Path) -> None:
     Base.metadata.create_all(bind=engine)
 
     comparison_rows = read_csv_rows(comparison_path)
-    vivino_rows = read_csv_rows(vivino_path)
+    vivino_rows_base = read_csv_rows(vivino_path)
+    vivino_rows_override = read_optional_csv_rows(vivino_overrides_path)
+    vivino_rows = vivino_rows_base + vivino_rows_override
     vivino_lookup = build_vivino_lookup(vivino_rows)
+
+    logger.info(
+        "import_start comparison=%s vivino=%s overrides=%s",
+        comparison_path,
+        vivino_path,
+        vivino_overrides_path,
+    )
 
     session = SessionLocal()
     run = IngestionRun(status="running", comparison_rows=len(comparison_rows), vivino_rows=len(vivino_rows))
@@ -327,14 +354,14 @@ def import_data(comparison_path: Path, vivino_path: Path) -> None:
         run.finished_at = datetime.now(UTC)
         run.merged_rows = len(merged_records)
         run.details = (
-            f"Loaded {len(comparison_rows)} comparison rows and {len(vivino_rows)} vivino rows "
-            f"into {len(merged_records)} current deals and {len(snapshot_records)} snapshots "
-            f"(vivino matched: exact={exact_matches}, canonical={canonical_matches}, "
-            f"fuzzy={fuzzy_matches}, unmatched={unmatched}); "
+            f"Loaded {len(comparison_rows)} comparison rows and {len(vivino_rows_base)} vivino rows "
+            f"(+{len(vivino_rows_override)} overrides) into {len(merged_records)} current deals and "
+            f"{len(snapshot_records)} snapshots (vivino matched: exact={exact_matches}, "
+            f"canonical={canonical_matches}, fuzzy={fuzzy_matches}, unmatched={unmatched}); "
             f"pruned {deleted_snapshots} snapshots older than {settings.history_retention_days} days."
         )
         session.commit()
-        print(run.details)
+        logger.info("import_success %s", run.details)
     except Exception as exc:
         session.rollback()
         run.status = "failed"
@@ -342,6 +369,7 @@ def import_data(comparison_path: Path, vivino_path: Path) -> None:
         run.details = f"Import failed: {exc}"
         session.add(run)
         session.commit()
+        logger.exception("import_failed %s", run.details)
         raise
     finally:
         session.close()
@@ -361,8 +389,14 @@ def main() -> None:
         default=Path("seed/vivino_results.csv"),
         help="Path to vivino_results.csv",
     )
+    parser.add_argument(
+        "--vivino-overrides",
+        type=Path,
+        default=Path("seed/vivino_overrides.csv"),
+        help="Optional path to manual vivino overrides CSV.",
+    )
     args = parser.parse_args()
-    import_data(args.comparison, args.vivino)
+    import_data(args.comparison, args.vivino, args.vivino_overrides)
 
 
 if __name__ == "__main__":

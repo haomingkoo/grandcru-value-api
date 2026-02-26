@@ -1,5 +1,8 @@
 from contextlib import asynccontextmanager
+import logging
 from pathlib import Path
+import time
+import uuid
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +22,17 @@ from app.service import (
     is_ingestion_stale,
     list_deals,
 )
+
+
+_level = getattr(logging, settings.log_level, logging.INFO)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=_level,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+else:
+    logging.getLogger().setLevel(_level)
+logger = logging.getLogger("grandcru.api")
 
 
 @asynccontextmanager
@@ -65,6 +79,13 @@ async def rate_limit_middleware(request, call_next):
     )
     limit_result = _rate_limiter.check(client_ip)
     if not limit_result.allowed:
+        logger.warning(
+            "rate_limited path=%s method=%s ip=%s retry_after=%s",
+            request.url.path,
+            request.method,
+            client_ip,
+            limit_result.reset_seconds,
+        )
         return JSONResponse(
             status_code=429,
             content={"detail": "Rate limit exceeded. Please retry shortly."},
@@ -78,6 +99,47 @@ async def rate_limit_middleware(request, call_next):
     response = await call_next(request)
     response.headers["X-RateLimit-Limit"] = str(_rate_limiter.limit)
     response.headers["X-RateLimit-Remaining"] = str(limit_result.remaining)
+    return response
+
+
+@app.middleware("http")
+async def access_log_middleware(request, call_next):
+    if not settings.access_log_enabled:
+        return await call_next(request)
+
+    start = time.perf_counter()
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    client_ip = resolve_client_ip(
+        request.client.host if request.client else None,
+        request.headers.get("x-forwarded-for"),
+        request.headers.get("x-real-ip"),
+    )
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - start) * 1000.0
+        logger.exception(
+            "request_failed request_id=%s method=%s path=%s ip=%s duration_ms=%.2f",
+            request_id,
+            request.method,
+            request.url.path,
+            client_ip,
+            duration_ms,
+        )
+        raise
+
+    duration_ms = (time.perf_counter() - start) * 1000.0
+    response.headers["X-Request-ID"] = request_id
+    logger.info(
+        "request request_id=%s method=%s path=%s status=%s ip=%s duration_ms=%.2f",
+        request_id,
+        request.method,
+        request.url.path,
+        response.status_code,
+        client_ip,
+        duration_ms,
+    )
     return response
 
 
