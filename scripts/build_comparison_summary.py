@@ -256,7 +256,8 @@ def build_matches(
                     "quantity_main": fallback_main["quantity"] if fallback_main is not None else None,
                     "volume_main": fallback_main["volume"] if fallback_main is not None else None,
                     "price_main": fallback_main["price"] if fallback_main is not None else None,
-                    "url_main": fallback_url,
+                    # Do not expose predicted-only Grand Cru URLs when no catalog hit exists.
+                    "url_main": fallback_main["url"] if fallback_main is not None else "",
                     "match_method": "url_fallback" if fallback_main is not None else "url_predicted",
                     "match_score": round(best_score, 4),
                 }
