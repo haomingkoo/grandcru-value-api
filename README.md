@@ -348,3 +348,44 @@ railway run python scripts/import_wine_data.py \
 3. Configure with:
    - `LOG_LEVEL` (default `INFO`)
    - `ACCESS_LOG_ENABLED` (`true`/`false`, default `true`)
+
+### Ops Endpoints (Production Diagnostics + Manual Trigger)
+
+Use these to inspect Railway runtime state and trigger refresh jobs from the hosted API itself.
+
+Required env vars:
+
+1. `OPS_API_KEY` (required to enable `/ops/*` endpoints)
+2. `OPS_DEFAULT_HEALTH_URL` (optional fallback health URL for triggered runs)
+
+Endpoints:
+
+1. `GET /ops/diagnostics`:
+   - runtime metadata (`git_commit`, service name, hostname)
+   - DB counts (`total_deals`, `total_snapshots`)
+   - file row counts for seed/queue CSVs
+   - current refresh runner status
+2. `GET /ops/refresh/status`: current/last refresh run state
+3. `GET /ops/refresh/log?lines=300`: tail of latest refresh log
+4. `POST /ops/refresh/trigger`: trigger `daily`, `weekly`, or `import_only` run mode
+
+Examples:
+
+```bash
+export OPS_KEY="replace_me"
+export API_BASE="https://web-production-f2effe.up.railway.app"
+
+curl -sS "$API_BASE/ops/diagnostics" -H "X-Ops-Key: $OPS_KEY"
+curl -sS "$API_BASE/ops/refresh/status" -H "X-Ops-Key: $OPS_KEY"
+curl -sS "$API_BASE/ops/refresh/log?lines=200" -H "X-Ops-Key: $OPS_KEY"
+
+curl -sS -X POST "$API_BASE/ops/refresh/trigger" \
+  -H "Content-Type: application/json" \
+  -H "X-Ops-Key: $OPS_KEY" \
+  -d '{"mode":"daily","strict_health":false}'
+
+curl -sS -X POST "$API_BASE/ops/refresh/trigger" \
+  -H "Content-Type: application/json" \
+  -H "X-Ops-Key: $OPS_KEY" \
+  -d '{"mode":"weekly","strict_health":false}'
+```

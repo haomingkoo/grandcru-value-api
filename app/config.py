@@ -24,6 +24,8 @@ class Settings:
     )
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
     access_log_enabled: bool = _as_bool(os.getenv("ACCESS_LOG_ENABLED"), True)
+    ops_api_key: str = os.getenv("OPS_API_KEY", "")
+    ops_default_health_url: str = os.getenv("OPS_DEFAULT_HEALTH_URL", "")
 
 
 settings = Settings()

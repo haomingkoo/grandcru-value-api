@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DealOut(BaseModel):
@@ -77,3 +77,44 @@ class DealHistoryOut(BaseModel):
     vivino_num_ratings: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class OpsRefreshTriggerIn(BaseModel):
+    mode: str = Field(default="daily", description="daily | weekly | import_only")
+    health_url: str | None = None
+    strict_health: bool = False
+
+
+class OpsRefreshStatusOut(BaseModel):
+    run_id: str | None = None
+    status: str
+    mode: str | None = None
+    triggered_by: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    exit_code: int | None = None
+    command: list[str] | None = None
+    log_path: str | None = None
+    pid: int | None = None
+
+
+class OpsRefreshLogOut(BaseModel):
+    run_id: str | None = None
+    log_tail: str
+
+
+class OpsDiagnosticsOut(BaseModel):
+    timestamp: str
+    app_name: str
+    hostname: str
+    python_version: str
+    git_commit: str
+    railway_service: str
+    railway_env: str
+    database_scheme: str
+    brave_api_key_set: bool
+    ops_api_key_set: bool
+    total_deals: int
+    total_snapshots: int
+    refresh_status: dict
+    files: list[dict]
