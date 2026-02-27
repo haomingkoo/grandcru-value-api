@@ -820,6 +820,16 @@ def resolve_matches(args: argparse.Namespace) -> None:
         if search_errors:
             reason = f"{reason}; search_error={search_errors[0]}"
 
+        if decision == "auto_accept" and best is not None:
+            existing_rating_for_accept = (existing_match_row.get("vivino_rating") or "").strip()
+            existing_count_for_accept = (
+                (existing_match_row.get("vivino_num_ratings") or "").strip()
+                or (existing_match_row.get("vivino_raters") or "").strip()
+            )
+            if not existing_rating_for_accept and not existing_count_for_accept:
+                decision = "needs_review"
+                reason = f"{reason}; missing vivino rating/count for auto-apply"
+
         query_1 = queries[0] if len(queries) > 0 else ""
         query_2 = queries[1] if len(queries) > 1 else ""
         query_3 = queries[2] if len(queries) > 2 else ""

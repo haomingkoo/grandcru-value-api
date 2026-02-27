@@ -336,10 +336,15 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                     vivino_num_ratings = prior.vivino_num_ratings
                     db_fallback_matches += 1
 
+            # Avoid exposing orphaned Vivino links with no usable quality metrics.
+            if vivino_rating is None and vivino_num_ratings is None:
+                vivino_url = None
+
             price_platinum = parse_float(row.get("price_plat"))
             price_grand_cru = parse_float(row.get("price_main"))
             price_diff = parse_float(row.get("price_diff"))
             price_diff_pct = parse_float(row.get("price_diff_pct"))
+            grand_cru_url = normalize_url(row.get("url_main")) if price_grand_cru is not None else None
 
             if price_diff is None and price_platinum is not None and price_grand_cru is not None:
                 price_diff = round(price_platinum - price_grand_cru, 2)
@@ -357,7 +362,7 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 "price_diff_pct": price_diff_pct,
                 "cheaper_side": (row.get("cheaper_side") or "").strip() or None,
                 "platinum_url": normalize_platinum_url(row.get("url_plat")),
-                "grand_cru_url": normalize_url(row.get("url_main")),
+                "grand_cru_url": grand_cru_url,
                 "vivino_url": vivino_url,
                 "vivino_rating": vivino_rating,
                 "vivino_num_ratings": vivino_num_ratings,
