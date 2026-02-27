@@ -4,14 +4,24 @@ from pathlib import Path
 import time
 import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Base, engine, get_session
-from app.schemas import DealHistoryOut, DealOut, HealthOut, LegalOut
+from app.ops import RefreshRunner, diagnostics_payload
+from app.schemas import (
+    DealHistoryOut,
+    DealOut,
+    HealthOut,
+    LegalOut,
+    OpsDiagnosticsOut,
+    OpsRefreshLogOut,
+    OpsRefreshStatusOut,
+    OpsRefreshTriggerIn,
+)
 from app.security import InMemoryRateLimiter, is_exempt_path, parse_exempt_paths, resolve_client_ip
 from app.service import (
     count_deals,
@@ -33,6 +43,7 @@ if not logging.getLogger().handlers:
 else:
     logging.getLogger().setLevel(_level)
 logger = logging.getLogger("grandcru.api")
+refresh_runner = RefreshRunner()
 
 
 @asynccontextmanager
@@ -232,3 +243,59 @@ def legal() -> LegalOut:
     if not notice_path.exists():
         raise HTTPException(status_code=404, detail=f"Missing legal notice file: {notice_path}")
     return LegalOut(title="Responsible Data Use Notice", content=notice_path.read_text(encoding="utf-8"))
+
+
+def require_ops_key(x_ops_key: str | None = Header(default=None, alias="X-Ops-Key")) -> None:
+    if not settings.ops_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Ops endpoints are disabled. Set OPS_API_KEY to enable them.",
+        )
+    if x_ops_key != settings.ops_api_key:
+        raise HTTPException(status_code=403, detail="Invalid X-Ops-Key")
+
+
+@app.get("/ops/diagnostics", response_model=OpsDiagnosticsOut)
+def ops_diagnostics(
+    _: None = Depends(require_ops_key),
+    session: Session = Depends(get_session),
+) -> OpsDiagnosticsOut:
+    payload = diagnostics_payload(
+        refresh_runner=refresh_runner,
+        total_deals=count_deals(session),
+        total_snapshots=count_snapshots(session),
+    )
+    return OpsDiagnosticsOut(**payload)
+
+
+@app.get("/ops/refresh/status", response_model=OpsRefreshStatusOut)
+def ops_refresh_status(_: None = Depends(require_ops_key)) -> OpsRefreshStatusOut:
+    return OpsRefreshStatusOut(**refresh_runner.get_status())
+
+
+@app.get("/ops/refresh/log", response_model=OpsRefreshLogOut)
+def ops_refresh_log(
+    lines: int = Query(default=200, ge=20, le=5000),
+    _: None = Depends(require_ops_key),
+) -> OpsRefreshLogOut:
+    return OpsRefreshLogOut(**refresh_runner.tail_log(lines=lines))
+
+
+@app.post("/ops/refresh/trigger", response_model=OpsRefreshStatusOut, status_code=202)
+def ops_refresh_trigger(
+    request: OpsRefreshTriggerIn,
+    _: None = Depends(require_ops_key),
+) -> OpsRefreshStatusOut:
+    mode = (request.mode or "").strip().lower()
+    if mode not in {"daily", "weekly", "import_only"}:
+        raise HTTPException(status_code=400, detail="mode must be one of: daily, weekly, import_only")
+    if refresh_runner.is_running():
+        raise HTTPException(status_code=409, detail="A refresh run is already in progress.")
+
+    status = refresh_runner.start(
+        mode=mode,
+        health_url=request.health_url,
+        strict_health=request.strict_health,
+        triggered_by="ops_api",
+    )
+    return OpsRefreshStatusOut(**status)
