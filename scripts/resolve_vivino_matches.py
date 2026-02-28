@@ -804,6 +804,12 @@ def resolve_matches(args: argparse.Namespace) -> None:
         elif best is None:
             decision = "unmatched"
             reason = "no viable vivino candidates returned"
+        elif args.auto_accept_best:
+            decision = "auto_accept"
+            reason = (
+                f"auto_accept_best enabled; score={best.score:.3f}, margin={margin:.3f}, "
+                f"producer_overlap={best.producer_overlap}"
+            )
         elif best.producer_overlap == 0:
             decision = "needs_review"
             reason = "top candidate missing producer token overlap"
@@ -826,7 +832,11 @@ def resolve_matches(args: argparse.Namespace) -> None:
                 (existing_match_row.get("vivino_num_ratings") or "").strip()
                 or (existing_match_row.get("vivino_raters") or "").strip()
             )
-            if not existing_rating_for_accept and not existing_count_for_accept:
+            if (
+                not args.allow_missing_vivino_metrics
+                and not existing_rating_for_accept
+                and not existing_count_for_accept
+            ):
                 decision = "needs_review"
                 reason = f"{reason}; missing vivino rating/count for auto-apply"
 
@@ -993,6 +1003,16 @@ def main() -> None:
     parser.add_argument("--sleep-seconds", type=float, default=1.2)
     parser.add_argument("--min-confidence", type=float, default=0.82)
     parser.add_argument("--min-margin", type=float, default=0.08)
+    parser.add_argument(
+        "--auto-accept-best",
+        action="store_true",
+        help="Auto-accept the best candidate even if below confidence thresholds.",
+    )
+    parser.add_argument(
+        "--allow-missing-vivino-metrics",
+        action="store_true",
+        help="Allow auto-apply even if vivino rating/count are missing.",
+    )
     parser.add_argument("--limit", type=int, default=0, help="Optional max unresolved wines to process (0 means all).")
     parser.add_argument("--auto-apply", action="store_true", help="Append auto-accepted rows into --vivino-overrides")
     parser.add_argument("--output-review", type=Path, default=Path("data/vivino_review_queue.csv"))

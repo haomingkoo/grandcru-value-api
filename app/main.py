@@ -181,7 +181,7 @@ def get_deals(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     min_score: float = Query(default=0.0, ge=0.0, le=100.0),
-    only_platinum_cheaper: bool = Query(default=True),
+    only_platinum_cheaper: bool = Query(default=False),
     cheaper_side: str | None = Query(default=None),
     min_vivino_rating: float | None = Query(default=None, ge=0.0, le=5.0),
     min_vivino_num_ratings: int | None = Query(default=None, ge=0),

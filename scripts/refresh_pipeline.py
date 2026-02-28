@@ -164,6 +164,35 @@ def run_scrape_and_build(
     subprocess.run(build_cmd, cwd=ROOT, env=env, check=True)
 
 
+def run_build_comparison_only(
+    *,
+    platinum_csv: Path,
+    grandcru_csv: Path,
+    match_threshold: float,
+    comparison_path: Path,
+    env: dict[str, str],
+) -> None:
+    build_cmd = [
+        sys.executable,
+        str(ROOT / "scripts" / "build_comparison_summary.py"),
+        "--grandcru-csv",
+        str(grandcru_csv),
+        "--platinum-csv",
+        str(platinum_csv),
+        "--output-comparison",
+        str(comparison_path),
+        "--match-threshold",
+        str(match_threshold),
+    ]
+    print(
+        "[refresh] Building comparison summary from existing CSVs:",
+        f"platinum={platinum_csv}",
+        f"grandcru={grandcru_csv}",
+        f"output={comparison_path}",
+    )
+    subprocess.run(build_cmd, cwd=ROOT, env=env, check=True)
+
+
 def check_health(health_url: str) -> bool:
     print(f"[refresh] Checking health: {health_url}")
     try:
@@ -278,6 +307,34 @@ def main() -> None:
         help="Optional DATABASE_URL override (useful for direct prod imports).",
     )
     parser.add_argument(
+        "--enrich-platinum-vivino",
+        action="store_true",
+        help=(
+            "Compatibility flag. Vivino-on-Platinum extraction is already handled "
+            "inside scripts/scrape_sources.py during --scrape-and-build."
+        ),
+    )
+    parser.add_argument(
+        "--build-comparison",
+        action="store_true",
+        help=(
+            "Build comparison summary from existing --platinum/--grandcru CSVs "
+            "(without scraping)."
+        ),
+    )
+    parser.add_argument(
+        "--platinum",
+        type=Path,
+        default=ROOT / "seed" / "latest_refresh" / "platinum_wines.csv",
+        help="Platinum CSV path used by --build-comparison.",
+    )
+    parser.add_argument(
+        "--grandcru",
+        type=Path,
+        default=ROOT / "seed" / "latest_refresh" / "grandcru_wines.csv",
+        help="Grand Cru CSV path used by --build-comparison.",
+    )
+    parser.add_argument(
         "--scrape-and-build",
         action="store_true",
         help="Scrape both websites and rebuild comparison summary before resolver/import.",
@@ -322,7 +379,9 @@ def main() -> None:
     vivino_path = args.vivino.resolve()
     vivino_overrides_path = args.vivino_overrides.resolve()
 
-    if not comparison_path.exists() and not args.scrape_and_build:
+    build_requested = args.scrape_and_build or args.build_comparison
+
+    if not comparison_path.exists() and not build_requested:
         raise FileNotFoundError(f"Missing comparison CSV: {comparison_path}")
     if not vivino_path.exists():
         raise FileNotFoundError(f"Missing vivino CSV: {vivino_path}")
@@ -330,6 +389,12 @@ def main() -> None:
     env = os.environ.copy()
     if args.database_url:
         env["DATABASE_URL"] = args.database_url
+
+    if args.enrich_platinum_vivino:
+        print(
+            "[refresh] --enrich-platinum-vivino enabled; note: this repo already captures "
+            "Platinum Vivino metadata during --scrape-and-build."
+        )
 
     for command in args.pre_command:
         run_command(command, env)
@@ -342,6 +407,20 @@ def main() -> None:
             max_pages=args.scrape_max_pages,
             sleep_seconds=args.scrape_sleep_seconds,
             headed=args.scrape_headed,
+            match_threshold=args.build_match_threshold,
+            comparison_path=comparison_path,
+            env=env,
+        )
+    elif args.build_comparison:
+        platinum_csv = args.platinum.resolve()
+        grandcru_csv = args.grandcru.resolve()
+        if not platinum_csv.exists():
+            raise FileNotFoundError(f"Missing platinum CSV: {platinum_csv}")
+        if not grandcru_csv.exists():
+            raise FileNotFoundError(f"Missing grandcru CSV: {grandcru_csv}")
+        run_build_comparison_only(
+            platinum_csv=platinum_csv,
+            grandcru_csv=grandcru_csv,
             match_threshold=args.build_match_threshold,
             comparison_path=comparison_path,
             env=env,

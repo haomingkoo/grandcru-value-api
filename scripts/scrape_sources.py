@@ -9,6 +9,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -46,6 +47,24 @@ PLATINUM_PRICE_SELECTORS = [
     "span.item-price",
     "span[class*='price']",
     "[itemprop='price']",
+]
+PLATINUM_VIVINO_LINK_SELECTORS = [
+    "a[href*='vivino.com']",
+]
+PLATINUM_VIVINO_HINT_SELECTORS = [
+    "[class*='vivino']",
+    "[id*='vivino']",
+    "[data-vivino-rating]",
+    "[data-vivino]",
+]
+
+_VIVINO_URL_RE = re.compile(r"https?://[^\s\"'<>()]*vivino\.com[^\s\"'<>()]*", re.IGNORECASE)
+_VIVINO_RATING_RE = [
+    re.compile(r"vivino[^0-9]{0,24}([0-5](?:\.\d+)?)", re.IGNORECASE),
+    re.compile(r"([0-5](?:\.\d+)?)\s*(?:/5)?\s*(?:vivino|rating)", re.IGNORECASE),
+]
+_VIVINO_COUNT_RE = [
+    re.compile(r"([\d,]+(?:\.\d+)?\s*[kKmM]?)\s*(?:ratings?|reviews?)", re.IGNORECASE),
 ]
 
 
@@ -92,11 +111,106 @@ def first_non_empty_text(root, selectors: list[str]) -> str:
     return "N/A"
 
 
+def _parse_compact_count(value: str) -> int | None:
+    raw = (value or "").strip().replace(",", "")
+    if not raw:
+        return None
+    try:
+        if raw[-1] in {"k", "K"}:
+            return int(float(raw[:-1]) * 1000)
+        if raw[-1] in {"m", "M"}:
+            return int(float(raw[:-1]) * 1_000_000)
+        return int(float(raw))
+    except ValueError:
+        return None
+
+
+def extract_platinum_vivino_fields(card) -> dict[str, str]:
+    vivino_url = ""
+    for selector in PLATINUM_VIVINO_LINK_SELECTORS:
+        elements = card.find_elements(By.CSS_SELECTOR, selector)
+        for element in elements:
+            href = (element.get_attribute("href") or "").strip()
+            if href and "vivino.com" in href.lower():
+                vivino_url = href
+                break
+        if vivino_url:
+            break
+
+    html = (card.get_attribute("innerHTML") or "").strip()
+    if not vivino_url:
+        url_match = _VIVINO_URL_RE.search(html)
+        if url_match:
+            vivino_url = url_match.group(0).strip()
+
+    hint_text_parts: list[str] = []
+    for selector in PLATINUM_VIVINO_HINT_SELECTORS:
+        for element in card.find_elements(By.CSS_SELECTOR, selector):
+            text = (element.text or "").strip()
+            if text:
+                hint_text_parts.append(text)
+            data_rating = (element.get_attribute("data-vivino-rating") or "").strip()
+            if data_rating:
+                hint_text_parts.append(f"vivino {data_rating}")
+            data_count = (element.get_attribute("data-vivino-num-ratings") or "").strip()
+            if data_count:
+                hint_text_parts.append(f"{data_count} ratings")
+
+    card_text = " ".join((card.text or "").split())
+    context = " ".join(hint_text_parts + [card_text])
+
+    # Only attempt numeric extraction when Vivino appears on-card in some form.
+    has_vivino_context = "vivino" in context.lower() or "vivino" in html.lower() or bool(vivino_url)
+    if not has_vivino_context:
+        return {
+            "platinum_vivino_rating": "",
+            "platinum_vivino_num_ratings": "",
+            "platinum_vivino_url": "",
+        }
+
+    rating = ""
+    for pattern in _VIVINO_RATING_RE:
+        match = pattern.search(context)
+        if not match:
+            continue
+        try:
+            value = float(match.group(1))
+        except ValueError:
+            continue
+        if 0.0 <= value <= 5.0:
+            rating = f"{value:.2f}".rstrip("0").rstrip(".")
+            break
+
+    num_ratings = ""
+    for pattern in _VIVINO_COUNT_RE:
+        match = pattern.search(context)
+        if not match:
+            continue
+        parsed = _parse_compact_count(match.group(1))
+        if parsed is None:
+            continue
+        num_ratings = str(parsed)
+        break
+
+    return {
+        "platinum_vivino_rating": rating,
+        "platinum_vivino_num_ratings": num_ratings,
+        "platinum_vivino_url": vivino_url,
+    }
+
+
 def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = ["name", "price", "url"]
-    if any("in_stock" in row for row in rows):
-        fieldnames.append("in_stock")
+    optional_fields = [
+        "in_stock",
+        "platinum_vivino_rating",
+        "platinum_vivino_num_ratings",
+        "platinum_vivino_url",
+    ]
+    for field in optional_fields:
+        if any(field in row for row in rows):
+            fieldnames.append(field)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -325,19 +439,25 @@ def scrape_platinum(
 
             href = urljoin(base + "/", href)
             price = first_non_empty_text(card, PLATINUM_PRICE_SELECTORS)
+            vivino_fields = extract_platinum_vivino_fields(card)
             key = name.lower()
             if key in seen_names:
                 continue
 
             seen_names.add(key)
-            rows.append(
-                {
-                    "name": name,
-                    "price": price,
-                    "url": href,
-                    "in_stock": "true" if in_stock else "false",
-                }
-            )
+            payload = {
+                "name": name,
+                "price": price,
+                "url": href,
+                "in_stock": "true" if in_stock else "false",
+            }
+            if vivino_fields.get("platinum_vivino_rating"):
+                payload["platinum_vivino_rating"] = vivino_fields["platinum_vivino_rating"]
+            if vivino_fields.get("platinum_vivino_num_ratings"):
+                payload["platinum_vivino_num_ratings"] = vivino_fields["platinum_vivino_num_ratings"]
+            if vivino_fields.get("platinum_vivino_url"):
+                payload["platinum_vivino_url"] = vivino_fields["platinum_vivino_url"]
+            rows.append(payload)
             page_new_rows += 1
 
         if include_oos:

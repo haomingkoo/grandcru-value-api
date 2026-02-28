@@ -166,6 +166,9 @@ def prepare_rows(rows: list[dict[str, str]], *, enforce_in_stock: bool = False) 
                 "volume": volume,
                 "year": year,
                 "name_clean": normalize_name(name),
+                "platinum_vivino_rating": (row.get("platinum_vivino_rating") or "").strip(),
+                "platinum_vivino_num_ratings": (row.get("platinum_vivino_num_ratings") or "").strip(),
+                "platinum_vivino_url": (row.get("platinum_vivino_url") or "").strip(),
             }
         )
     return prepared
@@ -210,6 +213,9 @@ def build_matches(
                     "volume_plat": plat["volume"],
                     "price_plat": plat["price"],
                     "url_plat": plat["url"],
+                    "platinum_vivino_rating": plat.get("platinum_vivino_rating") or "",
+                    "platinum_vivino_num_ratings": plat.get("platinum_vivino_num_ratings") or "",
+                    "platinum_vivino_url": plat.get("platinum_vivino_url") or "",
                     "name_main": best_same_pack["name"],
                     "year_main": best_same_pack["year"],
                     "quantity_main": best_same_pack["quantity"],
@@ -229,6 +235,9 @@ def build_matches(
                     "volume_plat": plat["volume"],
                     "price_plat": plat["price"],
                     "url_plat": plat["url"],
+                    "platinum_vivino_rating": plat.get("platinum_vivino_rating") or "",
+                    "platinum_vivino_num_ratings": plat.get("platinum_vivino_num_ratings") or "",
+                    "platinum_vivino_url": plat.get("platinum_vivino_url") or "",
                     "name_main": best_cross_pack["name"],
                     "year_main": best_cross_pack["year"],
                     "quantity_main": best_cross_pack["quantity"],
@@ -251,6 +260,9 @@ def build_matches(
                     "volume_plat": plat["volume"],
                     "price_plat": plat["price"],
                     "url_plat": plat["url"],
+                    "platinum_vivino_rating": plat.get("platinum_vivino_rating") or "",
+                    "platinum_vivino_num_ratings": plat.get("platinum_vivino_num_ratings") or "",
+                    "platinum_vivino_url": plat.get("platinum_vivino_url") or "",
                     "name_main": fallback_main["name"] if fallback_main is not None else None,
                     "year_main": fallback_main["year"] if fallback_main is not None else None,
                     "quantity_main": fallback_main["quantity"] if fallback_main is not None else None,
@@ -324,6 +336,9 @@ def build_summary(matched_rows: list[dict[str, object]]) -> list[dict[str, objec
                 "cheaper_side": cheaper_side,
                 "url_plat": row["url_plat"],
                 "url_main": row["url_main"],
+                "platinum_vivino_rating": row.get("platinum_vivino_rating") or "",
+                "platinum_vivino_num_ratings": row.get("platinum_vivino_num_ratings") or "",
+                "platinum_vivino_url": row.get("platinum_vivino_url") or "",
             }
         )
 
@@ -370,6 +385,9 @@ def main() -> None:
                 "volume_plat",
                 "price_plat",
                 "url_plat",
+                "platinum_vivino_rating",
+                "platinum_vivino_num_ratings",
+                "platinum_vivino_url",
                 "name_main",
                 "year_main",
                 "quantity_main",
@@ -395,6 +413,9 @@ def main() -> None:
             "cheaper_side",
             "url_plat",
             "url_main",
+            "platinum_vivino_rating",
+            "platinum_vivino_num_ratings",
+            "platinum_vivino_url",
         ],
         summary,
     )
