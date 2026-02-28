@@ -93,7 +93,7 @@ def list_deals(
     limit: int = 50,
     offset: int = 0,
     min_score: float = 0.0,
-    only_platinum_cheaper: bool = True,
+    only_platinum_cheaper: bool = False,
     search: str | None = None,
     cheaper_side: str | None = None,
     min_vivino_rating: float | None = None,

@@ -299,6 +299,7 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
         fuzzy_matches = 0
         unmatched = 0
         db_fallback_matches = 0
+        platinum_vivino_fallback_matches = 0
 
         for row in comparison_rows:
             wine_name = (row.get("name_plat") or "").strip()
@@ -335,6 +336,24 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                     vivino_rating = prior.vivino_rating
                     vivino_num_ratings = prior.vivino_num_ratings
                     db_fallback_matches += 1
+
+            platinum_vivino_rating = parse_float(row.get("platinum_vivino_rating"))
+            platinum_vivino_num_ratings = parse_int(row.get("platinum_vivino_num_ratings"))
+            platinum_vivino_url = normalize_url(row.get("platinum_vivino_url"))
+            used_platinum_fallback = False
+            if vivino_rating is None and platinum_vivino_rating is not None:
+                vivino_rating = platinum_vivino_rating
+                used_platinum_fallback = True
+            if vivino_num_ratings is None and platinum_vivino_num_ratings is not None:
+                vivino_num_ratings = platinum_vivino_num_ratings
+                used_platinum_fallback = True
+            if vivino_url is None and platinum_vivino_url and (
+                vivino_rating is not None or vivino_num_ratings is not None
+            ):
+                vivino_url = platinum_vivino_url
+                used_platinum_fallback = True
+            if used_platinum_fallback:
+                platinum_vivino_fallback_matches += 1
 
             # Avoid exposing orphaned Vivino links with no usable quality metrics.
             if vivino_rating is None and vivino_num_ratings is None:
@@ -393,7 +412,7 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
             f"(+{len(vivino_rows_override)} overrides) into {len(merged_records)} current deals and "
             f"{len(snapshot_records)} snapshots (vivino matched: exact={exact_matches}, "
             f"canonical={canonical_matches}, fuzzy={fuzzy_matches}, unmatched={unmatched}, "
-            f"db_fallback={db_fallback_matches}); "
+            f"db_fallback={db_fallback_matches}, platinum_fallback={platinum_vivino_fallback_matches}); "
             f"pruned {deleted_snapshots} snapshots older than {settings.history_retention_days} days."
         )
         session.commit()
