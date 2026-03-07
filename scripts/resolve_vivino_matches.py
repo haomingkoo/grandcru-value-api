@@ -261,17 +261,9 @@ def normalize_vivino_url(url: str | None) -> str:
         return ""
     if "/w/" not in parsed.path:
         return ""
-
-    query_map = parse_qs(parsed.query)
-    keep: dict[str, str] = {}
-    for key in ("year", "price_id", "ref"):
-        values = query_map.get(key)
-        if values:
-            keep[key] = values[0]
-
-    normalized_query = urlencode(keep)
     normalized_path = parsed.path.rstrip("/")
-    return urlunparse((parsed.scheme or "https", parsed.netloc, normalized_path, "", normalized_query, ""))
+    # Strip query/fragment to avoid Vivino pages that omit aggregateRating.
+    return urlunparse((parsed.scheme or "https", parsed.netloc, normalized_path, "", "", ""))
 
 
 def search_serper(query: str, api_key: str, max_results: int) -> list[dict[str, str]]:
@@ -930,6 +922,7 @@ def resolve_matches(args: argparse.Namespace) -> None:
         applied_overrides_rows = len(merged)
 
     save_query_cache(args.query_cache, query_cache)
+    state["last_run_at"] = int(time.time())
     save_state(args.state_file, state)
 
     print(
