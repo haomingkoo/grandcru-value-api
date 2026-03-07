@@ -5,9 +5,13 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
+from typing import Any
+
+from sqlalchemy import create_engine, text
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -98,6 +102,21 @@ def run_vivino_resolver(
     subprocess.run(resolver_cmd, cwd=ROOT, env=env, check=True)
 
 
+def resolver_recent(state_file: Path, min_interval_hours: float) -> bool:
+    if min_interval_hours <= 0:
+        return False
+    if not state_file.exists():
+        return False
+    try:
+        payload = json.loads(state_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    last_run = payload.get("last_run_at")
+    if not isinstance(last_run, (int, float)):
+        return False
+    return (time.time() - float(last_run)) < (min_interval_hours * 3600)
+
+
 def run_import(comparison_path: Path, vivino_path: Path, vivino_overrides_path: Path, env: dict[str, str]) -> None:
     import_cmd = [
         sys.executable,
@@ -125,6 +144,8 @@ def run_scrape_and_build(
     sleep_seconds: float,
     headed: bool,
     match_threshold: float,
+    platinum_detail_ratings: bool,
+    platinum_detail_sleep_seconds: float,
     comparison_path: Path,
     env: dict[str, str],
 ) -> None:
@@ -143,6 +164,9 @@ def run_scrape_and_build(
         "--sleep-seconds",
         str(sleep_seconds),
     ]
+    if platinum_detail_ratings:
+        scrape_cmd.append("--platinum-detail-ratings")
+        scrape_cmd.extend(["--platinum-detail-sleep-seconds", str(platinum_detail_sleep_seconds)])
     if headed:
         scrape_cmd.append("--headed")
     print(f"[refresh] Running scrape into {output_dir}")
@@ -218,6 +242,35 @@ def check_health(health_url: str) -> bool:
     return True
 
 
+def compute_rating_coverage(database_url: str) -> tuple[int, int, int, int, float]:
+    connect_args: dict[str, Any] = {}
+    if database_url.startswith("sqlite"):
+        connect_args = {"check_same_thread": False}
+    engine = create_engine(database_url, connect_args=connect_args)
+    with engine.connect() as conn:
+        total = conn.execute(text("select count(*) from wine_deals")).scalar() or 0
+        rated = conn.execute(
+            text(
+                "select count(*) from wine_deals "
+                "where vivino_rating is not null or vivino_num_ratings is not null"
+            )
+        ).scalar() or 0
+        unrated_with_url = conn.execute(
+            text(
+                "select count(*) from wine_deals "
+                "where vivino_rating is null and vivino_url is not null"
+            )
+        ).scalar() or 0
+        unrated_without_url = conn.execute(
+            text(
+                "select count(*) from wine_deals "
+                "where vivino_rating is null and vivino_url is null"
+            )
+        ).scalar() or 0
+    coverage = (rated / total) if total else 0.0
+    return int(total), int(rated), int(unrated_with_url), int(unrated_without_url), float(coverage)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run wine data refresh steps and import into the configured database."
@@ -263,6 +316,12 @@ def main() -> None:
     parser.add_argument("--resolver-limit", type=int, default=0)
     parser.add_argument("--resolver-max-api-queries", type=int, default=0)
     parser.add_argument(
+        "--resolver-min-interval-hours",
+        type=float,
+        default=6.0,
+        help="Skip resolver run if the previous run was within this many hours.",
+    )
+    parser.add_argument(
         "--resolver-auto-provider-order",
         default=os.getenv("VIVINO_AUTO_PROVIDER_ORDER", "google_cse,brave,serper"),
     )
@@ -305,6 +364,41 @@ def main() -> None:
         "--database-url",
         default=None,
         help="Optional DATABASE_URL override (useful for direct prod imports).",
+    )
+    parser.add_argument(
+        "--enrich-vivino-results",
+        action="store_true",
+        help="Fetch missing vivino ratings/counts for override URLs and update vivino_results.csv.",
+    )
+    parser.add_argument("--enrich-vivino-timeout-seconds", type=float, default=20.0)
+    parser.add_argument("--enrich-vivino-sleep-seconds", type=float, default=0.8)
+    parser.add_argument("--enrich-vivino-limit", type=int, default=0)
+    parser.add_argument(
+        "--ratings-coverage-min",
+        type=float,
+        default=0.0,
+        help="Minimum required fraction of deals with vivino_rating (0-1).",
+    )
+    parser.add_argument(
+        "--ratings-coverage-strict",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Fail the run if ratings coverage is below --ratings-coverage-min.",
+    )
+    parser.add_argument(
+        "--max-unrated",
+        type=int,
+        default=-1,
+        help=(
+            "Maximum allowed unrated rows after import. "
+            "Set -1 to disable this check (default)."
+        ),
+    )
+    parser.add_argument(
+        "--max-unrated-strict",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Fail the run if unrated rows exceed --max-unrated.",
     )
     parser.add_argument(
         "--enrich-platinum-vivino",
@@ -354,6 +448,8 @@ def main() -> None:
     )
     parser.add_argument("--scrape-max-pages", type=int, default=50)
     parser.add_argument("--scrape-sleep-seconds", type=float, default=1.0)
+    parser.add_argument("--platinum-detail-ratings", action="store_true")
+    parser.add_argument("--platinum-detail-sleep-seconds", type=float, default=2.0)
     parser.add_argument("--scrape-headed", action="store_true")
     parser.add_argument("--build-match-threshold", type=float, default=0.6)
     parser.add_argument(
@@ -409,6 +505,8 @@ def main() -> None:
             headed=args.scrape_headed,
             match_threshold=args.build_match_threshold,
             comparison_path=comparison_path,
+            platinum_detail_ratings=args.platinum_detail_ratings,
+            platinum_detail_sleep_seconds=args.platinum_detail_sleep_seconds,
             env=env,
         )
     elif args.build_comparison:
@@ -434,28 +532,52 @@ def main() -> None:
     )
 
     if args.resolve_vivino:
-        run_vivino_resolver(
-            comparison_path=comparison_path,
-            vivino_path=vivino_path,
-            vivino_overrides_path=vivino_overrides_path,
-            provider=args.resolver_provider,
-            auto_apply=args.resolver_auto_apply,
-            max_results=args.resolver_max_results,
-            sleep_seconds=args.resolver_sleep_seconds,
-            min_confidence=args.resolver_min_confidence,
-            min_margin=args.resolver_min_margin,
-            limit=args.resolver_limit,
-            max_api_queries=args.resolver_max_api_queries,
-            auto_provider_order=args.resolver_auto_provider_order,
-            query_cache=args.resolver_query_cache.resolve(),
-            cache_ttl_hours=args.resolver_cache_ttl_hours,
-            only_new_unresolved=args.resolver_only_new_unresolved,
-            state_file=args.resolver_state_file.resolve(),
-            output_review=args.resolver_output_review.resolve(),
-            output_unmatched=args.resolver_output_unmatched.resolve(),
-            output_suggestions=args.resolver_output_suggestions.resolve(),
-            env=env,
-        )
+        state_path = args.resolver_state_file.resolve()
+        if resolver_recent(state_path, args.resolver_min_interval_hours):
+            print(
+                f"[refresh] Skipping resolver; last run within {args.resolver_min_interval_hours}h."
+            )
+        else:
+            run_vivino_resolver(
+                comparison_path=comparison_path,
+                vivino_path=vivino_path,
+                vivino_overrides_path=vivino_overrides_path,
+                provider=args.resolver_provider,
+                auto_apply=args.resolver_auto_apply,
+                max_results=args.resolver_max_results,
+                sleep_seconds=args.resolver_sleep_seconds,
+                min_confidence=args.resolver_min_confidence,
+                min_margin=args.resolver_min_margin,
+                limit=args.resolver_limit,
+                max_api_queries=args.resolver_max_api_queries,
+                auto_provider_order=args.resolver_auto_provider_order,
+                query_cache=args.resolver_query_cache.resolve(),
+                cache_ttl_hours=args.resolver_cache_ttl_hours,
+                only_new_unresolved=args.resolver_only_new_unresolved,
+                state_file=state_path,
+                output_review=args.resolver_output_review.resolve(),
+                output_unmatched=args.resolver_output_unmatched.resolve(),
+                output_suggestions=args.resolver_output_suggestions.resolve(),
+                env=env,
+            )
+
+    if args.enrich_vivino_results:
+        enrich_cmd = [
+            sys.executable,
+            str(ROOT / "scripts" / "enrich_vivino_results.py"),
+            "--vivino",
+            str(vivino_path),
+            "--vivino-overrides",
+            str(vivino_overrides_path),
+            "--timeout-seconds",
+            str(args.enrich_vivino_timeout_seconds),
+            "--sleep-seconds",
+            str(args.enrich_vivino_sleep_seconds),
+        ]
+        if args.enrich_vivino_limit:
+            enrich_cmd.extend(["--limit", str(args.enrich_vivino_limit)])
+        print("[refresh] Enriching vivino_results.csv from override URLs")
+        subprocess.run(enrich_cmd, cwd=ROOT, env=env, check=True)
 
     run_import(comparison_path, vivino_path, vivino_overrides_path, env)
 
@@ -463,6 +585,39 @@ def main() -> None:
         health_ok = check_health(args.health_url)
         if not health_ok and args.health_strict:
             raise RuntimeError("Health check failed in strict mode.")
+
+    if (args.ratings_coverage_min and args.ratings_coverage_min > 0) or args.max_unrated >= 0:
+        database_url = args.database_url or env.get("DATABASE_URL") or "sqlite:///./data/wines.db"
+        try:
+            total, rated, unrated_with_url, unrated_without_url, coverage = compute_rating_coverage(database_url)
+        except Exception as exc:
+            if args.ratings_coverage_strict or args.max_unrated_strict:
+                raise RuntimeError(f"Ratings coverage check failed: {exc}") from exc
+            print(f"[refresh] Ratings coverage check failed: {exc}")
+        else:
+            unrated = total - rated
+            print(
+                "[refresh] Ratings coverage:",
+                f"rated={rated}",
+                f"total={total}",
+                f"unrated={unrated}",
+                f"unrated_with_url={unrated_with_url}",
+                f"unrated_without_url={unrated_without_url}",
+                f"coverage={coverage:.3f}",
+            )
+            if args.ratings_coverage_min > 0 and coverage < args.ratings_coverage_min:
+                message = (
+                    f"Ratings coverage {coverage:.3f} below minimum "
+                    f"{args.ratings_coverage_min:.3f}"
+                )
+                if args.ratings_coverage_strict:
+                    raise RuntimeError(message)
+                print(f"[refresh] WARNING: {message}")
+            if args.max_unrated >= 0 and unrated > args.max_unrated:
+                message = f"Unrated rows {unrated} exceed max {args.max_unrated}"
+                if args.max_unrated_strict:
+                    raise RuntimeError(message)
+                print(f"[refresh] WARNING: {message}")
 
     print("[refresh] Done.")
 

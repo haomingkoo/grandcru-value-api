@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse, urlunparse
 
 from sqlalchemy import delete, select
 
@@ -120,6 +120,26 @@ class VivinoLookup:
     rows: list[dict[str, str]]
 
 
+def _has_value(value: str | None) -> bool:
+    return bool((value or "").strip())
+
+
+def _vivino_row_quality(row: dict[str, str]) -> tuple[int, int, int, int]:
+    # Prefer rows that carry concrete rating data, then URL and price.
+    return (
+        1 if _has_value(row.get("vivino_rating")) else 0,
+        1 if _has_value(row.get("vivino_num_ratings") or row.get("vivino_raters")) else 0,
+        1 if _has_value(row.get("vivino_url")) else 0,
+        1 if _has_value(row.get("vivino_price")) else 0,
+    )
+
+
+def _pick_better_vivino_row(current: dict[str, str], candidate: dict[str, str]) -> dict[str, str]:
+    if _vivino_row_quality(candidate) >= _vivino_row_quality(current):
+        return candidate
+    return current
+
+
 def build_vivino_lookup(rows: list[dict[str, str]]) -> VivinoLookup:
     exact: dict[str, dict[str, str]] = {}
     canonical: dict[str, list[dict[str, str]]] = {}
@@ -130,8 +150,11 @@ def build_vivino_lookup(rows: list[dict[str, str]]) -> VivinoLookup:
         for candidate_name in candidate_names:
             key = normalize_key(candidate_name)
             if key:
-                # Latest row wins, so overrides can replace stale base records.
-                exact[key] = row
+                existing = exact.get(key)
+                if existing is None:
+                    exact[key] = row
+                else:
+                    exact[key] = _pick_better_vivino_row(existing, row)
 
             canonical_key = canonicalize_key(candidate_name)
             if canonical_key:
@@ -252,6 +275,33 @@ def normalize_url(url: str | None) -> str | None:
     return url.strip() or None
 
 
+def normalize_vivino_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    cleaned = url.strip()
+    parsed = urlparse(cleaned)
+    if "vivino.com" not in (parsed.netloc or ""):
+        return cleaned
+    if "/w/" not in (parsed.path or ""):
+        return cleaned
+    normalized_path = (parsed.path or "").rstrip("/")
+    return urlunparse((parsed.scheme or "https", parsed.netloc, normalized_path, "", "", ""))
+
+
+def build_vivino_url_index(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
+    index: dict[str, dict[str, str]] = {}
+    for row in rows:
+        normalized = normalize_vivino_url(row.get("vivino_url"))
+        if not normalized:
+            continue
+        existing = index.get(normalized)
+        if existing is None:
+            index[normalized] = row
+        else:
+            index[normalized] = _pick_better_vivino_row(existing, row)
+    return index
+
+
 def build_vivino_search_url(query: str | None) -> str | None:
     cleaned = (query or "").strip()
     if not cleaned:
@@ -272,6 +322,7 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
     vivino_rows_override = read_optional_csv_rows(vivino_overrides_path)
     vivino_rows = vivino_rows_base + vivino_rows_override
     vivino_lookup = build_vivino_lookup(vivino_rows)
+    vivino_by_url = build_vivino_url_index(vivino_rows)
 
     logger.info(
         "import_start comparison=%s vivino=%s overrides=%s",
@@ -318,7 +369,21 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
 
             vivino_rating = parse_float(vivino.get("vivino_rating"))
             vivino_num_ratings = parse_int(vivino.get("vivino_num_ratings")) or parse_int(vivino.get("vivino_raters"))
-            vivino_url = normalize_url(vivino.get("vivino_url"))
+            vivino_url = normalize_vivino_url(vivino.get("vivino_url"))
+
+            # If a matched row has URL but blank metrics, hydrate from the strongest row for that URL.
+            if vivino_url and vivino_rating is None and vivino_num_ratings is None:
+                url_row = vivino_by_url.get(vivino_url)
+                if url_row is not None:
+                    url_rating = parse_float(url_row.get("vivino_rating"))
+                    if url_rating is not None:
+                        vivino_rating = url_rating
+
+                    url_num_ratings = parse_int(url_row.get("vivino_num_ratings"))
+                    if url_num_ratings is None:
+                        url_num_ratings = parse_int(url_row.get("vivino_raters"))
+                    if url_num_ratings is not None:
+                        vivino_num_ratings = url_num_ratings
 
             if vivino_url is None and (vivino_rating is not None or vivino_num_ratings is not None):
                 vivino_url = build_vivino_search_url(

@@ -66,6 +66,7 @@ _VIVINO_RATING_RE = [
 _VIVINO_COUNT_RE = [
     re.compile(r"([\d,]+(?:\.\d+)?\s*[kKmM]?)\s*(?:ratings?|reviews?)", re.IGNORECASE),
 ]
+_PLATINUM_DETAIL_RATING_RE = re.compile(r"([0-5](?:\.\d+)?)\s*/\s*5\s*Stars\s*-\s*Vivino", re.IGNORECASE)
 
 
 @dataclass
@@ -197,6 +198,28 @@ def extract_platinum_vivino_fields(card) -> dict[str, str]:
         "platinum_vivino_num_ratings": num_ratings,
         "platinum_vivino_url": vivino_url,
     }
+
+
+def extract_platinum_detail_rating(driver: webdriver.Chrome, url: str, pause_seconds: float) -> str:
+    current_handle = driver.current_window_handle
+    existing_handles = set(driver.window_handles)
+    driver.execute_script("window.open(arguments[0], '_blank');", url)
+    new_handles = [h for h in driver.window_handles if h not in existing_handles]
+    if not new_handles:
+        return ""
+    detail_handle = new_handles[-1]
+    driver.switch_to.window(detail_handle)
+    time.sleep(max(pause_seconds, 0.5))
+
+    page_text = (driver.find_element(By.TAG_NAME, "body").text or "").strip()
+    match = _PLATINUM_DETAIL_RATING_RE.search(page_text)
+    rating = ""
+    if match:
+        rating = match.group(1)
+
+    driver.close()
+    driver.switch_to.window(current_handle)
+    return rating
 
 
 def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
@@ -382,6 +405,8 @@ def scrape_platinum(
     sleep_seconds: float,
     debug_dir: Path | None,
     include_oos: bool,
+    detail_ratings: bool,
+    detail_sleep_seconds: float,
 ) -> ScrapeResult:
     rows: list[dict[str, str]] = []
     seen_names: set[str] = set()
@@ -440,6 +465,17 @@ def scrape_platinum(
             href = urljoin(base + "/", href)
             price = first_non_empty_text(card, PLATINUM_PRICE_SELECTORS)
             vivino_fields = extract_platinum_vivino_fields(card)
+            if detail_ratings and not vivino_fields.get("platinum_vivino_rating"):
+                try:
+                    detail_rating = extract_platinum_detail_rating(
+                        driver,
+                        href,
+                        detail_sleep_seconds,
+                    )
+                    if detail_rating:
+                        vivino_fields["platinum_vivino_rating"] = detail_rating
+                except WebDriverException:
+                    pass
             key = name.lower()
             if key in seen_names:
                 continue
@@ -499,6 +535,17 @@ def main() -> None:
         action="store_true",
         help="Include out-of-stock Platinum listings (default excludes them)",
     )
+    parser.add_argument(
+        "--platinum-detail-ratings",
+        action="store_true",
+        help="Fetch Vivino rating from Platinum product detail pages.",
+    )
+    parser.add_argument(
+        "--platinum-detail-sleep-seconds",
+        type=float,
+        default=2.0,
+        help="Pause after opening Platinum product detail page.",
+    )
     parser.add_argument("--headed", action="store_true", help="Run with browser UI visible")
     args = parser.parse_args()
 
@@ -523,6 +570,8 @@ def main() -> None:
             sleep_seconds=args.sleep_seconds,
             debug_dir=debug_dir,
             include_oos=args.include_oos,
+            detail_ratings=args.platinum_detail_ratings,
+            detail_sleep_seconds=args.platinum_detail_sleep_seconds,
         )
     finally:
         driver.quit()
