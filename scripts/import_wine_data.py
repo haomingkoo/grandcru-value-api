@@ -319,14 +319,26 @@ def build_vivino_search_url(query: str | None) -> str | None:
 
 
 def _ensure_column(conn, table: str, column: str, col_type: str) -> None:
-    """Add a column to an existing table if it doesn't exist."""
+    """Add a column to an existing table if it doesn't exist (Postgres + SQLite safe)."""
     from sqlalchemy import text
 
-    try:
-        conn.execute(text(f"SELECT {column} FROM {table} LIMIT 0"))
-    except Exception:
-        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
-        logger.info("migration: added %s.%s (%s)", table, column, col_type)
+    # Use information_schema for Postgres, pragma for SQLite.
+    dialect = conn.dialect.name
+    if dialect == "postgresql":
+        result = conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = :table AND column_name = :column"
+        ), {"table": table, "column": column})
+        if result.fetchone() is None:
+            conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}'))
+            logger.info("migration: added %s.%s (%s)", table, column, col_type)
+    else:
+        # SQLite fallback: try-except.
+        try:
+            conn.execute(text(f"SELECT {column} FROM {table} LIMIT 0"))
+        except Exception:
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+            logger.info("migration: added %s.%s (%s)", table, column, col_type)
 
 
 def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path: Path | None = None) -> None:
