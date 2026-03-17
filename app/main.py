@@ -190,19 +190,53 @@ def health(session: Session = Depends(get_session)) -> HealthOut:
 
 @app.get("/deals", response_model=list[DealOut])
 def get_deals(
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-    min_score: float = Query(default=0.0, ge=0.0, le=100.0),
-    only_platinum_cheaper: bool = Query(default=False),
-    cheaper_side: str | None = Query(default=None),
-    min_vivino_rating: float | None = Query(default=None, ge=0.0, le=5.0),
-    min_vivino_num_ratings: int | None = Query(default=None, ge=0),
-    max_platinum_price: float | None = Query(default=None, ge=0.0),
-    sort_by: str = Query(default="deal_score"),
-    sort_order: str = Query(default="desc"),
-    search: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500, description="Max number of rows to return."),
+    offset: int = Query(default=0, ge=0, description="Pagination offset."),
+    min_score: float = Query(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Minimum deal_score threshold.",
+    ),
+    only_platinum_cheaper: bool = Query(
+        default=False,
+        description="Shortcut for cheaper_side=Platinum Cheaper.",
+    ),
+    cheaper_side: str | None = Query(
+        default=None,
+        description="Retailer comparison outcome: Platinum Cheaper, Grand Cru Cheaper, Same Price, or No Match.",
+    ),
+    min_vivino_rating: float | None = Query(
+        default=None,
+        ge=0.0,
+        le=5.0,
+        description="Minimum Vivino rating.",
+    ),
+    min_vivino_num_ratings: int | None = Query(
+        default=None,
+        ge=0,
+        description="Minimum Vivino rating count.",
+    ),
+    max_platinum_price: float | None = Query(
+        default=None,
+        ge=0.0,
+        description="Maximum Platinum price.",
+    ),
+    sort_by: str = Query(
+        default="deal_score",
+        description="Sort field: deal_score, price_diff_pct, vivino_rating, vivino_num_ratings, price_platinum, or wine_name.",
+    ),
+    sort_order: str = Query(
+        default="desc",
+        description="Sort direction. For price_diff_pct, asc means Platinum-cheaper-first and desc means Grand-Cru-cheaper-first.",
+    ),
+    search: str | None = Query(
+        default=None,
+        description="Case-insensitive search on wine_name.",
+    ),
     session: Session = Depends(get_session),
 ) -> list[DealOut]:
+    """List ranked wine deals with stable tie-break ordering for equal-looking UI values."""
     return list_deals(
         session,
         limit=limit,
@@ -230,9 +264,12 @@ def get_deal(deal_id: int, session: Session = Depends(get_session)) -> DealOut:
 @app.get("/deals/{deal_id}/history", response_model=list[DealHistoryOut])
 def deal_history(
     deal_id: int,
-    limit: int = Query(default=30, ge=1, le=365),
-    days: int = Query(default=90, ge=1, le=3650),
-    sort_order: str = Query(default="asc"),
+    limit: int = Query(default=30, ge=1, le=365, description="Max number of history points to return."),
+    days: int = Query(default=90, ge=1, le=3650, description="Lookback window in days."),
+    sort_order: str = Query(
+        default="asc",
+        description="History sort direction. asc is typically best for charting.",
+    ),
     session: Session = Depends(get_session),
 ) -> list[DealHistoryOut]:
     deal = get_deal_by_id(session, deal_id)

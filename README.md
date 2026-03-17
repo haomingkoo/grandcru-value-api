@@ -38,6 +38,20 @@ Open:
 3. Deals: `http://127.0.0.1:8000/deals?limit=20&only_platinum_cheaper=true`
 4. Deal history: `http://127.0.0.1:8000/deals/1/history?days=180&sort_order=asc`
 
+## Maintainer Quick Start
+
+The backend has 3 distinct responsibilities:
+
+1. `scripts/scrape_sources.py` pulls raw retailer catalog data into CSVs.
+2. `scripts/build_comparison_summary.py` pairs Platinum rows with Grand Cru rows and computes retailer-vs-retailer price deltas.
+3. `scripts/import_wine_data.py` hydrates Vivino metadata, computes `deal_score`, and writes `wine_deals` plus `wine_deal_snapshots`.
+
+When debugging, keep these layers separate:
+
+1. Retailer match issue: inspect `seed/comparison_summary.csv`
+2. Vivino enrichment issue: inspect `seed/vivino_results.csv`, `seed/vivino_overrides.csv`, and `vivino_match_method`
+3. API ranking or filter issue: inspect `app/service.py` and `/deals`
+
 ## Refreshing Source Data
 
 If website formatting changes, avoid notebook edits first. Run the refactored scraper with a small page cap and debug HTML output:
@@ -67,7 +81,7 @@ Key fields:
 
 1. `wine_name`, `vintage`, `quantity`, `volume`
 2. `price_platinum`, `price_grand_cru`, `price_diff`, `price_diff_pct`
-3. `cheaper_side`, `deal_score`
+3. `cheaper_side`, `deal_score`, `vivino_match_method`
 4. `platinum_url`, `grand_cru_url`, `vivino_url`
 5. `vivino_rating`, `vivino_num_ratings`
 6. Daily delta fields on `GET /deals`:
@@ -86,6 +100,82 @@ History endpoint notes (`GET /deals/{deal_id}/history`):
 1. `days`: lookback window (default `90`)
 2. `limit`: max rows returned (default `30`)
 3. `sort_order`: `asc` (chart-friendly) or `desc`
+
+## Ranking, Sorting, and UI Semantics
+
+These fields are easy to confuse when picking the project up for the first time.
+
+### Signed Price Difference
+
+`price_diff_pct` is signed and uses this formula:
+
+```text
+(price_platinum - price_grand_cru) / price_grand_cru * 100
+```
+
+Interpretation:
+
+1. Negative: Platinum is cheaper
+2. Positive: Grand Cru is cheaper
+3. Zero: same price
+4. `null`: no comparable Grand Cru price was found
+
+Sorting examples:
+
+1. `GET /deals?sort_by=price_diff_pct&sort_order=asc` returns the biggest Platinum discounts first
+2. `GET /deals?sort_by=price_diff_pct&sort_order=desc` returns the biggest Platinum markups or Grand Cru advantages first
+
+### Deal Score
+
+`deal_score` is not the same thing as Vivino rating.
+
+Formula from [app/scoring.py](app/scoring.py):
+
+1. Discount component: up to `60` points
+2. Vivino rating component: up to `30` points
+3. Vivino rating-count confidence: up to `10` points
+
+Because quality and confidence still contribute even when price difference is `0` or missing:
+
+1. `Same Price` rows can still have a non-zero `deal_score`
+2. `No Match` rows can still have a non-zero `deal_score` if they have strong Vivino data
+
+### Stable Tie-Break Sorting
+
+The API now uses deterministic tie-breakers so equal-looking UI values do not jump around between deploys.
+
+Current sort behavior from [app/service.py](app/service.py):
+
+1. `sort_by=deal_score`: tie-break by `price_diff_pct`, then `vivino_rating`, then `vivino_num_ratings`, then `wine_name`
+2. `sort_by=price_diff_pct`: tie-break by `deal_score`, then `vivino_rating`, then `vivino_num_ratings`, then `wine_name`
+
+If the frontend rounds scores to whole numbers, multiple rows may still look tied in the UI even when the backend is correctly sorting raw decimals like `35.82`, `35.80`, and `35.20`.
+
+### Match Labels
+
+`cheaper_side` and `vivino_match_method` are independent.
+
+`cheaper_side` answers the retailer comparison question:
+
+1. `Platinum Cheaper`
+2. `Grand Cru Cheaper`
+3. `Same Price`
+4. `No Match`
+
+`vivino_match_method` answers how Vivino metadata was attached:
+
+1. `exact`: exact normalized-name match in the Vivino dataset
+2. `canonical`: normalized-name family match after token cleanup
+3. `fuzzy`: best similarity match that passed safety gates
+4. `platinum`: Vivino data came from Platinum-embedded metadata because dataset matching found nothing
+5. `none`: no Vivino metadata was attached
+
+This means a card can legitimately show:
+
+1. `cheaper_side = No Match`
+2. `vivino_match_method = exact`
+
+That combination means the project found the right Vivino wine, but did not find a comparable Grand Cru listing.
 
 ## Hosting Recommendation
 
@@ -112,6 +202,12 @@ If traffic grows, switch `DATABASE_URL` from SQLite to Railway Postgres without 
    - Fallback command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 4. Run ingestion after deploy:
    - `python scripts/import_wine_data.py`
+
+Important CORS note:
+
+1. Origins must be exact scheme + host + optional port matches
+2. `https://kooexperience.com` and `https://wine.kooexperience.com` are different origins
+3. If the browser shows a CORS error after adding a new frontend hostname, update Railway `CORS_ORIGINS` first
 
 ### API Abuse Controls
 

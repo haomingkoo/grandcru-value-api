@@ -12,15 +12,26 @@ class DealOut(BaseModel):
     price_platinum: float | None = None
     price_grand_cru: float | None = None
     price_diff: float | None = None
-    price_diff_pct: float | None = None
-    cheaper_side: str | None = None
+    price_diff_pct: float | None = Field(
+        default=None,
+        description="Signed percentage: (Platinum - Grand Cru) / Grand Cru * 100. Negative means Platinum cheaper; positive means Grand Cru cheaper.",
+    )
+    cheaper_side: str | None = Field(
+        default=None,
+        description="Retailer comparison outcome: Platinum Cheaper, Grand Cru Cheaper, Same Price, or No Match.",
+    )
     platinum_url: str | None = None
     grand_cru_url: str | None = None
     vivino_url: str | None = None
     vivino_rating: float | None = None
     vivino_num_ratings: int | None = None
-    vivino_match_method: str | None = None
-    deal_score: float
+    vivino_match_method: str | None = Field(
+        default=None,
+        description="How Vivino metadata was attached: exact, canonical, fuzzy, platinum, or none.",
+    )
+    deal_score: float = Field(
+        description="0-100 ranking score. Discount contributes up to 60 points, Vivino rating up to 30 points, and rating-count confidence up to 10 points.",
+    )
     price_platinum_7d_ago: float | None = None
     price_platinum_change_7d: float | None = None
     price_grand_cru_7d_ago: float | None = None
@@ -72,11 +83,19 @@ class DealHistoryOut(BaseModel):
     price_platinum: float | None = None
     price_grand_cru: float | None = None
     price_diff: float | None = None
-    price_diff_pct: float | None = None
-    deal_score: float
+    price_diff_pct: float | None = Field(
+        default=None,
+        description="Signed percentage: (Platinum - Grand Cru) / Grand Cru * 100. Negative means Platinum cheaper; positive means Grand Cru cheaper.",
+    )
+    deal_score: float = Field(
+        description="0-100 ranking score using discount, Vivino rating, and rating-count confidence.",
+    )
     vivino_rating: float | None = None
     vivino_num_ratings: int | None = None
-    vivino_match_method: str | None = None
+    vivino_match_method: str | None = Field(
+        default=None,
+        description="How Vivino metadata was attached: exact, canonical, fuzzy, platinum, or none.",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
