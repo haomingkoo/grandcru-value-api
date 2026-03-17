@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import hmac
 import logging
 from pathlib import Path
 import time
@@ -10,7 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import Base, engine, get_session
+from app.database import Base, engine, ensure_column, get_session
 from app.ops import RefreshRunner, diagnostics_payload
 from app.schemas import (
     DealHistoryOut,
@@ -46,36 +47,13 @@ logger = logging.getLogger("grandcru.api")
 refresh_runner = RefreshRunner()
 
 
-def _ensure_column(conn, table: str, column: str, col_type: str) -> None:
-    """Add a column if it doesn't exist yet (Postgres + SQLite safe)."""
-    from sqlalchemy import text
-
-    dialect = conn.dialect.name
-    if dialect == "postgresql":
-        result = conn.execute(text(
-            "SELECT 1 FROM information_schema.columns "
-            "WHERE table_name = :table AND column_name = :column"
-        ), {"table": table, "column": column})
-        if result.fetchone() is None:
-            conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}'))
-            logger.info("migration: added %s.%s (%s)", table, column, col_type)
-    else:
-        try:
-            conn.execute(text(f"SELECT {column} FROM {table} LIMIT 0"))
-        except Exception:
-            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
-            logger.info("migration: added %s.%s (%s)", table, column, col_type)
-
-
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     if settings.database_url.startswith("sqlite:///./"):
         Path("data").mkdir(exist_ok=True)
     Base.metadata.create_all(bind=engine)
-    with engine.connect() as conn:
-        _ensure_column(conn, "wine_deals", "vivino_match_method", "VARCHAR(32)")
-        _ensure_column(conn, "wine_deal_snapshots", "vivino_match_method", "VARCHAR(32)")
-        conn.commit()
+    ensure_column("wine_deals", "vivino_match_method", "VARCHAR(32)")
+    ensure_column("wine_deal_snapshots", "vivino_match_method", "VARCHAR(32)")
     yield
 
 
@@ -101,6 +79,15 @@ _exempt_paths = parse_exempt_paths(settings.rate_limit_exempt_paths)
 _rate_limiter = None
 if settings.rate_limit_enabled:
     _rate_limiter = InMemoryRateLimiter(settings.rate_limit_requests_per_minute)
+
+
+@app.middleware("http")
+async def security_headers_middleware(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 
 @app.middleware("http")
@@ -266,7 +253,7 @@ def deal_history(
 def legal() -> LegalOut:
     notice_path = Path(settings.legal_notice_path)
     if not notice_path.exists():
-        raise HTTPException(status_code=404, detail=f"Missing legal notice file: {notice_path}")
+        raise HTTPException(status_code=404, detail="Legal notice not available")
     return LegalOut(title="Responsible Data Use Notice", content=notice_path.read_text(encoding="utf-8"))
 
 
@@ -276,7 +263,7 @@ def require_ops_key(x_ops_key: str | None = Header(default=None, alias="X-Ops-Ke
             status_code=503,
             detail="Ops endpoints are disabled. Set OPS_API_KEY to enable them.",
         )
-    if x_ops_key != settings.ops_api_key:
+    if not x_ops_key or not hmac.compare_digest(x_ops_key, settings.ops_api_key):
         raise HTTPException(status_code=403, detail="Invalid X-Ops-Key")
 
 

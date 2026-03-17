@@ -111,7 +111,8 @@ def list_deals(
         stmt = stmt.where(WineDeal.cheaper_side == effective_cheaper_side)
 
     if search:
-        stmt = stmt.where(WineDeal.wine_name.ilike(f"%{search.strip()}%"))
+        escaped = search.strip().replace("%", r"\%").replace("_", r"\_")
+        stmt = stmt.where(WineDeal.wine_name.ilike(f"%{escaped}%", escape="\\"))
 
     if min_vivino_rating is not None:
         stmt = stmt.where(WineDeal.vivino_rating >= min_vivino_rating)

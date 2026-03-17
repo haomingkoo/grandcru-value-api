@@ -115,7 +115,7 @@ def call_gemini(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> s
     """Call Gemini API via REST with thinking disabled for fast, clean output."""
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model}:generateContent?key={api_key}"
+        f"{model}:generateContent"
     )
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
@@ -125,7 +125,10 @@ def call_gemini(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> s
             "thinkingConfig": {"thinkingBudget": 0},
         },
     }).encode("utf-8")
-    req = Request(url, data=body, method="POST", headers={"Content-Type": "application/json"})
+    req = Request(url, data=body, method="POST", headers={
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    })
     with urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read().decode("utf-8"))
     candidates = data.get("candidates", [])

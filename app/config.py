@@ -14,7 +14,7 @@ class Settings:
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./data/wines.db")
     legal_notice_path: str = os.getenv("LEGAL_NOTICE_PATH", "LEGAL_NOTICE.md")
     ingestion_stale_hours: int = int(os.getenv("INGESTION_STALE_HOURS", "24"))
-    cors_origins: str = os.getenv("CORS_ORIGINS", "*")
+    cors_origins: str = os.getenv("CORS_ORIGINS", "https://kooexperience.com,https://haomingkoo.com")
     history_retention_days: int = int(os.getenv("HISTORY_RETENTION_DAYS", "90"))
     rate_limit_enabled: bool = _as_bool(os.getenv("RATE_LIMIT_ENABLED"), True)
     rate_limit_requests_per_minute: int = int(os.getenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "120"))

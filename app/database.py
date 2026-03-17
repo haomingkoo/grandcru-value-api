@@ -1,10 +1,15 @@
+from __future__ import annotations
+
+import logging
 from collections.abc import Generator
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
+
+logger = logging.getLogger("grandcru.database")
 
 
 class Base(DeclarativeBase):
@@ -29,3 +34,35 @@ def get_session() -> Generator[Session, None, None]:
         yield session
     finally:
         session.close()
+
+
+_ALLOWED_TABLES = {"wine_deals", "wine_deal_snapshots", "ingestion_runs"}
+_ALLOWED_COLUMNS = {"vivino_match_method"}
+
+
+def ensure_column(table: str, column: str, col_type: str) -> None:
+    """Add a column to an existing table if missing. Postgres + SQLite safe."""
+    if table not in _ALLOWED_TABLES or column not in _ALLOWED_COLUMNS:
+        raise ValueError(f"Unrecognized migration target: {table}.{column}")
+
+    with engine.connect() as conn:
+        dialect = conn.dialect.name
+        if dialect == "postgresql":
+            result = conn.execute(text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = :table AND column_name = :column"
+            ), {"table": table, "column": column})
+            if result.fetchone() is None:
+                conn.execute(text(
+                    f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}'
+                ))
+                logger.info("migration: added %s.%s (%s)", table, column, col_type)
+        else:
+            try:
+                conn.execute(text(f"SELECT {column} FROM {table} LIMIT 0"))
+            except Exception:
+                conn.execute(text(
+                    f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+                ))
+                logger.info("migration: added %s.%s (%s)", table, column, col_type)
+        conn.commit()
