@@ -46,11 +46,26 @@ logger = logging.getLogger("grandcru.api")
 refresh_runner = RefreshRunner()
 
 
+def _ensure_column(conn, table: str, column: str, col_type: str) -> None:
+    """Add a column if it doesn't exist yet (simple migration helper)."""
+    from sqlalchemy import text
+
+    try:
+        conn.execute(text(f"SELECT {column} FROM {table} LIMIT 0"))
+    except Exception:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+        logger.info("migration: added %s.%s (%s)", table, column, col_type)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     if settings.database_url.startswith("sqlite:///./"):
         Path("data").mkdir(exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    with engine.connect() as conn:
+        _ensure_column(conn, "wine_deals", "vivino_match_method", "VARCHAR(32)")
+        _ensure_column(conn, "wine_deal_snapshots", "vivino_match_method", "VARCHAR(32)")
+        conn.commit()
     yield
 
 

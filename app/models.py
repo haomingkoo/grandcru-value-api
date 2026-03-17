@@ -30,6 +30,7 @@ class WineDeal(Base):
 
     vivino_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     vivino_num_ratings: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vivino_match_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     deal_score: Mapped[float] = mapped_column(Float, default=0.0, index=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -89,4 +90,5 @@ class WineDealSnapshot(Base):
 
     vivino_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     vivino_num_ratings: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vivino_match_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     deal_score: Mapped[float] = mapped_column(Float, default=0.0, index=True)
