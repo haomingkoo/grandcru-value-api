@@ -318,6 +318,17 @@ def build_vivino_search_url(query: str | None) -> str | None:
     return f"https://www.vivino.com/en/search/wines?q={quote_plus(cleaned)}"
 
 
+def _ensure_column(conn, table: str, column: str, col_type: str) -> None:
+    """Add a column to an existing table if it doesn't exist."""
+    from sqlalchemy import text
+
+    try:
+        conn.execute(text(f"SELECT {column} FROM {table} LIMIT 0"))
+    except Exception:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+        logger.info("migration: added %s.%s (%s)", table, column, col_type)
+
+
 def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path: Path | None = None) -> None:
     if not comparison_path.exists():
         raise FileNotFoundError(f"comparison_summary missing: {comparison_path}")
@@ -325,6 +336,12 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
         raise FileNotFoundError(f"vivino_results missing: {vivino_path}")
 
     Base.metadata.create_all(bind=engine)
+
+    # Ensure new columns exist on legacy databases (Postgres on Railway).
+    with engine.connect() as conn:
+        _ensure_column(conn, "wine_deals", "vivino_match_method", "VARCHAR(32)")
+        _ensure_column(conn, "wine_deal_snapshots", "vivino_match_method", "VARCHAR(32)")
+        conn.commit()
 
     comparison_rows = read_csv_rows(comparison_path)
     vivino_rows_base = read_csv_rows(vivino_path)
