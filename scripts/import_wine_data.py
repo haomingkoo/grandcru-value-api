@@ -45,11 +45,14 @@ _DROP_TOKENS = {
     "la",
     "le",
     "du",
+    "des",
+    "di",
     "standard",
     "bottle",
     "magnum",
     "jeroboam",
     "double",
+    "half",
     "red",
     "white",
     "rose",
@@ -57,6 +60,12 @@ _DROP_TOKENS = {
     "rouge",
     "ml",
     "l",
+    "igt",
+    "doc",
+    "docg",
+    "aoc",
+    "aop",
+    "vdt",
 }
 
 
@@ -237,14 +246,14 @@ def match_vivino_row(wine_name: str, lookup: VivinoLookup) -> tuple[dict[str, st
     best = scored_candidates[0]
     second_best = scored_candidates[1] if len(scored_candidates) > 1 else None
 
-    # Conservative gate to avoid linking the wrong wine.
-    if best[4] < 3:
+    # Gate to avoid linking the wrong wine — relaxed to improve coverage.
+    if best[4] < 2:
         return {}, "none"
-    if best[0] < 0.68 and best[3] < 0.90:
+    if best[0] < 0.60 and best[3] < 0.85:
         return {}, "none"
-    if best[1] < 0.45 and best[3] < 0.90:
+    if best[1] < 0.35 and best[3] < 0.85:
         return {}, "none"
-    if second_best is not None and (best[0] - second_best[0]) < 0.03 and best[3] < 0.92:
+    if second_best is not None and (best[0] - second_best[0]) < 0.02 and best[3] < 0.88:
         return {}, "none"
 
     return best[5], "fuzzy"
@@ -338,91 +347,63 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
     session.refresh(run)
 
     try:
-        existing_deals = list(session.scalars(select(WineDeal)).all())
-        existing_vivino_by_name = {normalize_key(deal.wine_name): deal for deal in existing_deals if deal.wine_name}
-
         merged_records: list[WineDeal] = []
         snapshot_records: list[WineDealSnapshot] = []
         snapshot_time = datetime.now(UTC)
 
-        exact_matches = 0
-        canonical_matches = 0
-        fuzzy_matches = 0
-        unmatched = 0
-        db_fallback_matches = 0
-        platinum_vivino_fallback_matches = 0
+        match_counts: dict[str, int] = {
+            "exact": 0, "canonical": 0, "fuzzy": 0, "platinum": 0, "none": 0,
+        }
 
         for row in comparison_rows:
             wine_name = (row.get("name_plat") or "").strip()
             if not wine_name:
                 continue
 
+            # --- Source 1: vivino_results.csv + overrides (richest: rating + count + URL) ---
             vivino, match_method = match_vivino_row(wine_name, vivino_lookup)
-            if match_method == "exact":
-                exact_matches += 1
-            elif match_method == "canonical":
-                canonical_matches += 1
-            elif match_method == "fuzzy":
-                fuzzy_matches += 1
-            else:
-                unmatched += 1
-
             vivino_rating = parse_float(vivino.get("vivino_rating"))
-            vivino_num_ratings = parse_int(vivino.get("vivino_num_ratings")) or parse_int(vivino.get("vivino_raters"))
+            vivino_num_ratings = (
+                parse_int(vivino.get("vivino_num_ratings"))
+                or parse_int(vivino.get("vivino_raters"))
+            )
             vivino_url = normalize_vivino_url(vivino.get("vivino_url"))
 
-            # If a matched row has URL but blank metrics, hydrate from the strongest row for that URL.
+            # If a matched row has URL but blank metrics, hydrate from URL index.
             if vivino_url and vivino_rating is None and vivino_num_ratings is None:
                 url_row = vivino_by_url.get(vivino_url)
                 if url_row is not None:
                     url_rating = parse_float(url_row.get("vivino_rating"))
                     if url_rating is not None:
                         vivino_rating = url_rating
-
-                    url_num_ratings = parse_int(url_row.get("vivino_num_ratings"))
-                    if url_num_ratings is None:
-                        url_num_ratings = parse_int(url_row.get("vivino_raters"))
+                    url_num_ratings = (
+                        parse_int(url_row.get("vivino_num_ratings"))
+                        or parse_int(url_row.get("vivino_raters"))
+                    )
                     if url_num_ratings is not None:
                         vivino_num_ratings = url_num_ratings
 
-            if vivino_url is None and (vivino_rating is not None or vivino_num_ratings is not None):
+            # --- Source 2: Platinum-embedded Vivino data (explicit, named) ---
+            # Only used when CSV matching found nothing. Not a hidden fallback —
+            # stored as match_method="platinum" and visible in the API/UI.
+            if match_method == "none":
+                plat_rating = parse_float(row.get("platinum_vivino_rating"))
+                if plat_rating is not None:
+                    vivino_rating = plat_rating
+                    vivino_num_ratings = parse_int(row.get("platinum_vivino_num_ratings"))
+                    vivino_url = normalize_url(row.get("platinum_vivino_url"))
+                    match_method = "platinum"
+
+            # Generate a Vivino search URL for wines that have a rating but no direct link.
+            if vivino_url is None and vivino_rating is not None:
                 vivino_url = build_vivino_search_url(
                     vivino.get("wine_name") or vivino.get("match_name") or wine_name
                 )
 
-            if match_method == "none":
-                prior = existing_vivino_by_name.get(normalize_key(wine_name))
-                if prior is not None and (
-                    prior.vivino_url is not None
-                    or prior.vivino_rating is not None
-                    or prior.vivino_num_ratings is not None
-                ):
-                    vivino_url = prior.vivino_url
-                    vivino_rating = prior.vivino_rating
-                    vivino_num_ratings = prior.vivino_num_ratings
-                    db_fallback_matches += 1
+            # Preserve Vivino URLs even without metrics — users can click through to verify.
+            # Only generate a search URL when we have a rating but no direct link.
 
-            platinum_vivino_rating = parse_float(row.get("platinum_vivino_rating"))
-            platinum_vivino_num_ratings = parse_int(row.get("platinum_vivino_num_ratings"))
-            platinum_vivino_url = normalize_url(row.get("platinum_vivino_url"))
-            used_platinum_fallback = False
-            if vivino_rating is None and platinum_vivino_rating is not None:
-                vivino_rating = platinum_vivino_rating
-                used_platinum_fallback = True
-            if vivino_num_ratings is None and platinum_vivino_num_ratings is not None:
-                vivino_num_ratings = platinum_vivino_num_ratings
-                used_platinum_fallback = True
-            if vivino_url is None and platinum_vivino_url and (
-                vivino_rating is not None or vivino_num_ratings is not None
-            ):
-                vivino_url = platinum_vivino_url
-                used_platinum_fallback = True
-            if used_platinum_fallback:
-                platinum_vivino_fallback_matches += 1
-
-            # Avoid exposing orphaned Vivino links with no usable quality metrics.
-            if vivino_rating is None and vivino_num_ratings is None:
-                vivino_url = None
+            match_counts[match_method] = match_counts.get(match_method, 0) + 1
 
             price_platinum = parse_float(row.get("price_plat"))
             price_grand_cru = parse_float(row.get("price_main"))
@@ -450,6 +431,7 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 "vivino_url": vivino_url,
                 "vivino_rating": vivino_rating,
                 "vivino_num_ratings": vivino_num_ratings,
+                "vivino_match_method": match_method,
                 "deal_score": compute_deal_score(price_diff_pct, vivino_rating, vivino_num_ratings),
             }
             merged_records.append(WineDeal(**deal_payload))
@@ -472,12 +454,11 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
         run.status = "success"
         run.finished_at = datetime.now(UTC)
         run.merged_rows = len(merged_records)
+        match_summary = ", ".join(f"{k}={v}" for k, v in sorted(match_counts.items()))
         run.details = (
             f"Loaded {len(comparison_rows)} comparison rows and {len(vivino_rows_base)} vivino rows "
             f"(+{len(vivino_rows_override)} overrides) into {len(merged_records)} current deals and "
-            f"{len(snapshot_records)} snapshots (vivino matched: exact={exact_matches}, "
-            f"canonical={canonical_matches}, fuzzy={fuzzy_matches}, unmatched={unmatched}, "
-            f"db_fallback={db_fallback_matches}, platinum_fallback={platinum_vivino_fallback_matches}); "
+            f"{len(snapshot_records)} snapshots (vivino: {match_summary}); "
             f"pruned {deleted_snapshots} snapshots older than {settings.history_retention_days} days."
         )
         session.commit()

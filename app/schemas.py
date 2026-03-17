@@ -19,6 +19,7 @@ class DealOut(BaseModel):
     vivino_url: str | None = None
     vivino_rating: float | None = None
     vivino_num_ratings: int | None = None
+    vivino_match_method: str | None = None
     deal_score: float
     price_platinum_7d_ago: float | None = None
     price_platinum_change_7d: float | None = None
@@ -75,6 +76,7 @@ class DealHistoryOut(BaseModel):
     deal_score: float
     vivino_rating: float | None = None
     vivino_num_ratings: int | None = None
+    vivino_match_method: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

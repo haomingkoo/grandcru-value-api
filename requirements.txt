@@ -5,3 +5,4 @@ pydantic
 psycopg[binary]
 psycopg2-binary
 selenium
+google-generativeai
