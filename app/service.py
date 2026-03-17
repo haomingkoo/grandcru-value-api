@@ -29,6 +29,69 @@ def _safe_diff(current: float | None, previous: float | None) -> float | None:
     return round(current - previous, 2)
 
 
+def _sort_with_direction(column, direction: str):
+    return column.asc().nullslast() if direction == "asc" else column.desc().nullslast()
+
+
+def _deal_sort_expressions(sort_by: str, sort_order: str) -> list:
+    direction = "asc" if (sort_order or "").lower() == "asc" else "desc"
+    normalized_sort_by = (sort_by or "deal_score").lower()
+
+    sort_map = {
+        "deal_score": WineDeal.deal_score,
+        "price_diff_pct": WineDeal.price_diff_pct,
+        "vivino_rating": WineDeal.vivino_rating,
+        "vivino_num_ratings": WineDeal.vivino_num_ratings,
+        "price_platinum": WineDeal.price_platinum,
+        "wine_name": WineDeal.wine_name,
+    }
+    primary_column = sort_map.get(normalized_sort_by, WineDeal.deal_score)
+    expressions = [_sort_with_direction(primary_column, direction)]
+
+    # Give ties a domain-aware order so equal rounded values still feel intentional in the UI.
+    secondary_map = {
+        "deal_score": [
+            WineDeal.price_diff_pct.asc().nullslast(),
+            WineDeal.vivino_rating.desc().nullslast(),
+            WineDeal.vivino_num_ratings.desc().nullslast(),
+            WineDeal.wine_name.asc(),
+        ],
+        "price_diff_pct": [
+            WineDeal.deal_score.desc().nullslast(),
+            WineDeal.vivino_rating.desc().nullslast(),
+            WineDeal.vivino_num_ratings.desc().nullslast(),
+            WineDeal.wine_name.asc(),
+        ],
+        "vivino_rating": [
+            WineDeal.vivino_num_ratings.desc().nullslast(),
+            WineDeal.deal_score.desc().nullslast(),
+            WineDeal.price_diff_pct.asc().nullslast(),
+            WineDeal.wine_name.asc(),
+        ],
+        "vivino_num_ratings": [
+            WineDeal.vivino_rating.desc().nullslast(),
+            WineDeal.deal_score.desc().nullslast(),
+            WineDeal.price_diff_pct.asc().nullslast(),
+            WineDeal.wine_name.asc(),
+        ],
+        "price_platinum": [
+            WineDeal.deal_score.desc().nullslast(),
+            WineDeal.vivino_rating.desc().nullslast(),
+            WineDeal.wine_name.asc(),
+        ],
+        "wine_name": [
+            WineDeal.deal_score.desc().nullslast(),
+            WineDeal.vivino_rating.desc().nullslast(),
+            WineDeal.id.asc(),
+        ],
+    }
+
+    expressions.extend(secondary_map.get(normalized_sort_by, secondary_map["deal_score"]))
+    if normalized_sort_by != "wine_name":
+        expressions.append(WineDeal.id.asc())
+    return expressions
+
+
 def _apply_price_change_fields(session: Session, deals: list[WineDeal]) -> None:
     if not deals:
         return
@@ -123,17 +186,7 @@ def list_deals(
     if max_platinum_price is not None:
         stmt = stmt.where(WineDeal.price_platinum <= max_platinum_price)
 
-    sort_map = {
-        "deal_score": WineDeal.deal_score,
-        "price_diff_pct": WineDeal.price_diff_pct,
-        "vivino_rating": WineDeal.vivino_rating,
-        "vivino_num_ratings": WineDeal.vivino_num_ratings,
-        "price_platinum": WineDeal.price_platinum,
-        "wine_name": WineDeal.wine_name,
-    }
-    sort_column = sort_map.get(sort_by, WineDeal.deal_score)
-    sort_expression = sort_column.asc().nullslast() if sort_order == "asc" else sort_column.desc().nullslast()
-    stmt = stmt.order_by(sort_expression, WineDeal.id.asc())
+    stmt = stmt.order_by(*_deal_sort_expressions(sort_by, sort_order))
     stmt = stmt.offset(offset).limit(min(limit, 500))
     deals = list(session.scalars(stmt).all())
     _apply_price_change_fields(session, deals)

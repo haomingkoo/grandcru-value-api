@@ -104,7 +104,7 @@ If traffic grows, switch `DATABASE_URL` from SQLite to Railway Postgres without 
    - `DATABASE_URL` (optional at first; default SQLite works)
    - `INGESTION_STALE_HOURS` (optional)
    - `HISTORY_RETENTION_DAYS` (optional, default `90`)
-   - `CORS_ORIGINS` (set to your GitHub Pages domain in production)
+   - `CORS_ORIGINS` (comma-separated exact origins, for example `https://kooexperience.com,https://www.kooexperience.com,https://wine.kooexperience.com`)
    - `RATE_LIMIT_ENABLED` (default `true`)
    - `RATE_LIMIT_REQUESTS_PER_MINUTE` (default `120`)
 3. Start command:
