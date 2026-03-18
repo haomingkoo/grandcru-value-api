@@ -1036,39 +1036,62 @@ h2 {
 }
 
 :root {
-  --bg: #06070a;
-  --bg-deep: #0d1117;
-  --card: rgba(14, 18, 25, 0.9);
-  --card-strong: rgba(17, 22, 30, 0.96);
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14);
-  --ink: #f4efe7;
-  --muted: #aaa4b6;
-  --wine: #c88aa5;
-  --wine-deep: #7f3855;
-  --sage: #63b99d;
-  --sage-soft: rgba(99, 185, 157, 0.16);
-  --amber: #d8b36a;
-  --amber-soft: rgba(216, 179, 106, 0.16);
-  --rust: #e07a64;
-  --rust-soft: rgba(224, 122, 100, 0.16);
-  --shadow: 0 24px 56px rgba(0, 0, 0, 0.42);
+  --bg: #060608;
+  --bg-deep: #0e0e12;
+  --card: rgba(14, 14, 18, 0.94);
+  --card-strong: rgba(17, 17, 23, 0.98);
+  --line: #1c1c24;
+  --line-strong: #2a2a36;
+  --ink: #eeeef0;
+  --muted: #b0b0b8;
+  --wine: #a855f7;
+  --wine-deep: #7c3aed;
+  --sage: #4ade80;
+  --sage-soft: rgba(74, 222, 128, 0.12);
+  --amber: #d6b066;
+  --amber-soft: rgba(214, 176, 102, 0.12);
+  --rust: #fb7185;
+  --rust-soft: rgba(251, 113, 133, 0.12);
+  --shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
 }
 
 body {
   color: var(--ink);
   background:
-    radial-gradient(circle at top center, rgba(200, 138, 165, 0.14), transparent 28%),
-    radial-gradient(circle at 85% 12%, rgba(216, 179, 106, 0.1), transparent 24%),
-    linear-gradient(180deg, #07080c 0%, #0b0d12 44%, #08090d 100%);
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(168, 85, 247, 0.08) 0%, transparent 60%),
+    linear-gradient(180deg, #060608 0%, #09090d 44%, #060608 100%);
 }
 
 body::before {
-  background: rgba(127, 56, 85, 0.14);
+  background: rgba(168, 85, 247, 0.08);
 }
 
 body::after {
-  background: rgba(40, 72, 106, 0.12);
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.page-shell {
+  width: min(1200px, calc(100% - 32px));
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  font-weight: 800;
+}
+
+h1 {
+  max-width: 10ch;
+}
+
+.eyebrow {
+  color: #c084fc;
+  letter-spacing: 0.16em;
 }
 
 .panel,
@@ -1083,8 +1106,8 @@ body::after {
 }
 
 .panel {
-  background: linear-gradient(180deg, rgba(16, 19, 27, 0.94), rgba(11, 14, 20, 0.94));
-  backdrop-filter: blur(18px);
+  background: linear-gradient(180deg, rgba(14, 14, 18, 0.98), rgba(11, 11, 15, 0.98));
+  backdrop-filter: blur(14px);
 }
 
 .ghost-button {
@@ -1098,12 +1121,12 @@ body::after {
 .quick-filter-button:hover,
 .country-jump:hover,
 .region-pill:hover {
-  border-color: rgba(200, 138, 165, 0.38);
+  border-color: rgba(168, 85, 247, 0.3);
 }
 
 .map-stage {
   min-height: 430px;
-  background: #090d13;
+  background: #060608;
   border-color: var(--line);
 }
 
@@ -1115,7 +1138,7 @@ body::after {
 }
 
 .map-selection {
-  background: linear-gradient(180deg, rgba(15, 19, 26, 0.98), rgba(10, 13, 19, 0.96));
+  background: linear-gradient(180deg, rgba(14, 14, 18, 0.98), rgba(11, 11, 15, 0.98));
   border-color: var(--line);
   color: var(--muted);
 }
@@ -1126,25 +1149,25 @@ body::after {
 }
 
 .stat-card {
-  background: linear-gradient(180deg, rgba(20, 24, 33, 0.96), rgba(13, 16, 22, 0.96));
+  background: linear-gradient(180deg, rgba(19, 19, 25, 0.98), rgba(13, 13, 18, 0.98));
 }
 
 .pick-card {
   background:
-    radial-gradient(circle at top right, rgba(216, 179, 106, 0.12), transparent 32%),
-    linear-gradient(180deg, rgba(19, 23, 31, 0.98), rgba(12, 15, 21, 0.98));
+    radial-gradient(circle at top right, rgba(168, 85, 247, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(19, 19, 25, 0.98), rgba(13, 13, 18, 0.98));
 }
 
 .country-card {
   background:
-    radial-gradient(circle at top right, rgba(99, 185, 157, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(18, 22, 29, 0.98), rgba(11, 14, 19, 0.98));
+    radial-gradient(circle at top right, rgba(168, 85, 247, 0.06), transparent 34%),
+    linear-gradient(180deg, rgba(18, 18, 24, 0.98), rgba(12, 12, 16, 0.98));
 }
 
 .family-card {
   background:
-    radial-gradient(circle at top right, rgba(200, 138, 165, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(18, 22, 29, 0.98), rgba(11, 14, 19, 0.98));
+    radial-gradient(circle at top right, rgba(168, 85, 247, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(18, 18, 24, 0.98), rgba(12, 12, 16, 0.98));
 }
 
 .offer-variant {
@@ -1180,16 +1203,16 @@ body::after {
 .quick-filter-button.is-active,
 .country-jump.is-active,
 .region-pill.is-active {
-  background: rgba(200, 138, 165, 0.16);
-  border-color: rgba(200, 138, 165, 0.34);
-  color: #f6dce6;
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.3);
+  color: #d8b4fe;
 }
 
 .quick-filter-button.is-active span,
 .region-pill.is-active span,
 .filter-chip button:hover {
-  background: rgba(200, 138, 165, 0.2);
-  color: #f6dce6;
+  background: rgba(168, 85, 247, 0.16);
+  color: #d8b4fe;
 }
 
 .link-chip {
@@ -1214,8 +1237,8 @@ body::after {
 
 .field input:focus,
 .field select:focus {
-  outline-color: rgba(200, 138, 165, 0.22);
-  border-color: rgba(200, 138, 165, 0.38);
+  outline-color: rgba(168, 85, 247, 0.22);
+  border-color: rgba(168, 85, 247, 0.38);
 }
 
 .toggle-pill input {
@@ -1251,7 +1274,7 @@ body::after {
 }
 
 .sort-button.is-active {
-  color: #f4dbe5;
+  color: #d8b4fe;
 }
 
 .deal-row td {
@@ -1301,7 +1324,7 @@ body::after {
 }
 
 .leaflet-control-attribution a {
-  color: #cf9cb2 !important;
+  color: #c084fc !important;
 }
 
 .leaflet-tooltip.country-tooltip {

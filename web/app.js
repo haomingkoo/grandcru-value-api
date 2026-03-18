@@ -823,9 +823,9 @@ function renderMap(points) {
     const radius = Math.max(10, 9 + (point.wineCount / largestCount) * 16)
     const marker = window.L.circleMarker([point.originLatitude, point.originLongitude], {
       radius,
-      fillColor: point.isEuropean ? "#bf7aa0" : "#d8b36a",
+      fillColor: point.isEuropean ? "#a855f7" : "#d6b066",
       fillOpacity: isSelected ? 0.98 : 0.86,
-      color: isSelected ? "#fff3d6" : "#081017",
+      color: isSelected ? "#f3e8ff" : "#060608",
       weight: isSelected ? 3 : 2,
     })
 

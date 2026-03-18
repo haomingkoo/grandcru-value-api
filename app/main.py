@@ -7,7 +7,7 @@ import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
@@ -54,6 +54,11 @@ logger = logging.getLogger("grandcru.api")
 refresh_runner = RefreshRunner()
 ROOT_DIR = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT_DIR / "web"
+FRONTEND_ASSET_PATHS = (
+    WEB_DIR / "index.html",
+    WEB_DIR / "styles.css",
+    WEB_DIR / "app.js",
+)
 
 DEAL_EXTRA_COLUMNS = (
     ("producer", "VARCHAR(255)"),
@@ -288,13 +293,20 @@ async def access_log_middleware(request, call_next):
 
 
 @app.get("/", include_in_schema=False)
-def frontend() -> FileResponse:
-    return FileResponse(WEB_DIR / "index.html")
+def frontend() -> HTMLResponse:
+    asset_version = str(
+        max((path.stat().st_mtime_ns for path in FRONTEND_ASSET_PATHS if path.exists()), default=int(time.time_ns()))
+    )
+    html = (WEB_DIR / "index.html").read_text(encoding="utf-8").replace("__ASSET_VERSION__", asset_version)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store, max-age=0"})
 
 
 @app.get("/api")
 def root() -> dict[str, str]:
-    return {"service": settings.app_name, "docs": "/docs", "health": "/health", "deals": "/deals"}
+    payload = {"service": settings.app_name, "health": "/health", "deals": "/deals"}
+    if settings.api_docs_enabled:
+        payload["docs"] = "/docs"
+    return payload
 
 
 @app.get("/health", response_model=HealthOut)
