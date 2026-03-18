@@ -459,6 +459,14 @@ def main() -> None:
         help="Optional command to run before import. Repeat for multiple commands.",
     )
     parser.add_argument(
+        "--llm-resolve",
+        action="store_true",
+        help="Run LLM-powered Vivino resolver (Gemini + Brave) to get descriptions and prices.",
+    )
+    parser.add_argument("--llm-resolve-limit", type=int, default=0, help="Max wines for LLM resolver (0 = all)")
+    parser.add_argument("--llm-resolve-all", action="store_true", help="Resolve ALL wines, not just unmatched")
+    parser.add_argument("--llm-resolve-sleep", type=float, default=2.0)
+    parser.add_argument(
         "--health-url",
         default=None,
         help="Optional API /health URL to verify after import.",
@@ -560,6 +568,30 @@ def main() -> None:
                 output_suggestions=args.resolver_output_suggestions.resolve(),
                 env=env,
             )
+
+    if args.llm_resolve:
+        gemini_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+        brave_key = os.getenv("BRAVE_API_KEY", "")
+        if not gemini_key:
+            print("[refresh] Skipping LLM resolver: no GEMINI_API_KEY set")
+        else:
+            llm_cmd = [
+                sys.executable,
+                str(ROOT / "scripts" / "llm_vivino_resolver.py"),
+                "--comparison", str(comparison_path),
+                "--vivino", str(vivino_path),
+                "--vivino-overrides", str(vivino_overrides_path),
+                "--auto-apply",
+                "--sleep", str(args.llm_resolve_sleep),
+            ]
+            if brave_key:
+                llm_cmd.extend(["--brave-api-key", brave_key])
+            if args.llm_resolve_all:
+                llm_cmd.append("--all")
+            if args.llm_resolve_limit > 0:
+                llm_cmd.extend(["--limit", str(args.llm_resolve_limit)])
+            print(f"[refresh] Running LLM Vivino resolver (limit={args.llm_resolve_limit or 'all'})")
+            subprocess.run(llm_cmd, cwd=ROOT, env=env, check=True)
 
     if args.enrich_vivino_results:
         enrich_cmd = [

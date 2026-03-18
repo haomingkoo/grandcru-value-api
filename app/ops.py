@@ -97,6 +97,8 @@ def build_refresh_command(
                 "--no-resolver-only-new-unresolved",
                 "--resolver-cache-ttl-hours",
                 "0",
+                "--llm-resolve",
+                "--llm-resolve-all",
             ]
         )
     elif mode == "import_only":
