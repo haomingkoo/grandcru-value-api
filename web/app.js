@@ -48,6 +48,8 @@ let requestSerial = 0
 let searchDebounce = 0
 let originMap = null
 let originMarkerLayer = null
+let latestMapPoints = []
+let mapFocusCountry = ""
 
 const els = {}
 
@@ -166,10 +168,8 @@ function bindEvents() {
   })
 
   els.clearMapFocus.addEventListener("click", () => {
-    state.country = ""
-    state.region = ""
-    syncControlsFromState()
-    loadDashboard()
+    mapFocusCountry = ""
+    renderMap(latestMapPoints)
   })
 
   els.activeFilters.addEventListener("click", (event) => {
@@ -178,6 +178,18 @@ function bindEvents() {
       return
     }
     resetFilter(resetKey)
+    syncControlsFromState()
+    loadDashboard()
+  })
+
+  els.mapSelection.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-map-country-filter]")
+    if (!button) {
+      return
+    }
+    mapFocusCountry = ""
+    state.country = button.dataset.mapCountryFilter || ""
+    state.region = ""
     syncControlsFromState()
     loadDashboard()
   })
@@ -238,6 +250,7 @@ async function loadFilterOptions() {
 }
 
 async function loadDashboard() {
+  mapFocusCountry = ""
   const requestId = ++requestSerial
   setLoading(true)
   writeStateToUrl()
@@ -253,6 +266,7 @@ async function loadDashboard() {
       return
     }
 
+    latestMapPoints = mapPoints
     renderResultsMeta(deals)
     renderHeroStats(deals, mapPoints)
     renderDealMix(stats.cheaper_sides || [])
@@ -685,34 +699,32 @@ function renderTopPicks(deals) {
     .map((family) => {
       const deal = family.bestOffer
       const verdict = resolveVerdict(deal)
-      const styleLabel = family.styleLabel
       return `
         <article class="pick-card">
-          <div>
-            <div class="pick-meta">
-              <span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>
-              <span class="meta-chip">${escapeHtml(styleLabel)}</span>
-              <span class="meta-chip">${formatInteger(family.offers.length)} offer${family.offers.length > 1 ? "s" : ""}</span>
-              ${family.vintageLabel ? `<span class="meta-chip">Vintages ${escapeHtml(family.vintageLabel)}</span>` : ""}
-              ${deal.metadata_confidence ? `<span class="meta-chip">Metadata ${escapeHtml(deal.metadata_confidence)}</span>` : ""}
+          <div class="pick-card-top">
+            <div class="pick-head">
+              <span class="verdict-chip ${verdict.tone}">${escapeHtml(compactVerdictLabel(verdict.label))}</span>
+              <h3>${escapeHtml(family.title)}</h3>
+              <p class="panel-note">${escapeHtml(familyOriginLine(family))}</p>
             </div>
-            <h3>${escapeHtml(family.title)}</h3>
-            <p class="panel-note">${escapeHtml(family.region || "Region unknown")}, ${escapeHtml(family.country || "Country unknown")}</p>
+            ${renderRatingBadge(deal)}
           </div>
           <div class="pick-meta">
-            <span class="pill ghost">Best offer ${formatMoney(deal.price_platinum)}</span>
-            <span class="pill ${gapTone(deal)}">${escapeHtml(gapNarrative(deal))}</span>
+            <span class="meta-chip">${escapeHtml(family.styleLabel)}</span>
+            ${family.grapes ? `<span class="meta-chip">${escapeHtml(family.grapes)}</span>` : ""}
+            ${family.vintageLabel ? `<span class="meta-chip">${escapeHtml(family.vintageLabel)}</span>` : ""}
           </div>
-          <p>${escapeHtml(familyFamilyNarrative(family))}</p>
-          <p class="cell-subline">${escapeHtml(metadataNarrative(deal))}</p>
-          <div class="pick-meta">
-            ${renderTrendChip("P 7d", deal.price_platinum_change_7d, deal.platinum_trend_7d)}
-            ${renderTrendChip("G 7d", deal.price_grand_cru_change_7d, deal.grand_cru_trend_7d)}
+          <div class="pick-price-row">
+            <div class="pick-meta">
+              <span class="meta-chip">Best Platinum</span>
+              <strong class="pick-price">${formatMoney(deal.price_platinum)}</strong>
+            </div>
+            <span class="pill ${gapTone(deal)}">${escapeHtml(gapShortCopy(deal))}</span>
           </div>
           <div class="pick-actions">
-            ${actionLink(deal.platinum_url, "Platinum")}
-            ${actionLink(deal.grand_cru_url, "Grand Cru")}
-            ${actionLink(deal.vivino_url, "Vivino")}
+            ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
+            ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
+            ${actionLink(deal.vivino_url, "See Vivino")}
           </div>
         </article>
       `
@@ -739,20 +751,20 @@ function renderWineFamilies(deals) {
             <article class="offer-variant">
               <div class="offer-variant-head">
                 <div>
-                  <strong>${escapeHtml(offer.offering_type || "Unknown offer")}</strong>
+                  <strong>${escapeHtml(offer.offering_type || "Format")}</strong>
                   <div class="cell-subline">${escapeHtml(volumeQuantityCopy(offer))}</div>
                 </div>
-                <span class="verdict-chip ${offerVerdict.tone}">${escapeHtml(offerVerdict.label)}</span>
+                ${renderInlineRatingBadge(offer)}
               </div>
               <div class="offer-variant-metrics">
                 <span class="pill ghost">Platinum ${formatMoney(offer.price_platinum)}</span>
-                <span class="pill ${gapTone(offer)}">${escapeHtml(gapNarrative(offer))}</span>
-                ${offer.vivino_rating != null ? `<span class="meta-chip">Vivino ${escapeHtml(offer.vivino_rating.toFixed(1))}</span>` : ""}
+                <span class="pill ${gapTone(offer)}">${escapeHtml(gapShortCopy(offer))}</span>
+                <span class="meta-chip">${escapeHtml(compactVerdictLabel(offerVerdict.label))}</span>
               </div>
               <div class="offer-variant-links">
-                ${actionLink(offer.platinum_url, "Platinum")}
-                ${actionLink(offer.grand_cru_url, "Grand Cru")}
-                ${actionLink(offer.vivino_url, "Vivino")}
+                ${actionLink(offer.platinum_url, "Buy on Platinum", "primary")}
+                ${actionLink(offer.grand_cru_url, "Compare Grand Cru")}
+                ${actionLink(offer.vivino_url, "See Vivino")}
               </div>
             </article>
           `
@@ -760,33 +772,30 @@ function renderWineFamilies(deals) {
         .join("")
 
       return `
-        <details class="family-card"${family.offers.length === 1 ? " open" : ""}>
+        <details class="family-card">
           <summary class="family-summary">
             <div class="family-copy">
               <div class="pick-meta">
-                <span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>
+                <span class="verdict-chip ${verdict.tone}">${escapeHtml(compactVerdictLabel(verdict.label))}</span>
                 <span class="meta-chip">${escapeHtml(family.styleLabel)}</span>
-                <span class="meta-chip">${formatInteger(family.offers.length)} offer${family.offers.length > 1 ? "s" : ""}</span>
-                ${family.vintageLabel ? `<span class="meta-chip">Vintages ${escapeHtml(family.vintageLabel)}</span>` : ""}
+                ${family.grapes ? `<span class="meta-chip">${escapeHtml(family.grapes)}</span>` : ""}
+                ${family.vintageLabel ? `<span class="meta-chip">${escapeHtml(family.vintageLabel)}</span>` : ""}
               </div>
               <h3>${escapeHtml(family.title)}</h3>
-              <p class="panel-note">${escapeHtml(family.region || "Region unknown")}, ${escapeHtml(family.country || "Country unknown")} · ${escapeHtml(family.grapes || "Grape blend unknown")}</p>
-              <p class="cell-subline">${escapeHtml(familyFamilyNarrative(family))}</p>
+              <p class="panel-note">${escapeHtml(familyOriginLine(family))}</p>
             </div>
             <div class="family-aside">
+              ${renderRatingBadge(best)}
               <div class="family-price">${formatMoney(best.price_platinum)}</div>
-              <div class="cell-subline">Best current Platinum offer</div>
-              <div class="family-pill-row">
-                <span class="pill ${gapTone(best)}">${escapeHtml(gapNarrative(best))}</span>
-              </div>
+              <div class="cell-subline">Best Platinum</div>
+              <span class="pill ${gapTone(best)}">${escapeHtml(gapShortCopy(best))}</span>
+              <span class="family-toggle meta-chip">
+                <span class="toggle-closed">${escapeHtml(`Open ${formatFormatCount(family.offers.length)}`)}</span>
+                <span class="toggle-open">Hide formats</span>
+              </span>
             </div>
           </summary>
           <div class="family-body">
-            <div class="family-stats">
-              <span class="meta-chip">${formatInteger(family.platinumCheaperCount)} cheaper on Platinum</span>
-              <span class="meta-chip">${formatInteger(family.comparableCount)} comparable</span>
-              ${family.priceBand ? `<span class="meta-chip">Price band ${escapeHtml(family.priceBand)}</span>` : ""}
-            </div>
             <div class="offer-variant-grid">
               ${offerRows}
             </div>
@@ -800,32 +809,34 @@ function renderWineFamilies(deals) {
 function renderMap(points) {
   const map = ensureOriginMap()
   const groupedPoints = groupMapPointsByCountry(points)
-  const selected = groupedPoints.find((point) => point.country === state.country) || null
+  const selectedCountry = state.country || mapFocusCountry
+  const selected = groupedPoints.find((point) => point.country === selectedCountry) || null
 
   if (!map) {
     els.mapSelection.textContent = "The map is unavailable right now."
     return
   }
 
+  latestMapPoints = points
+  els.clearMapFocus.hidden = !mapFocusCountry
   originMarkerLayer.clearLayers()
 
   if (!groupedPoints.length) {
     els.mapSelection.textContent = "No mapped origins are available for the current filter set."
-    map.setView([22, 8], 2)
+    fitCountryMap(map, groupedPoints)
     return
   }
 
   const largestCount = Math.max(...groupedPoints.map((point) => point.wineCount), 1)
-  const bounds = []
 
   groupedPoints.forEach((point) => {
     const isSelected = selected ? selected.country === point.country : false
     const radius = Math.max(10, 9 + (point.wineCount / largestCount) * 16)
     const marker = window.L.circleMarker([point.originLatitude, point.originLongitude], {
       radius,
-      fillColor: point.isEuropean ? "#a855f7" : "#d6b066",
+      fillColor: point.isEuropean ? "#60a5fa" : "#d6b066",
       fillOpacity: isSelected ? 0.98 : 0.86,
-      color: isSelected ? "#f3e8ff" : "#060608",
+      color: isSelected ? "#dbeafe" : "#060608",
       weight: isSelected ? 3 : 2,
     })
 
@@ -839,45 +850,41 @@ function renderMap(points) {
     )
 
     marker.on("click", () => {
-      state.country = state.country === point.country && !state.region ? "" : point.country
-      state.region = ""
-      syncControlsFromState()
-      loadDashboard()
+      mapFocusCountry = mapFocusCountry === point.country ? "" : point.country
+      renderMap(points)
     })
 
     marker.addTo(originMarkerLayer)
-    bounds.push([point.originLatitude, point.originLongitude])
   })
 
-  fitCountryMap(map, bounds, selected)
-  renderMapSelection(selected || groupedPoints[0], Boolean(selected))
+  fitCountryMap(map, groupedPoints)
+  renderMapSelection(selected)
 }
 
-function renderMapSelection(point, isFocused) {
+function renderMapSelection(point) {
   if (!point) {
-    els.mapSelection.textContent = "Choose a country marker to focus the board."
+    els.mapSelection.textContent = "Click a country bubble to inspect it."
     return
   }
 
-  const avgGapCopy = point.average_price_diff_pct === null
-    ? "No comparable price signal yet."
-    : `${formatSignedPct(point.average_price_diff_pct, 1)} average price gap in the current filter set.`
-  const helperCopy = isFocused
-    ? "The board is currently filtered to this country."
-    : "Click the marker on the map to focus everything on this country."
-  const regionCopy = point.regionLabels.length
-    ? `${formatInteger(point.regionLabels.length)} regions in this view: ${point.regionLabels.slice(0, 4).join(" · ")}${point.regionLabels.length > 4 ? " ..." : ""}.`
-    : "Regional detail is still thin for this country."
-  const sampleCopy = point.sampleWines.length
-    ? point.sampleWines.slice(0, 3).join(" · ")
-    : "No sample bottles available yet."
+  const avgGapCopy = point.average_price_diff_pct === null ? null : `${formatSignedPct(point.average_price_diff_pct, 1)} avg gap`
+  const isFiltered = state.country === point.country && !state.region
 
   els.mapSelection.innerHTML = `
-    <h3>${escapeHtml(point.country)}</h3>
-    <p><strong>${point.wineCount}</strong> wines in view, with <strong>${point.platinumCheaperCount}</strong> currently cheaper on Platinum.</p>
-    <p>${escapeHtml(avgGapCopy)} ${escapeHtml(helperCopy)}</p>
-    <p>${escapeHtml(regionCopy)}</p>
-    <p><strong>Sample bottles:</strong> ${escapeHtml(sampleCopy)}</p>
+    <div class="map-selection-head">
+      <h3>${escapeHtml(point.country)}</h3>
+      ${
+        isFiltered
+          ? `<span class="meta-chip">Filtered</span>`
+          : `<button class="link-chip primary is-compact" type="button" data-map-country-filter="${escapeHtml(point.country)}">Filter country</button>`
+      }
+    </div>
+    <div class="map-selection-stats">
+      <span class="meta-chip">${formatInteger(point.wineCount)} wines</span>
+      <span class="meta-chip">${formatInteger(point.platinumCheaperCount)} cheaper on Platinum</span>
+      <span class="meta-chip">${formatInteger(point.regionLabels.length)} regions</span>
+      ${avgGapCopy ? `<span class="meta-chip">${escapeHtml(avgGapCopy)}</span>` : ""}
+    </div>
   `
 }
 
@@ -890,9 +897,12 @@ function ensureOriginMap() {
     originMap = window.L.map(els.originMap, {
       zoomControl: true,
       scrollWheelZoom: false,
-      minZoom: 2,
-      maxZoom: 6,
-    }).setView([22, 8], 2)
+      worldCopyJump: true,
+      zoomSnap: 0.1,
+      zoomDelta: 0.25,
+      minZoom: 0.6,
+      maxZoom: 5.5,
+    }).setView([18, 18], 0.9)
 
     window.L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
@@ -967,25 +977,30 @@ function groupMapPointsByCountry(points) {
     .sort((left, right) => right.wineCount - left.wineCount || left.country.localeCompare(right.country))
 }
 
-function fitCountryMap(map, bounds, selected) {
-  if (!bounds.length) {
-    map.setView([22, 8], 2)
+function fitCountryMap(map, points) {
+  if (!points.length) {
+    map.setView([18, 18], 0.9)
     return
   }
 
-  if (selected) {
-    map.setView([selected.originLatitude, selected.originLongitude], selected.isEuropean ? 4 : 3)
+  const bounds = points.map((point) => [point.originLatitude, point.originLongitude])
+
+  if (!state.country && !state.region) {
+    map.fitBounds(bounds, {
+      padding: [28, 28],
+      maxZoom: 0.9,
+    })
     return
   }
 
   if (bounds.length === 1) {
-    map.setView(bounds[0], 4)
+    map.setView(bounds[0], 2.9)
     return
   }
 
   map.fitBounds(bounds, {
     padding: [44, 44],
-    maxZoom: 3,
+    maxZoom: 2.8,
   })
 }
 
@@ -1012,9 +1027,9 @@ function renderTable(deals) {
             <div class="wine-title">${escapeHtml(deal.wine_name)}</div>
             <div class="wine-subline">${escapeHtml(deal.producer || "Producer unknown")}</div>
             <div class="wine-links">
-              ${actionLink(deal.platinum_url, "Platinum")}
-              ${actionLink(deal.grand_cru_url, "Grand Cru")}
-              ${actionLink(deal.vivino_url, "Vivino")}
+              ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
+              ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
+              ${actionLink(deal.vivino_url, "See Vivino")}
             </div>
           </td>
           <td>
@@ -1164,17 +1179,6 @@ function fallbackLabelName(deal) {
     return deal.wine_name || "Wine"
   }
   return normalized[0]
-}
-
-function familyFamilyNarrative(family) {
-  const best = family.bestOffer
-  const offerCopy = family.offers.length === 1 ? "single offer" : `${family.offers.length} offer variants`
-  const ratingCopy = best.vivino_rating != null
-    ? `${best.vivino_rating.toFixed(1)} on Vivino${best.vivino_num_ratings ? ` from ${formatInteger(best.vivino_num_ratings)} ratings` : ""}`
-    : "quality signal still thin"
-  const grapeCopy = family.grapes ? family.grapes.toLowerCase() : "grape identity still fuzzy"
-  const vintageCopy = family.vintageLabel ? `vintages ${family.vintageLabel}` : "vintage mix unknown"
-  return `${offerCopy} · ${vintageCopy} · ${family.styleLabel.toLowerCase()} family · ${grapeCopy} · ${ratingCopy}.`
 }
 
 function volumeQuantityCopy(offer) {
@@ -1356,6 +1360,25 @@ function resolveVerdict(deal) {
   }
 }
 
+function compactVerdictLabel(label) {
+  switch (label) {
+    case "Strong Credit Spend":
+      return "Top Value"
+    case "Solid Value":
+      return "Good Value"
+    case "Quality Buy":
+      return "Worth A Look"
+    case "Platinum Markup":
+      return "Markup"
+    case "Quality Only":
+      return "No Comp"
+    case "Needs Review":
+      return "Review"
+    default:
+      return label
+  }
+}
+
 function recommendationScore(deal) {
   let score = deal.deal_score || 0
   if (deal.cheaper_side === "Platinum Cheaper") score += 20
@@ -1412,11 +1435,11 @@ function metadataNarrative(deal) {
   return `${originCopy} via ${humanizeCode(deal.origin_source || "unknown source")} - ${grapeCopy}.`
 }
 
-function actionLink(url, label) {
+function actionLink(url, label, tone = "secondary") {
   if (!url) {
     return ""
   }
-  return `<a class="link-chip" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
+  return `<a class="link-chip ${escapeHtml(tone)}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
 }
 
 function gapTone(deal) {
@@ -1501,6 +1524,54 @@ function formatSignedPct(value, digits = 1) {
 
 function formatInteger(value) {
   return new Intl.NumberFormat("en-US").format(value)
+}
+
+function formatCompactInteger(value) {
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
+function formatFormatCount(count) {
+  return `${count} ${count === 1 ? "format" : "formats"}`
+}
+
+function familyOriginLine(family) {
+  return [family.region || "Region unknown", family.country || "Country unknown"].join(", ")
+}
+
+function gapShortCopy(deal) {
+  if (deal.price_diff_pct == null) {
+    return "No direct comparison"
+  }
+  if (deal.cheaper_side === "Platinum Cheaper") {
+    return `Platinum -${formatPct(deal.price_diff_pct_abs, 1)}`
+  }
+  if (deal.cheaper_side === "Grand Cru Cheaper") {
+    return `Grand Cru -${formatPct(deal.price_diff_pct_abs, 1)}`
+  }
+  return "Same price"
+}
+
+function renderRatingBadge(deal) {
+  if (deal.vivino_rating == null) {
+    return `<div class="rating-badge is-empty"><span class="rating-value">-</span><span class="rating-caption">No rating</span></div>`
+  }
+  const countCopy = deal.vivino_num_ratings ? `${formatCompactInteger(deal.vivino_num_ratings)} ratings` : "Vivino"
+  return `
+    <div class="rating-badge">
+      <span class="rating-value">${escapeHtml(deal.vivino_rating.toFixed(1))}</span>
+      <span class="rating-caption">${escapeHtml(countCopy)}</span>
+    </div>
+  `
+}
+
+function renderInlineRatingBadge(deal) {
+  if (deal.vivino_rating == null) {
+    return `<span class="meta-chip">No rating</span>`
+  }
+  return `<span class="meta-chip">Vivino ${escapeHtml(deal.vivino_rating.toFixed(1))}</span>`
 }
 
 function humanizeCode(value) {

@@ -26,10 +26,8 @@
     <header class="masthead reveal">
       <div class="masthead-copy">
         <p class="eyebrow">GrandCru Value Compass</p>
-        <h1>Spend Platinum credits without paying blind markups.</h1>
-        <p class="lede">
-          Start from the map, narrow by country or style, and see quickly when Platinum is actually the better buy.
-        </p>
+        <h1>Spend Platinum smarter.</h1>
+        <p class="lede">Map the wines. Spot the value.</p>
       </div>
     </header>
 
@@ -38,9 +36,9 @@
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Origin Map</p>
-            <h2>Where the live deals come from</h2>
+            <h2>Browse by country</h2>
           </div>
-          <button id="clearMapFocus" class="ghost-button" type="button">Clear map focus</button>
+          <button id="clearMapFocus" class="ghost-button" type="button" hidden>Clear selection</button>
         </div>
 
         <div class="map-stage">
@@ -48,7 +46,7 @@
         </div>
 
         <div id="mapSelection" class="map-selection">
-          Choose a country marker to focus the board. Marker size reflects how many wines are currently in view.
+          Click a country bubble to inspect it.
         </div>
       </article>
 
@@ -83,12 +81,10 @@
     <section class="panel picks-panel reveal">
       <div class="panel-heading">
         <div>
-          <p class="eyebrow">Suggested Starts</p>
-          <h2>Where I would look first</h2>
+          <p class="eyebrow">Top Picks</p>
+          <h2>Start here</h2>
         </div>
-        <p class="panel-note">
-          These are the strongest current candidates for good wine without an obvious Platinum markup.
-        </p>
+        <p class="panel-note">Best value first.</p>
       </div>
       <div id="topPicks" class="pick-grid"></div>
     </section>
@@ -195,9 +191,7 @@
           <p class="eyebrow">Browse By Place</p>
           <h2>Pick a country, then narrow by region</h2>
         </div>
-        <p class="panel-note">
-          This view groups the current wines by origin so people can start with France, Australia, Italy, and then drill into the regions they actually like.
-        </p>
+        <p class="panel-note">Start with France, Australia, Italy, then drill in.</p>
       </div>
       <div id="regionGuide" class="country-grid"></div>
     </section>
@@ -206,11 +200,9 @@
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Wine Families</p>
-          <h2>Browse each wine once, then compare the variants</h2>
+          <h2>Browse once, open for detail</h2>
         </div>
-        <p class="panel-note">
-          Bottle, bundle, case, and large-format offers are grouped together here so the shortlist feels cleaner before you drop into the full table.
-        </p>
+        <p class="panel-note">Open only when you want the formats.</p>
       </div>
       <div id="familyBoard" class="family-grid"></div>
     </section>
@@ -221,9 +213,7 @@
           <p class="eyebrow">Deal Board</p>
           <h2>Compare the numbers directly</h2>
         </div>
-        <p class="panel-note">
-          Use the table when you want exact prices, the gap against Grand Cru, Vivino confidence, and the offer format.
-        </p>
+        <p class="panel-note">Use the table for exact prices and offer details.</p>
       </div>
 
       <div class="table-scroll">

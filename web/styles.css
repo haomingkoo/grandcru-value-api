@@ -1044,8 +1044,8 @@ h2 {
   --line-strong: #2a2a36;
   --ink: #eeeef0;
   --muted: #b0b0b8;
-  --wine: #a855f7;
-  --wine-deep: #7c3aed;
+  --wine: #60a5fa;
+  --wine-deep: #2563eb;
   --sage: #4ade80;
   --sage-soft: rgba(74, 222, 128, 0.12);
   --amber: #d6b066;
@@ -1060,12 +1060,12 @@ h2 {
 body {
   color: var(--ink);
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(168, 85, 247, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(96, 165, 250, 0.08) 0%, transparent 60%),
     linear-gradient(180deg, #060608 0%, #09090d 44%, #060608 100%);
 }
 
 body::before {
-  background: rgba(168, 85, 247, 0.08);
+  background: rgba(96, 165, 250, 0.08);
 }
 
 body::after {
@@ -1090,7 +1090,7 @@ h1 {
 }
 
 .eyebrow {
-  color: #c084fc;
+  color: #93c5fd;
   letter-spacing: 0.16em;
 }
 
@@ -1121,11 +1121,15 @@ h1 {
 .quick-filter-button:hover,
 .country-jump:hover,
 .region-pill:hover {
-  border-color: rgba(168, 85, 247, 0.3);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.ghost-button[hidden] {
+  display: none;
 }
 
 .map-stage {
-  min-height: 430px;
+  min-height: 440px;
   background: #060608;
   border-color: var(--line);
 }
@@ -1133,8 +1137,8 @@ h1 {
 #originMap {
   position: relative;
   width: 100%;
-  height: 430px;
-  min-height: 430px;
+  height: 440px;
+  min-height: 440px;
 }
 
 .map-selection {
@@ -1154,20 +1158,95 @@ h1 {
 
 .pick-card {
   background:
-    radial-gradient(circle at top right, rgba(168, 85, 247, 0.08), transparent 32%),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 32%),
     linear-gradient(180deg, rgba(19, 19, 25, 0.98), rgba(13, 13, 18, 0.98));
+}
+
+.pick-head {
+  display: grid;
+  gap: 8px;
+}
+
+.pick-card-top,
+.pick-price-row,
+.map-selection-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pick-price-row {
+  align-items: center;
+}
+
+.pick-price {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.rating-badge {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  width: 82px;
+  min-width: 82px;
+  height: 82px;
+  padding: 10px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, rgba(96, 165, 250, 0.18), rgba(255, 255, 255, 0.04));
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  text-align: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.rating-badge.is-empty {
+  opacity: 0.7;
+}
+
+.rating-value {
+  font-size: 1.28rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.rating-caption {
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.2;
 }
 
 .country-card {
   background:
-    radial-gradient(circle at top right, rgba(168, 85, 247, 0.06), transparent 34%),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.06), transparent 34%),
     linear-gradient(180deg, rgba(18, 18, 24, 0.98), rgba(12, 12, 16, 0.98));
 }
 
 .family-card {
   background:
-    radial-gradient(circle at top right, rgba(168, 85, 247, 0.08), transparent 34%),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 34%),
     linear-gradient(180deg, rgba(18, 18, 24, 0.98), rgba(12, 12, 16, 0.98));
+}
+
+.family-card[open] .family-summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.family-card[open] .toggle-closed,
+.family-toggle .toggle-open {
+  display: none;
+}
+
+.family-card[open] .family-toggle .toggle-open {
+  display: inline;
+}
+
+.family-card[open] .family-toggle .toggle-closed {
+  display: none;
 }
 
 .offer-variant {
@@ -1203,20 +1282,65 @@ h1 {
 .quick-filter-button.is-active,
 .country-jump.is-active,
 .region-pill.is-active {
-  background: rgba(168, 85, 247, 0.12);
-  border-color: rgba(168, 85, 247, 0.3);
-  color: #d8b4fe;
+  background: rgba(96, 165, 250, 0.12);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: #bfdbfe;
 }
 
 .quick-filter-button.is-active span,
 .region-pill.is-active span,
 .filter-chip button:hover {
-  background: rgba(168, 85, 247, 0.16);
-  color: #d8b4fe;
+  background: rgba(96, 165, 250, 0.16);
+  color: #bfdbfe;
 }
 
 .link-chip {
   border: 1px solid var(--line);
+  min-height: 38px;
+}
+
+.link-chip.primary {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(37, 99, 235, 0.16));
+  border-color: rgba(96, 165, 250, 0.28);
+  color: #dbeafe;
+}
+
+.link-chip.secondary {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.link-chip.is-compact {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.map-selection {
+  display: grid;
+  gap: 12px;
+}
+
+.map-selection h3 {
+  font-size: 1.25rem;
+}
+
+.map-selection-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.family-aside {
+  gap: 10px;
+}
+
+.family-toggle {
+  min-height: 36px;
+}
+
+.offer-variant-metrics,
+.offer-variant-links,
+.wine-links {
+  gap: 10px;
 }
 
 .field input,
@@ -1237,8 +1361,8 @@ h1 {
 
 .field input:focus,
 .field select:focus {
-  outline-color: rgba(168, 85, 247, 0.22);
-  border-color: rgba(168, 85, 247, 0.38);
+  outline-color: rgba(96, 165, 250, 0.22);
+  border-color: rgba(96, 165, 250, 0.38);
 }
 
 .toggle-pill input {
@@ -1274,7 +1398,7 @@ h1 {
 }
 
 .sort-button.is-active {
-  color: #d8b4fe;
+  color: #bfdbfe;
 }
 
 .deal-row td {
@@ -1324,7 +1448,7 @@ h1 {
 }
 
 .leaflet-control-attribution a {
-  color: #c084fc !important;
+  color: #93c5fd !important;
 }
 
 .leaflet-tooltip.country-tooltip {
@@ -1396,7 +1520,10 @@ h1 {
   }
 
   .family-summary,
-  .country-card-head {
+  .country-card-head,
+  .pick-card-top,
+  .pick-price-row,
+  .map-selection-head {
     flex-direction: column;
     align-items: flex-start;
   }
