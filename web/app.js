@@ -32,15 +32,39 @@ const sortLabels = {
   "wine_name:asc": "Alphabetical",
 }
 
-const EUROPEAN_COUNTRIES = new Set([
-  "Austria",
-  "France",
-  "Germany",
-  "Italy",
-  "Portugal",
-  "Spain",
-  "Switzerland",
-])
+const COUNTRY_TO_CONTINENT = {
+  Austria: "Europe",
+  France: "Europe",
+  Germany: "Europe",
+  Italy: "Europe",
+  Portugal: "Europe",
+  Spain: "Europe",
+  Switzerland: "Europe",
+  Australia: "Oceania",
+  "New Zealand": "Oceania",
+  "United States": "North America",
+  Canada: "North America",
+  Argentina: "South America",
+  Chile: "South America",
+  Brazil: "South America",
+  Uruguay: "South America",
+  "South Africa": "Africa",
+  Lebanon: "Asia",
+  Israel: "Asia",
+  Japan: "Asia",
+  China: "Asia",
+  Georgia: "Asia",
+  Turkey: "Asia",
+}
+
+const CONTINENT_COLORS = {
+  Europe: "#60a5fa",
+  Oceania: "#34d399",
+  "North America": "#f472b6",
+  "South America": "#fb923c",
+  Africa: "#facc15",
+  Asia: "#c084fc",
+}
 
 const state = { ...defaultState }
 let filterOptions = null
@@ -54,6 +78,7 @@ let mapFocusCountry = ""
 const els = {}
 
 document.addEventListener("DOMContentLoaded", async () => {
+  initScrollReveal()
   captureElements()
   hydrateStateFromUrl()
   bindEvents()
@@ -61,6 +86,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   syncControlsFromState()
   await loadDashboard()
 })
+
+function initScrollReveal() {
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("visible")
+        }
+      })
+    },
+    { threshold: 0.08, rootMargin: "0px 0px -40px 0px" }
+  )
+
+  document.querySelectorAll(".reveal").forEach((el) => observer.observe(el))
+}
 
 function captureElements() {
   els.searchInput = document.getElementById("searchInput")
@@ -870,7 +910,7 @@ function renderMap(points) {
     const radius = Math.max(10, 9 + (point.wineCount / largestCount) * 16)
     const marker = window.L.circleMarker([point.originLatitude, point.originLongitude], {
       radius,
-      fillColor: point.isEuropean ? "#60a5fa" : "#d6b066",
+      fillColor: continentColor(point.country),
       fillOpacity: isSelected ? 0.98 : 0.86,
       color: isSelected ? "#dbeafe" : "#060608",
       weight: isSelected ? 3 : 2,
@@ -1014,7 +1054,7 @@ function groupMapPointsByCountry(points) {
       average_price_diff_pct: bucket.avgGapWeight ? bucket.avgGapTotal / bucket.avgGapWeight : null,
       sampleWines: bucket.sampleWines,
       regionLabels: Array.from(bucket.regionLabels).sort(),
-      isEuropean: isEuropeanCountry(bucket.country),
+      continent: continentOf(bucket.country),
     }))
     .sort((left, right) => right.wineCount - left.wineCount || left.country.localeCompare(right.country))
 }
@@ -1699,8 +1739,12 @@ function average(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
-function isEuropeanCountry(country) {
-  return EUROPEAN_COUNTRIES.has(country)
+function continentOf(country) {
+  return COUNTRY_TO_CONTINENT[country] || "Europe"
+}
+
+function continentColor(country) {
+  return CONTINENT_COLORS[continentOf(country)] || "#60a5fa"
 }
 
 function escapeHtml(value) {

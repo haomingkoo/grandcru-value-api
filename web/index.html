@@ -31,7 +31,33 @@
       </div>
     </header>
 
-    <section class="hero-layout reveal">
+    <nav class="discovery-hub reveal" aria-label="Browse wines">
+      <p class="eyebrow">How do you want to explore?</p>
+      <div class="discovery-grid">
+        <a class="discovery-card reveal reveal-d1" href="#mapSection">
+          <span class="discovery-icon">&#127758;</span>
+          <strong>By Country</strong>
+          <span class="discovery-desc">Tap the map, pick a region</span>
+        </a>
+        <a class="discovery-card reveal reveal-d2" href="#styleSection">
+          <span class="discovery-icon">&#127863;</span>
+          <strong>By Style</strong>
+          <span class="discovery-desc">Red, white, Champagne &amp; more</span>
+        </a>
+        <a class="discovery-card reveal reveal-d3" href="#picksSection">
+          <span class="discovery-icon">&#11088;</span>
+          <strong>Best Deals</strong>
+          <span class="discovery-desc">Top value picks right now</span>
+        </a>
+        <a class="discovery-card reveal reveal-d4" href="#offersSection">
+          <span class="discovery-icon">&#128203;</span>
+          <strong>See All</strong>
+          <span class="discovery-desc">Full table with filters</span>
+        </a>
+      </div>
+    </nav>
+
+    <section id="mapSection" class="hero-layout reveal">
       <article class="panel map-panel">
         <div class="panel-heading">
           <div>
@@ -59,8 +85,8 @@
         <section class="panel">
           <div class="split-heading">
             <div>
-              <p class="eyebrow">Visualization</p>
-              <h2>Deal Mix</h2>
+              <p class="eyebrow">Pricing</p>
+              <h2>Price Split</h2>
             </div>
           </div>
           <div id="dealMixChart" class="bar-list"></div>
@@ -69,8 +95,8 @@
         <section class="panel">
           <div class="split-heading">
             <div>
-              <p class="eyebrow">Visualization</p>
-              <h2>Offer Shapes</h2>
+              <p class="eyebrow">Formats</p>
+              <h2>Offer Types</h2>
             </div>
           </div>
           <div id="offeringChart" class="bar-list"></div>
@@ -78,111 +104,15 @@
       </aside>
     </section>
 
-    <section class="panel picks-panel reveal">
+    <section id="picksSection" class="panel picks-panel reveal">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Top Picks</p>
-          <h2>Start here</h2>
+          <h2>Best Deals</h2>
         </div>
         <p class="panel-note">Best value first.</p>
       </div>
       <div id="topPicks" class="pick-grid"></div>
-    </section>
-
-    <section class="panel controls-panel reveal">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">Filters</p>
-          <h2>Filter fast</h2>
-        </div>
-        <div id="resultsMeta" class="results-meta"></div>
-      </div>
-
-      <div class="quick-filter-layout">
-        <div class="quick-filter-block">
-          <p class="eyebrow">Quick Countries</p>
-          <div id="countryQuickFilters" class="quick-filter-row"></div>
-        </div>
-        <div class="quick-filter-block">
-          <p class="eyebrow">Quick Styles</p>
-          <div id="styleQuickFilters" class="quick-filter-row"></div>
-        </div>
-      </div>
-
-      <form id="filtersForm" class="controls-grid">
-        <label class="field">
-          <span>Search wine</span>
-          <input id="searchInput" type="search" placeholder="Producer, label, or vintage">
-        </label>
-
-        <label class="field">
-          <span>Sort by</span>
-          <select id="sortSelect">
-            <option value="deal_score:desc">Best overall</option>
-            <option value="price_diff_pct:asc">Biggest Platinum discount</option>
-            <option value="price_diff_pct_abs:desc">Largest gap either way</option>
-            <option value="vivino_rating:desc">Highest Vivino rating</option>
-            <option value="price_platinum:asc">Lowest Platinum price</option>
-            <option value="wine_name:asc">Alphabetical</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Country</span>
-          <select id="countrySelect"></select>
-        </label>
-
-        <label class="field">
-          <span>Region</span>
-          <select id="regionSelect"></select>
-        </label>
-
-        <label class="field">
-          <span>Wine type</span>
-          <select id="wineTypeSelect"></select>
-        </label>
-
-        <label class="field">
-          <span>Browse style</span>
-          <select id="styleFamilySelect"></select>
-        </label>
-
-        <label class="field">
-          <span>Grape</span>
-          <select id="grapeSelect"></select>
-        </label>
-
-        <label class="field">
-          <span>Offering</span>
-          <select id="offeringSelect"></select>
-        </label>
-
-        <label class="field">
-          <span>Producer</span>
-          <select id="producerSelect"></select>
-        </label>
-      </form>
-
-      <div class="toggle-row">
-        <label class="toggle-pill">
-          <input id="comparableOnlyToggle" type="checkbox">
-          <span>Comparable only</span>
-        </label>
-        <label class="toggle-pill">
-          <input id="platinumOnlyToggle" type="checkbox">
-          <span>Platinum cheaper only</span>
-        </label>
-        <label class="toggle-pill">
-          <input id="ratingToggle" type="checkbox">
-          <span>4.0+ rated</span>
-        </label>
-        <label class="toggle-pill">
-          <input id="confidenceToggle" type="checkbox">
-          <span>100+ ratings</span>
-        </label>
-      </div>
-
-      <div id="activeFilters" class="active-filters"></div>
     </section>
 
     <section class="panel explorer-panel reveal">
@@ -196,7 +126,7 @@
       <div id="regionGuide" class="country-grid"></div>
     </section>
 
-    <section class="panel family-panel reveal">
+    <section id="styleSection" class="panel family-panel reveal">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Browse By Style</p>
@@ -207,13 +137,101 @@
       <div id="familyBoard" class="family-grid"></div>
     </section>
 
-    <section class="panel table-panel reveal">
+    <section id="offersSection" class="panel table-panel reveal">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">All Offers</p>
-          <h2>Every exact offer</h2>
+          <h2>See all offers</h2>
         </div>
-        <p class="panel-note">Raw rows, exact prices, every format.</p>
+        <div id="resultsMeta" class="results-meta"></div>
+      </div>
+
+      <div class="table-tools">
+        <div class="quick-filter-layout">
+          <div class="quick-filter-block">
+            <p class="eyebrow">Quick Countries</p>
+            <div id="countryQuickFilters" class="quick-filter-row"></div>
+          </div>
+          <div class="quick-filter-block">
+            <p class="eyebrow">Quick Styles</p>
+            <div id="styleQuickFilters" class="quick-filter-row"></div>
+          </div>
+        </div>
+
+        <form id="filtersForm" class="controls-grid">
+          <label class="field">
+            <span>Search wine</span>
+            <input id="searchInput" type="search" placeholder="Producer, label, or vintage">
+          </label>
+
+          <label class="field">
+            <span>Sort by</span>
+            <select id="sortSelect">
+              <option value="deal_score:desc">Best overall</option>
+              <option value="price_diff_pct:asc">Biggest Platinum discount</option>
+              <option value="price_diff_pct_abs:desc">Largest gap either way</option>
+              <option value="vivino_rating:desc">Highest Vivino rating</option>
+              <option value="price_platinum:asc">Lowest Platinum price</option>
+              <option value="wine_name:asc">Alphabetical</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Country</span>
+            <select id="countrySelect"></select>
+          </label>
+
+          <label class="field">
+            <span>Region</span>
+            <select id="regionSelect"></select>
+          </label>
+
+          <label class="field">
+            <span>Wine type</span>
+            <select id="wineTypeSelect"></select>
+          </label>
+
+          <label class="field">
+            <span>Browse style</span>
+            <select id="styleFamilySelect"></select>
+          </label>
+
+          <label class="field">
+            <span>Grape</span>
+            <select id="grapeSelect"></select>
+          </label>
+
+          <label class="field">
+            <span>Offering</span>
+            <select id="offeringSelect"></select>
+          </label>
+
+          <label class="field">
+            <span>Producer</span>
+            <select id="producerSelect"></select>
+          </label>
+        </form>
+
+        <div class="toggle-row">
+          <label class="toggle-pill">
+            <input id="comparableOnlyToggle" type="checkbox">
+            <span>Comparable only</span>
+          </label>
+          <label class="toggle-pill">
+            <input id="platinumOnlyToggle" type="checkbox">
+            <span>Platinum cheaper only</span>
+          </label>
+          <label class="toggle-pill">
+            <input id="ratingToggle" type="checkbox">
+            <span>4.0+ rated</span>
+          </label>
+          <label class="toggle-pill">
+            <input id="confidenceToggle" type="checkbox">
+            <span>100+ ratings</span>
+          </label>
+        </div>
+
+        <div id="activeFilters" class="active-filters"></div>
       </div>
 
       <div class="table-scroll">
