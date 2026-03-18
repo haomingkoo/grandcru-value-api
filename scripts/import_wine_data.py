@@ -363,6 +363,8 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
 
     ensure_column("wine_deals", "vivino_match_method", "VARCHAR(32)")
     ensure_column("wine_deal_snapshots", "vivino_match_method", "VARCHAR(32)")
+    ensure_column("wine_deals", "vivino_price", "FLOAT")
+    ensure_column("wine_deals", "vivino_description", "VARCHAR(512)")
     for column, col_type in DEAL_EXTRA_COLUMNS:
         ensure_column("wine_deals", column, col_type)
 
