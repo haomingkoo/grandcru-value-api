@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GrandCru Value Compass</title>
+  <meta
+    name="description"
+    content="Compare Platinum wine deals against Grand Cru, surface likely good credit spends, and explore the current range by country, style, grape, and offer shape."
+  >
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="masthead reveal">
+      <div class="masthead-copy">
+        <p class="eyebrow">GrandCru Value Compass</p>
+        <h1>Spend Platinum credits with the markups exposed.</h1>
+        <p class="lede">
+          See where the bottles come from, spot when Platinum is genuinely cheaper,
+          and filter down to wines that match your taste instead of browsing blind.
+        </p>
+      </div>
+      <div class="masthead-actions">
+        <a class="action-button" href="/docs">API Docs</a>
+        <a class="ghost-button" href="/api">API Root</a>
+      </div>
+    </header>
+
+    <section class="hero-layout reveal">
+      <article class="panel map-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Origin Map</p>
+            <h2>Where the live deals come from</h2>
+          </div>
+          <button id="clearMapFocus" class="ghost-button" type="button">Clear map focus</button>
+        </div>
+
+        <div class="map-stage">
+          <svg id="originMap" viewBox="0 0 1000 520" aria-label="Wine origin map" role="img">
+            <defs>
+              <linearGradient id="oceanGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#19333a"></stop>
+                <stop offset="55%" stop-color="#0f2228"></stop>
+                <stop offset="100%" stop-color="#13292f"></stop>
+              </linearGradient>
+              <radialGradient id="markerCore" cx="50%" cy="50%" r="70%">
+                <stop offset="0%" stop-color="#fff7de"></stop>
+                <stop offset="100%" stop-color="#f0bd63"></stop>
+              </radialGradient>
+              <filter id="markerShadow" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="rgba(0,0,0,0.28)"></feDropShadow>
+              </filter>
+            </defs>
+
+            <rect class="map-ocean" x="0" y="0" width="1000" height="520" rx="28"></rect>
+
+            <g class="map-graticule">
+              <line x1="0" y1="86" x2="1000" y2="86"></line>
+              <line x1="0" y1="173" x2="1000" y2="173"></line>
+              <line x1="0" y1="260" x2="1000" y2="260"></line>
+              <line x1="0" y1="347" x2="1000" y2="347"></line>
+              <line x1="0" y1="434" x2="1000" y2="434"></line>
+              <line x1="166" y1="0" x2="166" y2="520"></line>
+              <line x1="333" y1="0" x2="333" y2="520"></line>
+              <line x1="500" y1="0" x2="500" y2="520"></line>
+              <line x1="666" y1="0" x2="666" y2="520"></line>
+              <line x1="833" y1="0" x2="833" y2="520"></line>
+            </g>
+
+            <g class="continent-shapes">
+              <ellipse class="continent" cx="175" cy="180" rx="112" ry="124" transform="rotate(-18 175 180)"></ellipse>
+              <ellipse class="continent continent-soft" cx="258" cy="345" rx="68" ry="112" transform="rotate(16 258 345)"></ellipse>
+              <ellipse class="continent" cx="556" cy="188" rx="212" ry="106" transform="rotate(-3 556 188)"></ellipse>
+              <ellipse class="continent continent-soft" cx="505" cy="304" rx="88" ry="118" transform="rotate(9 505 304)"></ellipse>
+              <ellipse class="continent" cx="801" cy="351" rx="84" ry="52" transform="rotate(10 801 351)"></ellipse>
+              <ellipse class="continent continent-soft" cx="914" cy="432" rx="42" ry="18"></ellipse>
+              <ellipse class="continent continent-soft" cx="430" cy="102" rx="34" ry="18"></ellipse>
+            </g>
+
+            <g id="markerLayer"></g>
+          </svg>
+
+          <div class="map-overlay">
+            <div class="legend-pill">
+              <span class="legend-dot gain"></span>
+              <span>Green means Platinum trends cheaper</span>
+            </div>
+            <div class="legend-pill">
+              <span class="legend-dot loss"></span>
+              <span>Red means Grand Cru tends to win</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="mapSelection" class="map-selection">
+          Click a marker to focus the table by region. Marker size reflects how many wines are in view.
+        </div>
+      </article>
+
+      <aside class="insight-rail">
+        <section class="panel">
+          <p class="eyebrow">At A Glance</p>
+          <div id="heroStats" class="stat-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="split-heading">
+            <div>
+              <p class="eyebrow">Visualization</p>
+              <h2>Deal Mix</h2>
+            </div>
+          </div>
+          <div id="dealMixChart" class="bar-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="split-heading">
+            <div>
+              <p class="eyebrow">Visualization</p>
+              <h2>Offer Shapes</h2>
+            </div>
+          </div>
+          <div id="offeringChart" class="bar-list"></div>
+        </section>
+      </aside>
+    </section>
+
+    <section class="panel picks-panel reveal">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Suggested Starts</p>
+          <h2>Where I would look first</h2>
+        </div>
+        <p class="panel-note">
+          These are the strongest current candidates for good wine without an obvious Platinum markup.
+        </p>
+      </div>
+      <div id="topPicks" class="pick-grid"></div>
+    </section>
+
+    <section class="panel controls-panel reveal">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Explore The Range</p>
+          <h2>Filter to your favorite stuff</h2>
+        </div>
+        <div id="resultsMeta" class="results-meta"></div>
+      </div>
+
+      <div class="quick-filter-layout">
+        <div class="quick-filter-block">
+          <p class="eyebrow">Quick Countries</p>
+          <div id="countryQuickFilters" class="quick-filter-row"></div>
+        </div>
+        <div class="quick-filter-block">
+          <p class="eyebrow">Quick Styles</p>
+          <div id="styleQuickFilters" class="quick-filter-row"></div>
+        </div>
+      </div>
+
+      <form id="filtersForm" class="controls-grid">
+        <label class="field">
+          <span>Search wine</span>
+          <input id="searchInput" type="search" placeholder="Producer, label, or vintage">
+        </label>
+
+        <label class="field">
+          <span>Sort by</span>
+          <select id="sortSelect">
+            <option value="deal_score:desc">Best overall</option>
+            <option value="price_diff_pct:asc">Biggest Platinum discount</option>
+            <option value="price_diff_pct_abs:desc">Largest gap either way</option>
+            <option value="vivino_rating:desc">Highest Vivino rating</option>
+            <option value="price_platinum:asc">Lowest Platinum price</option>
+            <option value="wine_name:asc">Alphabetical</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Country</span>
+          <select id="countrySelect"></select>
+        </label>
+
+        <label class="field">
+          <span>Region</span>
+          <select id="regionSelect"></select>
+        </label>
+
+        <label class="field">
+          <span>Wine type</span>
+          <select id="wineTypeSelect"></select>
+        </label>
+
+        <label class="field">
+          <span>Browse style</span>
+          <select id="styleFamilySelect"></select>
+        </label>
+
+        <label class="field">
+          <span>Grape</span>
+          <select id="grapeSelect"></select>
+        </label>
+
+        <label class="field">
+          <span>Offering</span>
+          <select id="offeringSelect"></select>
+        </label>
+
+        <label class="field">
+          <span>Producer</span>
+          <select id="producerSelect"></select>
+        </label>
+      </form>
+
+      <div class="toggle-row">
+        <label class="toggle-pill">
+          <input id="comparableOnlyToggle" type="checkbox">
+          <span>Comparable only</span>
+        </label>
+        <label class="toggle-pill">
+          <input id="platinumOnlyToggle" type="checkbox">
+          <span>Platinum cheaper only</span>
+        </label>
+        <label class="toggle-pill">
+          <input id="ratingToggle" type="checkbox">
+          <span>4.0+ rated</span>
+        </label>
+        <label class="toggle-pill">
+          <input id="confidenceToggle" type="checkbox">
+          <span>100+ ratings</span>
+        </label>
+      </div>
+
+      <div id="activeFilters" class="active-filters"></div>
+    </section>
+
+    <section class="panel explorer-panel reveal">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Browse By Place</p>
+          <h2>Pick a country, then narrow by region</h2>
+        </div>
+        <p class="panel-note">
+          This view groups the current wines by origin so people can start with France, Australia, Italy, and then drill into the regions they actually like.
+        </p>
+      </div>
+      <div id="regionGuide" class="country-grid"></div>
+    </section>
+
+    <section class="panel table-panel reveal">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Deal Board</p>
+          <h2>Compare the numbers directly</h2>
+        </div>
+        <p class="panel-note">
+          Use the table when you want exact prices, the gap against Grand Cru, Vivino confidence, and the offer format.
+        </p>
+      </div>
+
+      <div class="table-scroll">
+        <table class="deal-table">
+          <thead>
+            <tr>
+              <th><button class="sort-button" data-sort="wine_name" type="button">Wine</button></th>
+              <th>Verdict</th>
+              <th>Origin</th>
+              <th><button class="sort-button" data-sort="price_platinum" type="button">Platinum</button></th>
+              <th><button class="sort-button" data-sort="price_diff_pct_abs" type="button">Gap %</button></th>
+              <th><button class="sort-button" data-sort="vivino_rating" type="button">Vivino</button></th>
+              <th><button class="sort-button" data-sort="deal_score" type="button">Deal Score</button></th>
+              <th>Offer</th>
+            </tr>
+          </thead>
+          <tbody id="dealTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

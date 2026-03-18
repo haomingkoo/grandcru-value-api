@@ -7,7 +7,8 @@ import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -15,7 +16,10 @@ from app.database import Base, engine, ensure_column, get_session
 from app.ops import RefreshRunner, diagnostics_payload
 from app.schemas import (
     DealHistoryOut,
+    DealFiltersOut,
+    DealMapPointOut,
     DealOut,
+    DealStatsOut,
     HealthOut,
     LegalOut,
     OpsDiagnosticsOut,
@@ -27,8 +31,11 @@ from app.security import InMemoryRateLimiter, is_exempt_path, parse_exempt_paths
 from app.service import (
     count_deals,
     count_snapshots,
+    get_deal_filters,
     get_deal_by_id,
     get_deal_history,
+    get_deal_map_points,
+    get_deal_stats,
     get_latest_ingestion,
     is_ingestion_stale,
     list_deals,
@@ -45,6 +52,116 @@ else:
     logging.getLogger().setLevel(_level)
 logger = logging.getLogger("grandcru.api")
 refresh_runner = RefreshRunner()
+ROOT_DIR = Path(__file__).resolve().parents[1]
+WEB_DIR = ROOT_DIR / "web"
+
+DEAL_EXTRA_COLUMNS = (
+    ("producer", "VARCHAR(255)"),
+    ("country", "VARCHAR(128)"),
+    ("region", "VARCHAR(128)"),
+    ("wine_type", "VARCHAR(64)"),
+    ("style_family", "VARCHAR(64)"),
+    ("grapes", "VARCHAR(255)"),
+    ("offering_type", "VARCHAR(64)"),
+    ("origin_label", "VARCHAR(255)"),
+    ("origin_latitude", "FLOAT"),
+    ("origin_longitude", "FLOAT"),
+    ("origin_precision", "VARCHAR(32)"),
+)
+
+
+def _ensure_runtime_columns() -> None:
+    ensure_column("wine_deals", "vivino_match_method", "VARCHAR(32)")
+    ensure_column("wine_deal_snapshots", "vivino_match_method", "VARCHAR(32)")
+    for column, col_type in DEAL_EXTRA_COLUMNS:
+        ensure_column("wine_deals", column, col_type)
+
+
+def deal_filter_params(
+    min_score: float = Query(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Minimum deal_score threshold.",
+    ),
+    only_platinum_cheaper: bool = Query(
+        default=False,
+        description="Shortcut for cheaper_side=Platinum Cheaper.",
+    ),
+    comparable_only: bool = Query(
+        default=False,
+        description="Only return wines with a comparable Grand Cru price match.",
+    ),
+    cheaper_side: str | None = Query(
+        default=None,
+        description="Retailer comparison outcome: Platinum Cheaper, Grand Cru Cheaper, Same Price, or No Match.",
+    ),
+    min_vivino_rating: float | None = Query(
+        default=None,
+        ge=0.0,
+        le=5.0,
+        description="Minimum Vivino rating.",
+    ),
+    min_vivino_num_ratings: int | None = Query(
+        default=None,
+        ge=0,
+        description="Minimum Vivino rating count.",
+    ),
+    max_platinum_price: float | None = Query(
+        default=None,
+        ge=0.0,
+        description="Maximum Platinum price.",
+    ),
+    search: str | None = Query(
+        default=None,
+        description="Case-insensitive search on wine_name.",
+    ),
+    country: str | None = Query(
+        default=None,
+        description="Country filter. Accepts a single value or comma-separated list.",
+    ),
+    region: str | None = Query(
+        default=None,
+        description="Region filter. Accepts a single value or comma-separated list.",
+    ),
+    wine_type: str | None = Query(
+        default=None,
+        description="Wine type filter such as Red, White, Rose, Sparkling, or Sparkling Rose.",
+    ),
+    style_family: str | None = Query(
+        default=None,
+        description="Browse-style filter such as Red, White, Sparkling, Champagne, or Sweet / Dessert.",
+    ),
+    grape: str | None = Query(
+        default=None,
+        description="Grape filter. Matches partial text and accepts comma-separated values.",
+    ),
+    offering_type: str | None = Query(
+        default=None,
+        description="Offering filter such as Single Bottle, Magnum, Bundle, or Case.",
+    ),
+    producer: str | None = Query(
+        default=None,
+        description="Producer filter. Accepts a single value or comma-separated list.",
+    ),
+) -> dict:
+    return {
+        "min_score": min_score,
+        "only_platinum_cheaper": only_platinum_cheaper,
+        "comparable_only": comparable_only,
+        "cheaper_side": cheaper_side,
+        "min_vivino_rating": min_vivino_rating,
+        "min_vivino_num_ratings": min_vivino_num_ratings,
+        "max_platinum_price": max_platinum_price,
+        "search": search,
+        "country": country,
+        "region": region,
+        "wine_type": wine_type,
+        "style_family": style_family,
+        "grape": grape,
+        "offering_type": offering_type,
+        "producer": producer,
+    }
 
 
 @asynccontextmanager
@@ -52,8 +169,7 @@ async def lifespan(_: FastAPI):
     if settings.database_url.startswith("sqlite:///./"):
         Path("data").mkdir(exist_ok=True)
     Base.metadata.create_all(bind=engine)
-    ensure_column("wine_deals", "vivino_match_method", "VARCHAR(32)")
-    ensure_column("wine_deal_snapshots", "vivino_match_method", "VARCHAR(32)")
+    _ensure_runtime_columns()
     yield
 
 
@@ -63,6 +179,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 cors_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 if not cors_origins:
@@ -166,7 +283,12 @@ async def access_log_middleware(request, call_next):
     return response
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
+def frontend() -> FileResponse:
+    return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/api")
 def root() -> dict[str, str]:
     return {"service": settings.app_name, "docs": "/docs", "health": "/health", "deals": "/deals"}
 
@@ -192,48 +314,15 @@ def health(session: Session = Depends(get_session)) -> HealthOut:
 def get_deals(
     limit: int = Query(default=100, ge=1, le=500, description="Max number of rows to return."),
     offset: int = Query(default=0, ge=0, description="Pagination offset."),
-    min_score: float = Query(
-        default=0.0,
-        ge=0.0,
-        le=100.0,
-        description="Minimum deal_score threshold.",
-    ),
-    only_platinum_cheaper: bool = Query(
-        default=False,
-        description="Shortcut for cheaper_side=Platinum Cheaper.",
-    ),
-    cheaper_side: str | None = Query(
-        default=None,
-        description="Retailer comparison outcome: Platinum Cheaper, Grand Cru Cheaper, Same Price, or No Match.",
-    ),
-    min_vivino_rating: float | None = Query(
-        default=None,
-        ge=0.0,
-        le=5.0,
-        description="Minimum Vivino rating.",
-    ),
-    min_vivino_num_ratings: int | None = Query(
-        default=None,
-        ge=0,
-        description="Minimum Vivino rating count.",
-    ),
-    max_platinum_price: float | None = Query(
-        default=None,
-        ge=0.0,
-        description="Maximum Platinum price.",
-    ),
     sort_by: str = Query(
         default="deal_score",
-        description="Sort field: deal_score, price_diff_pct, vivino_rating, vivino_num_ratings, price_platinum, or wine_name.",
+        description="Sort field: deal_score, price_diff_pct, price_diff_pct_abs, vivino_rating, vivino_num_ratings, price_platinum, or wine_name.",
     ),
     sort_order: str = Query(
         default="desc",
-        description="Sort direction. For price_diff_pct, asc means Platinum-cheaper-first and desc means Grand-Cru-cheaper-first.",
+        description="Sort direction. For price_diff_pct, asc means Platinum-cheaper-first. Use price_diff_pct_abs for largest-gap sorting regardless of side.",
     ),
-    search: str | None = Query(
-        default=None,
-        description="Case-insensitive search on wine_name.",
-    ),
+    filters: dict = Depends(deal_filter_params),
     session: Session = Depends(get_session),
 ) -> list[DealOut]:
     """List ranked wine deals with stable tie-break ordering for equal-looking UI values."""
@@ -241,16 +330,34 @@ def get_deals(
         session,
         limit=limit,
         offset=offset,
-        min_score=min_score,
-        only_platinum_cheaper=only_platinum_cheaper,
-        cheaper_side=cheaper_side,
-        min_vivino_rating=min_vivino_rating,
-        min_vivino_num_ratings=min_vivino_num_ratings,
-        max_platinum_price=max_platinum_price,
         sort_by=sort_by,
         sort_order=sort_order,
-        search=search,
+        **filters,
     )
+
+
+@app.get("/deals/filters", response_model=DealFiltersOut)
+def get_deal_filter_options(
+    filters: dict = Depends(deal_filter_params),
+    session: Session = Depends(get_session),
+) -> DealFiltersOut:
+    return DealFiltersOut(**get_deal_filters(session, **filters))
+
+
+@app.get("/deals/stats", response_model=DealStatsOut)
+def get_deal_stats_summary(
+    filters: dict = Depends(deal_filter_params),
+    session: Session = Depends(get_session),
+) -> DealStatsOut:
+    return DealStatsOut(**get_deal_stats(session, **filters))
+
+
+@app.get("/deals/map", response_model=list[DealMapPointOut])
+def get_deal_map(
+    filters: dict = Depends(deal_filter_params),
+    session: Session = Depends(get_session),
+) -> list[DealMapPointOut]:
+    return [DealMapPointOut(**point) for point in get_deal_map_points(session, **filters)]
 
 
 @app.get("/deals/{deal_id}", response_model=DealOut)

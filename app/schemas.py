@@ -9,12 +9,27 @@ class DealOut(BaseModel):
     vintage: int | None = None
     quantity: int | None = None
     volume: str | None = None
+    producer: str | None = None
+    country: str | None = None
+    region: str | None = None
+    wine_type: str | None = None
+    style_family: str | None = None
+    grapes: str | None = None
+    offering_type: str | None = None
+    origin_label: str | None = None
+    origin_latitude: float | None = None
+    origin_longitude: float | None = None
+    origin_precision: str | None = None
     price_platinum: float | None = None
     price_grand_cru: float | None = None
     price_diff: float | None = None
     price_diff_pct: float | None = Field(
         default=None,
         description="Signed percentage: (Platinum - Grand Cru) / Grand Cru * 100. Negative means Platinum cheaper; positive means Grand Cru cheaper.",
+    )
+    price_diff_pct_abs: float | None = Field(
+        default=None,
+        description="Absolute retailer price gap in percent, regardless of which side is cheaper.",
     )
     cheaper_side: str | None = Field(
         default=None,
@@ -40,6 +55,22 @@ class DealOut(BaseModel):
     price_platinum_change_30d: float | None = None
     price_grand_cru_30d_ago: float | None = None
     price_grand_cru_change_30d: float | None = None
+    has_competitor_match: bool = False
+    is_platinum_cheaper: bool = False
+    is_good_wine: bool = False
+    is_high_confidence: bool = False
+    value_verdict: str = ""
+    value_verdict_tone: str = ""
+    value_verdict_reason: str = ""
+    origin_source: str | None = None
+    origin_confidence: str | None = None
+    grape_source: str | None = None
+    grape_confidence: str | None = None
+    metadata_confidence: str | None = None
+    platinum_trend_7d: str = "unknown"
+    grand_cru_trend_7d: str = "unknown"
+    platinum_trend_30d: str = "unknown"
+    grand_cru_trend_30d: str = "unknown"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -139,3 +170,49 @@ class OpsDiagnosticsOut(BaseModel):
     total_snapshots: int
     refresh_status: dict
     files: list[dict]
+
+
+class LabelCountOut(BaseModel):
+    value: str
+    count: int
+
+
+class OfferingStatOut(BaseModel):
+    value: str
+    count: int
+    platinum_cheaper_count: int
+    grand_cru_cheaper_count: int
+    average_price_platinum: float | None = None
+    average_price_diff_pct: float | None = None
+
+
+class DealFiltersOut(BaseModel):
+    countries: list[LabelCountOut]
+    regions: list[LabelCountOut]
+    wine_types: list[LabelCountOut]
+    style_families: list[LabelCountOut]
+    grapes: list[LabelCountOut]
+    offering_types: list[LabelCountOut]
+    producers: list[LabelCountOut]
+
+
+class DealStatsOut(BaseModel):
+    total_deals: int
+    cheaper_sides: list[LabelCountOut]
+    wine_types: list[LabelCountOut]
+    style_families: list[LabelCountOut]
+    countries: list[LabelCountOut]
+    offering_types: list[OfferingStatOut]
+
+
+class DealMapPointOut(BaseModel):
+    origin_label: str
+    country: str | None = None
+    region: str | None = None
+    origin_latitude: float
+    origin_longitude: float
+    origin_precision: str | None = None
+    wine_count: int
+    platinum_cheaper_count: int
+    average_price_diff_pct: float | None = None
+    sample_wines: list[str]

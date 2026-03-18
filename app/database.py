@@ -37,7 +37,20 @@ def get_session() -> Generator[Session, None, None]:
 
 
 _ALLOWED_TABLES = {"wine_deals", "wine_deal_snapshots", "ingestion_runs"}
-_ALLOWED_COLUMNS = {"vivino_match_method"}
+_ALLOWED_COLUMNS = {
+    "vivino_match_method",
+    "producer",
+    "country",
+    "region",
+    "wine_type",
+    "style_family",
+    "grapes",
+    "offering_type",
+    "origin_label",
+    "origin_latitude",
+    "origin_longitude",
+    "origin_precision",
+}
 
 
 def ensure_column(table: str, column: str, col_type: str) -> None:

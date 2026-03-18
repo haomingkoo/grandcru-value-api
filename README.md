@@ -15,7 +15,12 @@ Refactor of the notebook scraper into a backend service that helps users find hi
 4. CSV to database import pipeline (`scripts/import_wine_data.py`)
 5. Reusable source scraper (`scripts/scrape_sources.py`)
 5. API endpoints:
+   - `GET /` (browser UI)
+   - `GET /api` (service root)
    - `GET /deals`
+   - `GET /deals/filters`
+   - `GET /deals/stats`
+   - `GET /deals/map`
    - `GET /deals/{deal_id}`
    - `GET /deals/{deal_id}/history`
    - `GET /health`
@@ -33,10 +38,11 @@ uvicorn app.main:app --reload
 
 Open:
 
-1. API docs: `http://127.0.0.1:8000/docs`
-2. Health: `http://127.0.0.1:8000/health`
-3. Deals: `http://127.0.0.1:8000/deals?limit=20&only_platinum_cheaper=true`
-4. Deal history: `http://127.0.0.1:8000/deals/1/history?days=180&sort_order=asc`
+1. Website: `http://127.0.0.1:8000/`
+2. API docs: `http://127.0.0.1:8000/docs`
+3. Health: `http://127.0.0.1:8000/health`
+4. Deals: `http://127.0.0.1:8000/deals?limit=20&only_platinum_cheaper=true`
+5. Deal history: `http://127.0.0.1:8000/deals/1/history?days=180&sort_order=asc`
 
 ## Maintainer Quick Start
 
@@ -84,7 +90,18 @@ Key fields:
 3. `cheaper_side`, `deal_score`, `vivino_match_method`
 4. `platinum_url`, `grand_cru_url`, `vivino_url`
 5. `vivino_rating`, `vivino_num_ratings`
-6. Daily delta fields on `GET /deals`:
+6. Derived discovery fields on `GET /deals`:
+   - `producer`, `country`, `region`
+   - `wine_type`, `style_family`, `grapes`, `offering_type`
+   - `origin_label`, `origin_latitude`, `origin_longitude`, `origin_precision`
+   - `price_diff_pct_abs` for largest-gap sorting regardless of retailer side
+7. Decision helper fields on `GET /deals`:
+   - `has_competitor_match`, `is_platinum_cheaper`
+   - `is_good_wine`, `is_high_confidence`
+   - `value_verdict`, `value_verdict_tone`, `value_verdict_reason`
+   - `origin_confidence`, `grape_confidence`, `metadata_confidence`
+   - `platinum_trend_7d`, `grand_cru_trend_7d`, `platinum_trend_30d`, `grand_cru_trend_30d`
+8. Daily delta fields on `GET /deals`:
    - `price_platinum_7d_ago`, `price_platinum_change_7d`
    - `price_grand_cru_7d_ago`, `price_grand_cru_change_7d`
    - `price_platinum_30d_ago`, `price_platinum_change_30d`
@@ -124,6 +141,7 @@ Sorting examples:
 
 1. `GET /deals?sort_by=price_diff_pct&sort_order=asc` returns the biggest Platinum discounts first
 2. `GET /deals?sort_by=price_diff_pct&sort_order=desc` returns the biggest Platinum markups or Grand Cru advantages first
+3. `GET /deals?sort_by=price_diff_pct_abs&sort_order=desc` returns the largest retailer gap first regardless of which side is cheaper
 
 ### Deal Score
 
@@ -176,6 +194,31 @@ This means a card can legitimately show:
 2. `vivino_match_method = exact`
 
 That combination means the project found the right Vivino wine, but did not find a comparable Grand Cru listing.
+
+## Discovery Endpoints
+
+The API now exposes backend-friendly endpoints for richer UI controls:
+
+1. `GET /deals/filters` returns distinct countries, regions, wine types, browse styles, grapes, offering types, and producers with counts
+2. `GET /deals/stats` returns grouped counts plus offering summaries such as average Platinum price and average price difference
+3. `GET /deals/map` returns approximate origin points grouped by region for map markers
+
+All 3 endpoints accept the same filter query params as `GET /deals`, so a frontend can keep filters, stats, and map markers in sync.
+
+Useful frontend-facing filter params on `GET /deals` and the discovery endpoints:
+
+1. `comparable_only=true` limits the view to wines with a real Grand Cru comparison
+2. `only_platinum_cheaper=true` narrows to bottles where Platinum currently wins on price
+3. `country`, `region`, `wine_type`, `style_family`, `grape`, `offering_type`, and `producer` support browseable taste filters
+
+## Website Browse Flow
+
+The homepage is now designed around discovery first, then detailed comparison:
+
+1. Start with the top map and quick country buttons such as France, Australia, Italy, and the United States
+2. Use browse styles like `Red`, `White`, `Sparkling`, `Champagne`, or `Sweet / Dessert`
+3. Scan grouped country cards to jump into regions such as Burgundy, Champagne, Piedmont, or Marlborough
+4. Drop into the table when you want the exact offer-level pricing, verdict, and rating confidence
 
 ## Hosting Recommendation
 

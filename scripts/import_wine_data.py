@@ -21,6 +21,7 @@ from app.config import settings  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models import IngestionRun, WineDeal, WineDealSnapshot  # noqa: E402
 from app.scoring import compute_deal_score, parse_float, parse_int  # noqa: E402
+from app.wine_metadata import derive_wine_metadata  # noqa: E402
 
 
 logging.basicConfig(
@@ -28,6 +29,39 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger("grandcru.import")
+
+DEAL_EXTRA_COLUMNS = (
+    ("producer", "VARCHAR(255)"),
+    ("country", "VARCHAR(128)"),
+    ("region", "VARCHAR(128)"),
+    ("wine_type", "VARCHAR(64)"),
+    ("style_family", "VARCHAR(64)"),
+    ("grapes", "VARCHAR(255)"),
+    ("offering_type", "VARCHAR(64)"),
+    ("origin_label", "VARCHAR(255)"),
+    ("origin_latitude", "FLOAT"),
+    ("origin_longitude", "FLOAT"),
+    ("origin_precision", "VARCHAR(32)"),
+)
+
+SNAPSHOT_FIELDS = {
+    "wine_name",
+    "vintage",
+    "quantity",
+    "volume",
+    "price_platinum",
+    "price_grand_cru",
+    "price_diff",
+    "price_diff_pct",
+    "cheaper_side",
+    "platinum_url",
+    "grand_cru_url",
+    "vivino_url",
+    "vivino_rating",
+    "vivino_num_ratings",
+    "vivino_match_method",
+    "deal_score",
+}
 
 PLATINUM_LEGACY_HOSTS = (
     "https://platinum.grandcruwines.com",
@@ -328,6 +362,8 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
 
     ensure_column("wine_deals", "vivino_match_method", "VARCHAR(32)")
     ensure_column("wine_deal_snapshots", "vivino_match_method", "VARCHAR(32)")
+    for column, col_type in DEAL_EXTRA_COLUMNS:
+        ensure_column("wine_deals", column, col_type)
 
     comparison_rows = read_csv_rows(comparison_path)
     vivino_rows_base = read_csv_rows(vivino_path)
@@ -419,11 +455,19 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
             if price_diff_pct is None and price_diff is not None and price_grand_cru not in (None, 0):
                 price_diff_pct = round((price_diff / price_grand_cru) * 100.0, 2)
 
+            quantity = parse_int(row.get("quantity_plat"))
+            volume = (row.get("volume_plat") or "").strip() or None
+            metadata = derive_wine_metadata(
+                wine_name=wine_name,
+                quantity=quantity,
+                volume=volume,
+            )
+
             deal_payload = {
                 "wine_name": wine_name,
                 "vintage": parse_int(row.get("year_plat")),
-                "quantity": parse_int(row.get("quantity_plat")),
-                "volume": (row.get("volume_plat") or "").strip() or None,
+                "quantity": quantity,
+                "volume": volume,
                 "price_platinum": price_platinum,
                 "price_grand_cru": price_grand_cru,
                 "price_diff": price_diff,
@@ -435,14 +479,26 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 "vivino_rating": vivino_rating,
                 "vivino_num_ratings": vivino_num_ratings,
                 "vivino_match_method": match_method,
+                "producer": metadata.producer,
+                "country": metadata.country,
+                "region": metadata.region,
+                "wine_type": metadata.wine_type,
+                "style_family": metadata.style_family,
+                "grapes": metadata.grapes,
+                "offering_type": metadata.offering_type,
+                "origin_label": metadata.origin_label,
+                "origin_latitude": metadata.origin_latitude,
+                "origin_longitude": metadata.origin_longitude,
+                "origin_precision": metadata.origin_precision,
                 "deal_score": compute_deal_score(price_diff_pct, vivino_rating, vivino_num_ratings),
             }
             merged_records.append(WineDeal(**deal_payload))
+            snapshot_payload = {key: value for key, value in deal_payload.items() if key in SNAPSHOT_FIELDS}
             snapshot_records.append(
                 WineDealSnapshot(
                     ingestion_run_id=run.id,
                     captured_at=snapshot_time,
-                    **deal_payload,
+                    **snapshot_payload,
                 )
             )
 
