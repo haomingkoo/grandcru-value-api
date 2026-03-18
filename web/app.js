@@ -144,6 +144,11 @@ function initDiscoveryFocus() {
   })
 }
 
+function scrollToOffers() {
+  const section = document.getElementById("offersSection")
+  if (section) section.scrollIntoView({ behavior: "smooth", block: "start" })
+}
+
 function captureElements() {
   els.searchInput = document.getElementById("searchInput")
   els.sortSelect = document.getElementById("sortSelect")
@@ -271,7 +276,7 @@ function bindEvents() {
       state.country = filterButton.dataset.mapCountryFilter || ""
       state.region = ""
       syncControlsFromState()
-      loadDashboard()
+      loadDashboard().then(() => scrollToOffers())
       return
     }
 
@@ -315,7 +320,7 @@ function bindEvents() {
     state.country = button.dataset.countryPick || ""
     state.region = button.dataset.regionPick || ""
     syncControlsFromState()
-    loadDashboard()
+    loadDashboard().then(() => scrollToOffers())
   })
 
   els.familyBoard.addEventListener("click", (event) => {
@@ -325,7 +330,7 @@ function bindEvents() {
       event.stopPropagation()
       state.styleFamily = filterButton.dataset.styleGroupFilter || ""
       syncControlsFromState()
-      loadDashboard()
+      loadDashboard().then(() => scrollToOffers())
       return
     }
 
@@ -1146,12 +1151,12 @@ function renderTable(deals) {
       const verdict = resolveVerdict(deal)
       const styleLabel = deal.style_family || deal.wine_type || "Unclassified"
       const subtypeLabel = deal.wine_type && deal.wine_type !== styleLabel ? ` · ${deal.wine_type}` : ""
+      const wineNotes = cleanVivinoDescription(deal.vivino_description)
       return `
         <tr class="deal-row">
           <td>
             <div class="wine-title">${escapeHtml(deal.wine_name)}</div>
             <div class="wine-subline">${escapeHtml(deal.producer || "Producer unknown")}</div>
-            ${deal.vivino_description ? `<div class="wine-desc">${escapeHtml(deal.vivino_description)}</div>` : ""}
             <div class="wine-links">
               ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
               ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
@@ -1159,9 +1164,8 @@ function renderTable(deals) {
             </div>
           </td>
           <td>
-            <span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>
+            ${wineNotes ? `<div class="wine-desc">${escapeHtml(wineNotes)}</div>` : `<span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>`}
             <div class="cell-subline">${escapeHtml(verdict.detail)}</div>
-            ${deal.has_competitor_match ? "" : `<div class="cell-subline">No direct retailer comp yet.</div>`}
           </td>
           <td>
             <div class="cell-subline">
@@ -1799,6 +1803,14 @@ function continentOf(country) {
 
 function continentColor(country) {
   return CONTINENT_COLORS[continentOf(country)] || "#60a5fa"
+}
+
+function cleanVivinoDescription(desc) {
+  if (!desc) return ""
+  const garbage = ["underage", "forbidden", "page is forbidden", "yikes", "alternative great wines", "Try searching"]
+  if (garbage.some((word) => desc.toLowerCase().includes(word.toLowerCase()))) return ""
+  if (desc.length < 20) return ""
+  return desc
 }
 
 function escapeHtml(value) {
