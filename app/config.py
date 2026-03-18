@@ -32,6 +32,7 @@ class Settings:
         "RATE_LIMIT_EXEMPT_PATHS",
         "/,/health,/legal,/docs,/openapi.json,/redoc",
     )
+    api_docs_enabled: bool = _as_bool(os.getenv("API_DOCS_ENABLED"), False)
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
     access_log_enabled: bool = _as_bool(os.getenv("ACCESS_LOG_ENABLED"), True)
     ops_api_key: str = os.getenv("OPS_API_KEY", "")

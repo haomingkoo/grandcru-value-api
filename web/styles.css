@@ -1035,6 +1035,292 @@ h2 {
   }
 }
 
+:root {
+  --bg: #06070a;
+  --bg-deep: #0d1117;
+  --card: rgba(14, 18, 25, 0.9);
+  --card-strong: rgba(17, 22, 30, 0.96);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --ink: #f4efe7;
+  --muted: #aaa4b6;
+  --wine: #c88aa5;
+  --wine-deep: #7f3855;
+  --sage: #63b99d;
+  --sage-soft: rgba(99, 185, 157, 0.16);
+  --amber: #d8b36a;
+  --amber-soft: rgba(216, 179, 106, 0.16);
+  --rust: #e07a64;
+  --rust-soft: rgba(224, 122, 100, 0.16);
+  --shadow: 0 24px 56px rgba(0, 0, 0, 0.42);
+}
+
+body {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top center, rgba(200, 138, 165, 0.14), transparent 28%),
+    radial-gradient(circle at 85% 12%, rgba(216, 179, 106, 0.1), transparent 24%),
+    linear-gradient(180deg, #07080c 0%, #0b0d12 44%, #08090d 100%);
+}
+
+body::before {
+  background: rgba(127, 56, 85, 0.14);
+}
+
+body::after {
+  background: rgba(40, 72, 106, 0.12);
+}
+
+.panel,
+.stat-card,
+.pick-card,
+.country-card,
+.family-card,
+.offer-variant,
+.deal-row td {
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+
+.panel {
+  background: linear-gradient(180deg, rgba(16, 19, 27, 0.94), rgba(11, 14, 20, 0.94));
+  backdrop-filter: blur(18px);
+}
+
+.ghost-button {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.ghost-button:hover,
+.link-chip:hover,
+.quick-filter-button:hover,
+.country-jump:hover,
+.region-pill:hover {
+  border-color: rgba(200, 138, 165, 0.38);
+}
+
+.map-stage {
+  min-height: 430px;
+  background: #090d13;
+  border-color: var(--line);
+}
+
+#originMap {
+  position: relative;
+  width: 100%;
+  height: 430px;
+  min-height: 430px;
+}
+
+.map-selection {
+  background: linear-gradient(180deg, rgba(15, 19, 26, 0.98), rgba(10, 13, 19, 0.96));
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.map-selection strong,
+.country-spotlight strong {
+  color: var(--ink);
+}
+
+.stat-card {
+  background: linear-gradient(180deg, rgba(20, 24, 33, 0.96), rgba(13, 16, 22, 0.96));
+}
+
+.pick-card {
+  background:
+    radial-gradient(circle at top right, rgba(216, 179, 106, 0.12), transparent 32%),
+    linear-gradient(180deg, rgba(19, 23, 31, 0.98), rgba(12, 15, 21, 0.98));
+}
+
+.country-card {
+  background:
+    radial-gradient(circle at top right, rgba(99, 185, 157, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(18, 22, 29, 0.98), rgba(11, 14, 19, 0.98));
+}
+
+.family-card {
+  background:
+    radial-gradient(circle at top right, rgba(200, 138, 165, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(18, 22, 29, 0.98), rgba(11, 14, 19, 0.98));
+}
+
+.offer-variant {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.country-spotlight {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+}
+
+.verdict-chip.ghost,
+.pill.ghost,
+.meta-chip,
+.link-chip,
+.toggle-pill,
+.filter-chip,
+.quick-filter-button,
+.country-jump,
+.region-pill {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.quick-filter-button span,
+.region-pill span,
+.filter-chip button {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+
+.quick-filter-button.is-active,
+.country-jump.is-active,
+.region-pill.is-active {
+  background: rgba(200, 138, 165, 0.16);
+  border-color: rgba(200, 138, 165, 0.34);
+  color: #f6dce6;
+}
+
+.quick-filter-button.is-active span,
+.region-pill.is-active span,
+.filter-chip button:hover {
+  background: rgba(200, 138, 165, 0.2);
+  color: #f6dce6;
+}
+
+.link-chip {
+  border: 1px solid var(--line);
+}
+
+.field input,
+.field select {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+}
+
+.field input::placeholder {
+  color: #7f7a87;
+}
+
+.field select option {
+  background: #0d1218;
+  color: var(--ink);
+}
+
+.field input:focus,
+.field select:focus {
+  outline-color: rgba(200, 138, 165, 0.22);
+  border-color: rgba(200, 138, 165, 0.38);
+}
+
+.toggle-pill input {
+  accent-color: var(--wine);
+}
+
+.filter-chip {
+  color: var(--muted);
+}
+
+.results-meta,
+.bar-copy span:last-child,
+.field span,
+.wine-subline,
+.cell-subline,
+.muted,
+.panel-note,
+.lede {
+  color: var(--muted);
+}
+
+.bar-track,
+.score-bar {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.deal-table th {
+  color: var(--muted);
+}
+
+.sort-button {
+  color: var(--muted);
+}
+
+.sort-button.is-active {
+  color: #f4dbe5;
+}
+
+.deal-row td {
+  background: var(--card-strong);
+}
+
+.deal-row td,
+.deal-row td:first-child,
+.deal-row td:last-child {
+  border-color: var(--line);
+}
+
+.empty-state {
+  color: var(--muted);
+}
+
+.loading-sheen::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+}
+
+.leaflet-container {
+  background: #06080d;
+  font-family: var(--font-body);
+}
+
+.leaflet-control-zoom a {
+  background: rgba(14, 18, 25, 0.96) !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: rgba(17, 22, 30, 0.98);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.leaflet-popup-tip {
+  background: rgba(17, 22, 30, 0.98);
+}
+
+.leaflet-control-attribution {
+  background: rgba(7, 9, 12, 0.72) !important;
+  color: #878093 !important;
+}
+
+.leaflet-control-attribution a {
+  color: #cf9cb2 !important;
+}
+
+.leaflet-tooltip.country-tooltip {
+  background: rgba(8, 11, 16, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  padding: 8px 12px;
+}
+
+.leaflet-tooltip-top.country-tooltip::before {
+  border-top-color: rgba(8, 11, 16, 0.94);
+}
+
+.leaflet-tooltip-bottom.country-tooltip::before {
+  border-bottom-color: rgba(8, 11, 16, 0.94);
+}
+
 @media (max-width: 1200px) {
   .hero-layout {
     grid-template-columns: 1fr;
@@ -1078,6 +1364,11 @@ h2 {
   }
 
   .map-stage {
+    min-height: 320px;
+  }
+
+  #originMap {
+    height: 320px;
     min-height: 320px;
   }
 

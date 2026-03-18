@@ -8,8 +8,13 @@
     name="description"
     content="Compare Platinum wine deals against Grand Cru, surface likely good credit spends, and explore the current range by country, style, grape, and offer shape."
   >
+  <link
+    rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230c161c'/%3E%3Cpath d='M20 18h24c0 10-4 16-12 18v8h10v4H22v-4h10v-8c-8-2-12-8-12-18Z' fill='%23d8b36a'/%3E%3C/svg%3E"
+  >
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link
     href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
@@ -21,15 +26,10 @@
     <header class="masthead reveal">
       <div class="masthead-copy">
         <p class="eyebrow">GrandCru Value Compass</p>
-        <h1>Spend Platinum credits with the markups exposed.</h1>
+        <h1>Spend Platinum credits without paying blind markups.</h1>
         <p class="lede">
-          See where the bottles come from, spot when Platinum is genuinely cheaper,
-          and filter down to wines that match your taste instead of browsing blind.
+          Start from the map, narrow by country or style, and see quickly when Platinum is actually the better buy.
         </p>
-      </div>
-      <div class="masthead-actions">
-        <a class="action-button" href="/docs">API Docs</a>
-        <a class="ghost-button" href="/api">API Root</a>
       </div>
     </header>
 
@@ -44,64 +44,11 @@
         </div>
 
         <div class="map-stage">
-          <svg id="originMap" viewBox="0 0 1000 520" aria-label="Wine origin map" role="img">
-            <defs>
-              <linearGradient id="oceanGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#19333a"></stop>
-                <stop offset="55%" stop-color="#0f2228"></stop>
-                <stop offset="100%" stop-color="#13292f"></stop>
-              </linearGradient>
-              <radialGradient id="markerCore" cx="50%" cy="50%" r="70%">
-                <stop offset="0%" stop-color="#fff7de"></stop>
-                <stop offset="100%" stop-color="#f0bd63"></stop>
-              </radialGradient>
-              <filter id="markerShadow" x="-50%" y="-50%" width="200%" height="200%">
-                <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="rgba(0,0,0,0.28)"></feDropShadow>
-              </filter>
-            </defs>
-
-            <rect class="map-ocean" x="0" y="0" width="1000" height="520" rx="28"></rect>
-
-            <g class="map-graticule">
-              <line x1="0" y1="86" x2="1000" y2="86"></line>
-              <line x1="0" y1="173" x2="1000" y2="173"></line>
-              <line x1="0" y1="260" x2="1000" y2="260"></line>
-              <line x1="0" y1="347" x2="1000" y2="347"></line>
-              <line x1="0" y1="434" x2="1000" y2="434"></line>
-              <line x1="166" y1="0" x2="166" y2="520"></line>
-              <line x1="333" y1="0" x2="333" y2="520"></line>
-              <line x1="500" y1="0" x2="500" y2="520"></line>
-              <line x1="666" y1="0" x2="666" y2="520"></line>
-              <line x1="833" y1="0" x2="833" y2="520"></line>
-            </g>
-
-            <g class="continent-shapes">
-              <ellipse class="continent" cx="175" cy="180" rx="112" ry="124" transform="rotate(-18 175 180)"></ellipse>
-              <ellipse class="continent continent-soft" cx="258" cy="345" rx="68" ry="112" transform="rotate(16 258 345)"></ellipse>
-              <ellipse class="continent" cx="556" cy="188" rx="212" ry="106" transform="rotate(-3 556 188)"></ellipse>
-              <ellipse class="continent continent-soft" cx="505" cy="304" rx="88" ry="118" transform="rotate(9 505 304)"></ellipse>
-              <ellipse class="continent" cx="801" cy="351" rx="84" ry="52" transform="rotate(10 801 351)"></ellipse>
-              <ellipse class="continent continent-soft" cx="914" cy="432" rx="42" ry="18"></ellipse>
-              <ellipse class="continent continent-soft" cx="430" cy="102" rx="34" ry="18"></ellipse>
-            </g>
-
-            <g id="markerLayer"></g>
-          </svg>
-
-          <div class="map-overlay">
-            <div class="legend-pill">
-              <span class="legend-dot gain"></span>
-              <span>Green means Platinum trends cheaper</span>
-            </div>
-            <div class="legend-pill">
-              <span class="legend-dot loss"></span>
-              <span>Red means Grand Cru tends to win</span>
-            </div>
-          </div>
+          <div id="originMap" aria-label="Wine origin map" role="img"></div>
         </div>
 
         <div id="mapSelection" class="map-selection">
-          Click a marker to focus the table by region. Marker size reflects how many wines are in view.
+          Choose a country marker to focus the board. Marker size reflects how many wines are currently in view.
         </div>
       </article>
 
@@ -299,6 +246,7 @@
     </section>
   </div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
   <script src="/static/app.js" defer></script>
 </body>
 </html>

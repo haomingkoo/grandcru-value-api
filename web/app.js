@@ -1,5 +1,3 @@
-const SVG_NS = "http://www.w3.org/2000/svg"
-
 const defaultState = {
   search: "",
   sortBy: "deal_score",
@@ -34,10 +32,22 @@ const sortLabels = {
   "wine_name:asc": "Alphabetical",
 }
 
+const EUROPEAN_COUNTRIES = new Set([
+  "Austria",
+  "France",
+  "Germany",
+  "Italy",
+  "Portugal",
+  "Spain",
+  "Switzerland",
+])
+
 const state = { ...defaultState }
 let filterOptions = null
 let requestSerial = 0
 let searchDebounce = 0
+let originMap = null
+let originMarkerLayer = null
 
 const els = {}
 
@@ -75,7 +85,7 @@ function captureElements() {
   els.activeFilters = document.getElementById("activeFilters")
   els.familyBoard = document.getElementById("familyBoard")
   els.dealTableBody = document.getElementById("dealTableBody")
-  els.markerLayer = document.getElementById("markerLayer")
+  els.originMap = document.getElementById("originMap")
   els.mapSelection = document.getElementById("mapSelection")
   els.regionGuide = document.getElementById("regionGuide")
   els.sortButtons = Array.from(document.querySelectorAll(".sort-button"))
@@ -788,57 +798,64 @@ function renderWineFamilies(deals) {
 }
 
 function renderMap(points) {
-  els.markerLayer.innerHTML = ""
+  const map = ensureOriginMap()
+  const groupedPoints = groupMapPointsByCountry(points)
+  const selected = groupedPoints.find((point) => point.country === state.country) || null
 
-  if (!points.length) {
-    els.mapSelection.textContent = "No mapped origins are available for the current filter set."
+  if (!map) {
+    els.mapSelection.textContent = "The map is unavailable right now."
     return
   }
 
-  const selected = points.find((point) => point.region === state.region && point.country === state.country) || null
-  const largestCount = Math.max(...points.map((point) => point.wine_count), 1)
+  originMarkerLayer.clearLayers()
 
-  points.forEach((point) => {
-    const group = document.createElementNS(SVG_NS, "g")
-    const projected = project(point.origin_longitude, point.origin_latitude)
-    const radius = 11 + (point.wine_count / largestCount) * 17
-    const tone = toneForAverage(point.average_price_diff_pct)
+  if (!groupedPoints.length) {
+    els.mapSelection.textContent = "No mapped origins are available for the current filter set."
+    map.setView([22, 8], 2)
+    return
+  }
 
-    group.setAttribute("class", `map-marker ${tone}${selected && selected.origin_label === point.origin_label ? " is-selected" : ""}`)
-    group.setAttribute("transform", `translate(${projected.x} ${projected.y})`)
+  const largestCount = Math.max(...groupedPoints.map((point) => point.wineCount), 1)
+  const bounds = []
 
-    const title = document.createElementNS(SVG_NS, "title")
-    title.textContent = `${point.origin_label}: ${point.wine_count} wines`
+  groupedPoints.forEach((point) => {
+    const isSelected = selected ? selected.country === point.country : false
+    const radius = Math.max(10, 9 + (point.wineCount / largestCount) * 16)
+    const marker = window.L.circleMarker([point.originLatitude, point.originLongitude], {
+      radius,
+      fillColor: point.isEuropean ? "#bf7aa0" : "#d8b36a",
+      fillOpacity: isSelected ? 0.98 : 0.86,
+      color: isSelected ? "#fff3d6" : "#081017",
+      weight: isSelected ? 3 : 2,
+    })
 
-    const ring = document.createElementNS(SVG_NS, "circle")
-    ring.setAttribute("class", "marker-ring")
-    ring.setAttribute("r", String(radius))
+    marker.bindTooltip(
+      `${point.country} · ${formatInteger(point.wineCount)} wine${point.wineCount === 1 ? "" : "s"}`,
+      {
+        direction: "top",
+        offset: [0, -10],
+        className: "country-tooltip",
+      }
+    )
 
-    const core = document.createElementNS(SVG_NS, "circle")
-    core.setAttribute("class", "marker-core")
-    core.setAttribute("r", String(Math.max(6, radius * 0.46)))
-
-    const count = document.createElementNS(SVG_NS, "text")
-    count.setAttribute("class", "marker-count")
-    count.textContent = String(point.wine_count)
-
-    group.append(title, ring, core, count)
-    group.addEventListener("click", () => {
-      state.country = point.country || ""
-      state.region = point.region || ""
+    marker.on("click", () => {
+      state.country = state.country === point.country && !state.region ? "" : point.country
+      state.region = ""
       syncControlsFromState()
       loadDashboard()
     })
 
-    els.markerLayer.appendChild(group)
+    marker.addTo(originMarkerLayer)
+    bounds.push([point.originLatitude, point.originLongitude])
   })
 
-  renderMapSelection(selected || points[0], Boolean(selected))
+  fitCountryMap(map, bounds, selected)
+  renderMapSelection(selected || groupedPoints[0], Boolean(selected))
 }
 
 function renderMapSelection(point, isFocused) {
   if (!point) {
-    els.mapSelection.textContent = "Click a marker to focus the table by region."
+    els.mapSelection.textContent = "Choose a country marker to focus the board."
     return
   }
 
@@ -846,15 +863,130 @@ function renderMapSelection(point, isFocused) {
     ? "No comparable price signal yet."
     : `${formatSignedPct(point.average_price_diff_pct, 1)} average price gap in the current filter set.`
   const helperCopy = isFocused
-    ? "The table below is currently filtered to this region."
-    : "Click the marker again from the map to focus the table on this region."
+    ? "The board is currently filtered to this country."
+    : "Click the marker on the map to focus everything on this country."
+  const regionCopy = point.regionLabels.length
+    ? `${formatInteger(point.regionLabels.length)} regions in this view: ${point.regionLabels.slice(0, 4).join(" · ")}${point.regionLabels.length > 4 ? " ..." : ""}.`
+    : "Regional detail is still thin for this country."
+  const sampleCopy = point.sampleWines.length
+    ? point.sampleWines.slice(0, 3).join(" · ")
+    : "No sample bottles available yet."
 
   els.mapSelection.innerHTML = `
-    <h3>${escapeHtml(point.origin_label)}</h3>
-    <p><strong>${point.wine_count}</strong> wines in view, with <strong>${point.platinum_cheaper_count}</strong> currently cheaper on Platinum.</p>
+    <h3>${escapeHtml(point.country)}</h3>
+    <p><strong>${point.wineCount}</strong> wines in view, with <strong>${point.platinumCheaperCount}</strong> currently cheaper on Platinum.</p>
     <p>${escapeHtml(avgGapCopy)} ${escapeHtml(helperCopy)}</p>
-    <p><strong>Sample bottles:</strong> ${escapeHtml(point.sample_wines.slice(0, 3).join(" | "))}</p>
+    <p>${escapeHtml(regionCopy)}</p>
+    <p><strong>Sample bottles:</strong> ${escapeHtml(sampleCopy)}</p>
   `
+}
+
+function ensureOriginMap() {
+  if (!els.originMap || !window.L) {
+    return null
+  }
+
+  if (!originMap) {
+    originMap = window.L.map(els.originMap, {
+      zoomControl: true,
+      scrollWheelZoom: false,
+      minZoom: 2,
+      maxZoom: 6,
+    }).setView([22, 8], 2)
+
+    window.L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      maxZoom: 19,
+      subdomains: "abcd",
+    }).addTo(originMap)
+
+    originMarkerLayer = window.L.layerGroup().addTo(originMap)
+  }
+
+  window.setTimeout(() => originMap.invalidateSize(), 0)
+  return originMap
+}
+
+function groupMapPointsByCountry(points) {
+  const grouped = new Map()
+
+  points.forEach((point) => {
+    const country = (point.country || "").trim()
+    if (!country) {
+      return
+    }
+
+    if (!grouped.has(country)) {
+      grouped.set(country, {
+        country,
+        totalWeight: 0,
+        latitudeWeight: 0,
+        longitudeWeight: 0,
+        wineCount: 0,
+        platinumCheaperCount: 0,
+        avgGapTotal: 0,
+        avgGapWeight: 0,
+        sampleWines: [],
+        regionLabels: new Set(),
+      })
+    }
+
+    const bucket = grouped.get(country)
+    const weight = Math.max(Number(point.wine_count) || 0, 1)
+    bucket.totalWeight += weight
+    bucket.latitudeWeight += point.origin_latitude * weight
+    bucket.longitudeWeight += point.origin_longitude * weight
+    bucket.wineCount += Number(point.wine_count) || 0
+    bucket.platinumCheaperCount += Number(point.platinum_cheaper_count) || 0
+    if (typeof point.average_price_diff_pct === "number") {
+      bucket.avgGapTotal += point.average_price_diff_pct * weight
+      bucket.avgGapWeight += weight
+    }
+    ;(point.sample_wines || []).forEach((wine) => {
+      if (bucket.sampleWines.length < 5 && !bucket.sampleWines.includes(wine)) {
+        bucket.sampleWines.push(wine)
+      }
+    })
+    if (point.region) {
+      bucket.regionLabels.add(point.region)
+    }
+  })
+
+  return Array.from(grouped.values())
+    .map((bucket) => ({
+      country: bucket.country,
+      originLatitude: bucket.latitudeWeight / bucket.totalWeight,
+      originLongitude: bucket.longitudeWeight / bucket.totalWeight,
+      wineCount: bucket.wineCount,
+      platinumCheaperCount: bucket.platinumCheaperCount,
+      average_price_diff_pct: bucket.avgGapWeight ? bucket.avgGapTotal / bucket.avgGapWeight : null,
+      sampleWines: bucket.sampleWines,
+      regionLabels: Array.from(bucket.regionLabels).sort(),
+      isEuropean: isEuropeanCountry(bucket.country),
+    }))
+    .sort((left, right) => right.wineCount - left.wineCount || left.country.localeCompare(right.country))
+}
+
+function fitCountryMap(map, bounds, selected) {
+  if (!bounds.length) {
+    map.setView([22, 8], 2)
+    return
+  }
+
+  if (selected) {
+    map.setView([selected.originLatitude, selected.originLongitude], selected.isEuropean ? 4 : 3)
+    return
+  }
+
+  if (bounds.length === 1) {
+    map.setView(bounds[0], 4)
+    return
+  }
+
+  map.fitBounds(bounds, {
+    padding: [44, 44],
+    maxZoom: 3,
+  })
 }
 
 function renderTable(deals) {
@@ -1116,6 +1248,7 @@ function renderActiveFilters() {
 function renderErrorState(error) {
   const message = error instanceof Error ? error.message : "The dashboard could not load."
   els.resultsMeta.textContent = "Something broke while loading the board."
+  els.mapSelection.textContent = message
   els.topPicks.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`
   els.familyBoard.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`
   els.regionGuide.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`
@@ -1316,15 +1449,6 @@ function toneForAverage(value) {
   return "flat"
 }
 
-function project(longitude, latitude) {
-  const width = 1000
-  const height = 520
-  return {
-    x: ((longitude + 180) / 360) * width,
-    y: ((90 - latitude) / 180) * height,
-  }
-}
-
 async function fetchJson(path) {
   const response = await fetch(path, {
     headers: {
@@ -1343,6 +1467,9 @@ function setLoading(isLoading) {
   ;[els.heroStats, els.dealMixChart, els.offeringChart, els.topPicks, els.familyBoard, els.regionGuide].forEach((element) => {
     element.classList.toggle("loading-sheen", isLoading)
   })
+  if (els.originMap) {
+    els.originMap.classList.toggle("loading-sheen", isLoading)
+  }
   els.dealTableBody.classList.toggle("loading-sheen", isLoading)
 }
 
@@ -1389,6 +1516,10 @@ function average(values) {
     return 0
   }
   return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function isEuropeanCountry(country) {
+  return EUROPEAN_COUNTRIES.has(country)
 }
 
 function escapeHtml(value) {
