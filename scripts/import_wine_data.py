@@ -479,6 +479,8 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 "vivino_url": vivino_url,
                 "vivino_rating": vivino_rating,
                 "vivino_num_ratings": vivino_num_ratings,
+                "vivino_price": parse_float(vivino.get("vivino_price")),
+                "vivino_description": (vivino.get("vivino_description") or "").strip() or None,
                 "vivino_match_method": match_method,
                 "producer": metadata.producer,
                 "label_name": metadata.label_name,

@@ -53,6 +53,7 @@ _OVERRIDE_FIELDS = [
     "vivino_rating",
     "vivino_num_ratings",
     "vivino_price",
+    "vivino_description",
     "vivino_url",
     "notes",
 ]
@@ -198,6 +199,28 @@ def parse_vivino_rating(html: str) -> tuple[str, str]:
     return rating, count
 
 
+_DESCRIPTION_RE = re.compile(r'"description"\s*:\s*"([^"]{10,500})"')
+_PRICE_RE = re.compile(r'"price"\s*:\s*"?(?P<price>[\d.]+)"?')
+_OFFERS_PRICE_RE = re.compile(
+    r'"offers"\s*:\s*\{[^}]*"price"\s*:\s*"?(?P<price>[\d.]+)"?',
+    re.DOTALL,
+)
+
+
+def parse_vivino_extras(html: str) -> dict[str, str]:
+    """Extract description and price from Vivino page HTML."""
+    extras: dict[str, str] = {}
+    m_desc = _DESCRIPTION_RE.search(html)
+    if m_desc:
+        desc = m_desc.group(1).replace("\\n", " ").replace("\\u0026", "&").strip()
+        if len(desc) > 15:
+            extras["description"] = desc[:500]
+    m_price = _OFFERS_PRICE_RE.search(html) or _PRICE_RE.search(html)
+    if m_price:
+        extras["price"] = m_price.group("price")
+    return extras
+
+
 def search_vivino_via_brave(query: str, brave_api_key: str) -> str | None:
     """Use Brave Search API to find the Vivino wine page URL."""
     search_query = f"{query} site:vivino.com"
@@ -311,6 +334,11 @@ def resolve_wine(
         rating, count = parse_vivino_rating(page_html)
         result["vivino_rating"] = rating
         result["vivino_num_ratings"] = count
+        extras = parse_vivino_extras(page_html)
+        if extras.get("price"):
+            result["vivino_price"] = extras["price"]
+        if extras.get("description"):
+            result["vivino_description"] = extras["description"]
     except Exception as exc:
         result["notes"] += f" metric_fetch_error={exc}"
 

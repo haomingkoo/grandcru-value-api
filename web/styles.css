@@ -1036,12 +1036,39 @@ h2 {
   line-height: 1.55;
 }
 
+.wine-desc {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.5;
+  max-width: 28ch;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .price-stack,
 .rating-stack,
 .score-stack,
 .offer-stack {
   display: grid;
   gap: 6px;
+}
+
+.price-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.price-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  min-width: 5.5ch;
 }
 
 .money {

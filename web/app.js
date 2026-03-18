@@ -1151,6 +1151,7 @@ function renderTable(deals) {
           <td>
             <div class="wine-title">${escapeHtml(deal.wine_name)}</div>
             <div class="wine-subline">${escapeHtml(deal.producer || "Producer unknown")}</div>
+            ${deal.vivino_description ? `<div class="wine-desc">${escapeHtml(deal.vivino_description)}</div>` : ""}
             <div class="wine-links">
               ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
               ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
@@ -1172,8 +1173,9 @@ function renderTable(deals) {
           </td>
           <td>
             <div class="price-stack">
-              <span class="money">${formatMoney(deal.price_platinum)}</span>
-              <span class="muted">Grand Cru ${formatMoney(deal.price_grand_cru)}</span>
+              <div class="price-line"><span class="price-label">Platinum</span><span class="money">${formatMoney(deal.price_platinum)}</span></div>
+              <div class="price-line"><span class="price-label muted">Grand Cru</span><span class="muted">${formatMoney(deal.price_grand_cru)}</span></div>
+              ${deal.vivino_price ? `<div class="price-line"><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span></div>` : ""}
             </div>
             <div class="trend-list">
               ${renderTrendChip("P 7d", deal.price_platinum_change_7d, deal.platinum_trend_7d)}
