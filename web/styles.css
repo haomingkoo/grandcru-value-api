@@ -1340,6 +1340,27 @@ h1 {
   gap: 10px;
 }
 
+.style-lead {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  text-align: right;
+}
+
+.style-lead-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.style-lead-name {
+  max-width: 22ch;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
 .family-toggle {
   min-height: 36px;
 }
@@ -1544,6 +1565,11 @@ h1 {
   }
 
   .family-aside {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .style-lead {
     justify-items: start;
     text-align: left;
   }

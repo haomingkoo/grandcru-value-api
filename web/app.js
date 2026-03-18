@@ -634,10 +634,6 @@ function renderRegionGuide(deals) {
   els.regionGuide.innerHTML = countries
     .map(({ country, deals: countryDeals, regions }) => {
       const platinumCheaper = countryDeals.filter((deal) => deal.cheaper_side === "Platinum Cheaper").length
-      const styles = Array.from(new Set(countryDeals.map((deal) => deal.style_family || deal.wine_type).filter(Boolean))).slice(0, 4)
-      const lead = countryDeals
-        .slice()
-        .sort((left, right) => recommendationScore(right) - recommendationScore(left))[0]
       const regionButtons = Array.from(regions.entries())
         .sort((left, right) => right[1].length - left[1].length || left[0].localeCompare(right[0]))
         .map(([region, regionDeals]) => {
@@ -674,15 +670,14 @@ function renderRegionGuide(deals) {
               ${state.country === country && !state.region ? "Showing" : "View all"}
             </button>
           </div>
-          <p class="panel-note">${formatInteger(platinumCheaper)} cheaper on Platinum · ${formatInteger(regions.size)} regions · ${escapeHtml(styles.join(" · ") || "Mixed styles")}</p>
+          <div class="family-stats">
+            <span class="meta-chip">${formatInteger(countryDeals.length)} wines</span>
+            <span class="meta-chip">${formatInteger(platinumCheaper)} cheaper</span>
+            <span class="meta-chip">${formatInteger(regions.size)} regions</span>
+          </div>
           <div class="region-pill-grid">
             ${regionButtons}
           </div>
-          ${
-            lead
-              ? `<div class="country-spotlight"><strong>Best value here:</strong> ${escapeHtml(lead.wine_name)} · ${escapeHtml(resolveVerdict(lead).label)}</div>`
-              : ""
-          }
         </article>
       `
     })
@@ -743,12 +738,11 @@ function renderTopPicks(deals) {
           </div>
           <div class="pick-meta">
             <span class="meta-chip">${escapeHtml(family.styleLabel)}</span>
-            ${family.grapes ? `<span class="meta-chip">${escapeHtml(family.grapes)}</span>` : ""}
             ${family.vintageLabel ? `<span class="meta-chip">${escapeHtml(family.vintageLabel)}</span>` : ""}
           </div>
           <div class="pick-price-row">
             <div class="pick-meta">
-              <span class="meta-chip">Best Platinum price</span>
+              <span class="meta-chip">Platinum</span>
               <strong class="pick-price">${formatMoney(deal.price_platinum)}</strong>
             </div>
             <span class="pill ${gapTone(deal)}">${escapeHtml(gapShortCopy(deal))}</span>
@@ -820,12 +814,13 @@ function renderStyleGroups(deals) {
                 <span class="meta-chip">${formatInteger(group.platinumCheaperCount)} cheaper</span>
               </div>
               <h3>${escapeHtml(group.styleLabel)}</h3>
-              <p class="panel-note">${formatInteger(group.countryCount)} countries · ${escapeHtml(group.topCountries.join(" · ") || "Mixed origins")}</p>
+              <p class="panel-note">${escapeHtml(group.topCountries.join(" · ") || "Mixed origins")}</p>
             </div>
             <div class="family-aside">
-              <div class="family-price">${formatMoney(best.price_platinum)}</div>
-              <div class="cell-subline">Best value pick</div>
-              <span class="pill ${gapTone(best)}">${escapeHtml(gapShortCopy(best))}</span>
+              <div class="style-lead">
+                <span class="style-lead-label">Top pick</span>
+                <strong class="style-lead-name">${escapeHtml(best.wine_name)}</strong>
+              </div>
               <span class="family-toggle meta-chip">
                 <span class="toggle-closed">${escapeHtml(`Show ${Math.min(group.topOffers.length, 3)} picks`)}</span>
                 <span class="toggle-open">Hide picks</span>
