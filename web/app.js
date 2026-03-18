@@ -112,6 +112,8 @@ function initDiscoveryFocus() {
     card.addEventListener("click", (event) => {
       event.preventDefault()
       const show = new Set(card.dataset.focus.split(","))
+      // Always keep offers visible so filter actions can scroll to it
+      show.add("offersSection")
 
       sections.forEach((section) => {
         section.classList.toggle("is-hidden", !show.has(section.id))
@@ -121,27 +123,57 @@ function initDiscoveryFocus() {
       })
 
       hub.classList.add("is-hidden")
-
-      const existing = document.querySelector(".back-to-top")
-      if (existing) existing.remove()
-
-      const backBtn = document.createElement("button")
-      backBtn.className = "back-to-top"
-      backBtn.type = "button"
-      backBtn.textContent = "Back to explore"
-      backBtn.addEventListener("click", () => {
-        sections.forEach((section) => section.classList.remove("is-hidden"))
-        hub.classList.remove("is-hidden")
-        backBtn.remove()
-        window.scrollTo({ top: 0, behavior: "smooth" })
-      })
+      showBackButton()
 
       const firstVisible = document.querySelector(".browse-section:not(.is-hidden)")
-      if (firstVisible) firstVisible.before(backBtn)
-
-      firstVisible.scrollIntoView({ behavior: "smooth", block: "start" })
+      if (firstVisible) firstVisible.scrollIntoView({ behavior: "smooth", block: "start" })
     })
   })
+}
+
+function showBackButton() {
+  const existing = document.querySelector(".back-to-top")
+  if (existing) return
+
+  const backBtn = document.createElement("button")
+  backBtn.className = "back-to-top"
+  backBtn.type = "button"
+  backBtn.textContent = "Back to explore"
+  backBtn.addEventListener("click", () => {
+    exitFocusMode()
+  })
+
+  const firstVisible = document.querySelector(".browse-section:not(.is-hidden)")
+  if (firstVisible) firstVisible.before(backBtn)
+}
+
+function exitFocusMode() {
+  const sections = document.querySelectorAll(".browse-section")
+  const hub = document.querySelector(".discovery-hub")
+  const backBtn = document.querySelector(".back-to-top")
+
+  sections.forEach((section) => section.classList.remove("is-hidden"))
+  if (hub) hub.classList.remove("is-hidden")
+  if (backBtn) backBtn.remove()
+
+  // Clear all filters
+  Object.assign(state, { ...defaultState })
+  mapFocusCountry = ""
+  syncControlsFromState()
+  loadDashboard()
+  window.scrollTo({ top: 0, behavior: "smooth" })
+}
+
+function unfocusAndShowAll() {
+  const sections = document.querySelectorAll(".browse-section")
+  const hub = document.querySelector(".discovery-hub")
+  const backBtn = document.querySelector(".back-to-top")
+  sections.forEach((section) => {
+    section.classList.remove("is-hidden")
+    section.classList.add("visible")
+  })
+  if (hub) hub.classList.remove("is-hidden")
+  if (backBtn) backBtn.remove()
 }
 
 function scrollToOffers() {
@@ -275,6 +307,7 @@ function bindEvents() {
       mapFocusCountry = ""
       state.country = filterButton.dataset.mapCountryFilter || ""
       state.region = ""
+      unfocusAndShowAll()
       syncControlsFromState()
       loadDashboard().then(() => scrollToOffers())
       return
@@ -319,6 +352,7 @@ function bindEvents() {
     }
     state.country = button.dataset.countryPick || ""
     state.region = button.dataset.regionPick || ""
+    unfocusAndShowAll()
     syncControlsFromState()
     loadDashboard().then(() => scrollToOffers())
   })
@@ -329,6 +363,7 @@ function bindEvents() {
       event.preventDefault()
       event.stopPropagation()
       state.styleFamily = filterButton.dataset.styleGroupFilter || ""
+      unfocusAndShowAll()
       syncControlsFromState()
       loadDashboard().then(() => scrollToOffers())
       return
