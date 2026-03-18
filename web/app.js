@@ -1188,7 +1188,8 @@ function renderTable(deals) {
           </td>
           <td>
             <div class="gap-figure ${gapTone(deal)}">${escapeHtml(gapDisplay(deal))}</div>
-            <div class="cell-subline">${escapeHtml(gapNarrative(deal))}</div>
+            <div class="cell-subline">${escapeHtml(gapLabel(deal, "gc"))}</div>
+            ${vivinoGapHtml(deal)}
           </td>
           <td>
             <div class="rating-stack">
@@ -1648,6 +1649,26 @@ function actionLink(url, label, tone = "secondary") {
     return ""
   }
   return `<a class="link-chip ${escapeHtml(tone)}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
+}
+
+function gapLabel(deal, vs) {
+  if (vs === "gc") {
+    if (deal.price_diff_pct == null) return "No Grand Cru match"
+    if (deal.cheaper_side === "Platinum Cheaper") return `vs Grand Cru`
+    if (deal.cheaper_side === "Grand Cru Cheaper") return `vs Grand Cru`
+    return "Same as Grand Cru"
+  }
+  return ""
+}
+
+function vivinoGapHtml(deal) {
+  if (deal.vivino_price == null || deal.price_platinum == null) return ""
+  const diff = deal.price_platinum - deal.vivino_price
+  const pct = Math.abs(diff / deal.vivino_price * 100)
+  if (pct < 1) return `<div class="cell-subline">Market price</div>`
+  const tone = diff < 0 ? "gain" : "loss"
+  const label = diff < 0 ? "below" : "above"
+  return `<div class="gap-figure ${tone}" style="margin-top:6px;font-size:0.9rem">${formatPct(pct, 0)} ${label}</div><div class="cell-subline">vs Vivino market</div>`
 }
 
 function gapTone(deal) {
