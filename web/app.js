@@ -79,6 +79,7 @@ const els = {}
 
 document.addEventListener("DOMContentLoaded", async () => {
   initScrollReveal()
+  initDiscoveryFocus()
   captureElements()
   hydrateStateFromUrl()
   bindEvents()
@@ -100,6 +101,47 @@ function initScrollReveal() {
   )
 
   document.querySelectorAll(".reveal").forEach((el) => observer.observe(el))
+}
+
+function initDiscoveryFocus() {
+  const sections = document.querySelectorAll(".browse-section")
+  const hub = document.querySelector(".discovery-hub")
+  const cards = document.querySelectorAll(".discovery-card[data-focus]")
+
+  cards.forEach((card) => {
+    card.addEventListener("click", (event) => {
+      event.preventDefault()
+      const show = new Set(card.dataset.focus.split(","))
+
+      sections.forEach((section) => {
+        section.classList.toggle("is-hidden", !show.has(section.id))
+        if (show.has(section.id)) {
+          section.classList.add("visible")
+        }
+      })
+
+      hub.classList.add("is-hidden")
+
+      const existing = document.querySelector(".back-to-top")
+      if (existing) existing.remove()
+
+      const backBtn = document.createElement("button")
+      backBtn.className = "back-to-top"
+      backBtn.type = "button"
+      backBtn.textContent = "Back to explore"
+      backBtn.addEventListener("click", () => {
+        sections.forEach((section) => section.classList.remove("is-hidden"))
+        hub.classList.remove("is-hidden")
+        backBtn.remove()
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      })
+
+      const firstVisible = document.querySelector(".browse-section:not(.is-hidden)")
+      if (firstVisible) firstVisible.before(backBtn)
+
+      firstVisible.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  })
 }
 
 function captureElements() {
@@ -725,6 +767,7 @@ function renderRegionGuide(deals) {
 }
 
 function renderBarList(container, items, mapper) {
+  if (!container) return
   if (!items.length) {
     container.innerHTML = `<div class="empty-state">Nothing to chart for the current filter set.</div>`
     return
@@ -1256,9 +1299,18 @@ function groupDealsIntoStyleGroups(deals) {
 
       const wineFamilies = groupDealsIntoFamilies(offers)
       const bestOffer = wineFamilies[0]?.bestOffer || offers[0]
-      const sortedCountries = Array.from(group.countries.entries())
+
+      const familyCountries = new Map()
+      const familyRegions = new Map()
+      wineFamilies.forEach((family) => {
+        const country = family.bestOffer.country || "Unknown"
+        familyCountries.set(country, (familyCountries.get(country) || 0) + 1)
+        const region = family.bestOffer.region || "Unknown region"
+        familyRegions.set(region, (familyRegions.get(region) || 0) + 1)
+      })
+      const sortedCountries = Array.from(familyCountries.entries())
         .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-      const sortedRegions = Array.from(group.regions.entries())
+      const sortedRegions = Array.from(familyRegions.entries())
         .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
 
       return {
@@ -1638,7 +1690,7 @@ async function fetchJson(path) {
 
 function setLoading(isLoading) {
   ;[els.heroStats, els.dealMixChart, els.offeringChart, els.topPicks, els.familyBoard, els.regionGuide].forEach((element) => {
-    element.classList.toggle("loading-sheen", isLoading)
+    if (element) element.classList.toggle("loading-sheen", isLoading)
   })
   if (els.originMap) {
     els.originMap.classList.toggle("loading-sheen", isLoading)

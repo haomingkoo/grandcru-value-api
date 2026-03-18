@@ -34,22 +34,22 @@
     <nav class="discovery-hub reveal" aria-label="Browse wines">
       <p class="eyebrow">How do you want to explore?</p>
       <div class="discovery-grid">
-        <a class="discovery-card reveal reveal-d1" href="#mapSection">
+        <a class="discovery-card reveal reveal-d1" href="#mapSection" data-focus="mapSection,placeSection">
           <span class="discovery-icon">&#127758;</span>
           <strong>By Country</strong>
           <span class="discovery-desc">Tap the map, pick a region</span>
         </a>
-        <a class="discovery-card reveal reveal-d2" href="#styleSection">
+        <a class="discovery-card reveal reveal-d2" href="#styleSection" data-focus="styleSection">
           <span class="discovery-icon">&#127863;</span>
           <strong>By Style</strong>
           <span class="discovery-desc">Red, white, Champagne &amp; more</span>
         </a>
-        <a class="discovery-card reveal reveal-d3" href="#picksSection">
+        <a class="discovery-card reveal reveal-d3" href="#picksSection" data-focus="picksSection">
           <span class="discovery-icon">&#11088;</span>
           <strong>Best Deals</strong>
           <span class="discovery-desc">Top value picks right now</span>
         </a>
-        <a class="discovery-card reveal reveal-d4" href="#offersSection">
+        <a class="discovery-card reveal reveal-d4" href="#offersSection" data-focus="offersSection">
           <span class="discovery-icon">&#128203;</span>
           <strong>See All</strong>
           <span class="discovery-desc">Full table with filters</span>
@@ -57,7 +57,7 @@
       </div>
     </nav>
 
-    <section id="mapSection" class="hero-layout reveal">
+    <section id="mapSection" class="browse-section hero-layout reveal">
       <article class="panel map-panel">
         <div class="panel-heading">
           <div>
@@ -92,19 +92,10 @@
           <div id="dealMixChart" class="bar-list"></div>
         </section>
 
-        <section class="panel">
-          <div class="split-heading">
-            <div>
-              <p class="eyebrow">Formats</p>
-              <h2>Offer Types</h2>
-            </div>
-          </div>
-          <div id="offeringChart" class="bar-list"></div>
-        </section>
       </aside>
     </section>
 
-    <section id="picksSection" class="panel picks-panel reveal">
+    <section id="picksSection" class="browse-section panel picks-panel reveal">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Top Picks</p>
@@ -115,7 +106,7 @@
       <div id="topPicks" class="pick-grid"></div>
     </section>
 
-    <section class="panel explorer-panel reveal">
+    <section id="placeSection" class="browse-section panel explorer-panel reveal">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Browse By Place</p>
@@ -126,7 +117,7 @@
       <div id="regionGuide" class="country-grid"></div>
     </section>
 
-    <section id="styleSection" class="panel family-panel reveal">
+    <section id="styleSection" class="browse-section panel family-panel reveal">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Browse By Style</p>
@@ -137,7 +128,7 @@
       <div id="familyBoard" class="family-grid"></div>
     </section>
 
-    <section id="offersSection" class="panel table-panel reveal">
+    <section id="offersSection" class="browse-section panel table-panel">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">All Offers</p>
