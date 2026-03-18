@@ -236,6 +236,28 @@ function bindEvents() {
     loadDashboard()
   })
 
+  els.familyBoard.addEventListener("click", (event) => {
+    const filterButton = event.target.closest("[data-style-group-filter]")
+    if (filterButton) {
+      event.preventDefault()
+      event.stopPropagation()
+      state.styleFamily = filterButton.dataset.styleGroupFilter || ""
+      syncControlsFromState()
+      loadDashboard()
+      return
+    }
+
+    const clearButton = event.target.closest("[data-style-group-clear]")
+    if (!clearButton) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    state.styleFamily = ""
+    syncControlsFromState()
+    loadDashboard()
+  })
+
   els.sortButtons.forEach((button) => {
     button.addEventListener("click", () => {
       const sortBy = button.dataset.sort
@@ -284,7 +306,7 @@ async function loadDashboard() {
     renderCountryQuickFilters(stats.countries || [])
     renderStyleQuickFilters(stats.style_families || [])
     renderRegionGuide(deals)
-    renderWineFamilies(deals)
+    renderStyleGroups(deals)
     renderTopPicks(deals)
     renderMap(mapPoints)
     renderTable(deals)
@@ -433,9 +455,9 @@ function syncSortButtons() {
 }
 
 function renderResultsMeta(deals) {
-  const familyCount = groupDealsIntoFamilies(deals).length
+  const wineCount = groupDealsIntoFamilies(deals).length
   const comparableCopy = state.comparableOnly ? "comparable" : "visible"
-  els.resultsMeta.textContent = `${familyCount} families · ${deals.length} ${comparableCopy} offers - ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
+  els.resultsMeta.textContent = `${wineCount} wines · ${deals.length} ${comparableCopy} offers - ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
 }
 
 function renderHeroStats(deals, mapPoints) {
@@ -658,7 +680,7 @@ function renderRegionGuide(deals) {
           </div>
           ${
             lead
-              ? `<div class="country-spotlight"><strong>Top pick here:</strong> ${escapeHtml(lead.wine_name)} · ${escapeHtml(resolveVerdict(lead).label)}</div>`
+              ? `<div class="country-spotlight"><strong>Best value here:</strong> ${escapeHtml(lead.wine_name)} · ${escapeHtml(resolveVerdict(lead).label)}</div>`
               : ""
           }
         </article>
@@ -742,32 +764,31 @@ function renderTopPicks(deals) {
     .join("")
 }
 
-function renderWineFamilies(deals) {
-  const families = groupDealsIntoFamilies(deals)
+function renderStyleGroups(deals) {
+  const groups = groupDealsIntoStyleGroups(deals)
 
-  if (!families.length) {
-    els.familyBoard.innerHTML = `<div class="empty-state">No wine families match the current filter combination.</div>`
+  if (!groups.length) {
+    els.familyBoard.innerHTML = `<div class="empty-state">No style groups match the current filter combination.</div>`
     return
   }
 
-  els.familyBoard.innerHTML = families
-    .map((family) => {
-      const best = family.bestOffer
-      const verdict = resolveVerdict(best)
-      const offerRows = family.offers
+  els.familyBoard.innerHTML = groups
+    .map((group) => {
+      const best = group.bestOffer
+      const topRows = group.topOffers
         .map((offer) => {
           const offerVerdict = resolveVerdict(offer)
           return `
             <article class="offer-variant">
               <div class="offer-variant-head">
                 <div>
-                  <strong>${escapeHtml(offer.offering_type || "Format")}</strong>
-                  <div class="cell-subline">${escapeHtml(volumeQuantityCopy(offer))}</div>
+                  <strong>${escapeHtml(offer.wine_name)}</strong>
+                  <div class="cell-subline">${escapeHtml(familyOriginLine(offer))}</div>
                 </div>
                 ${renderInlineRatingBadge(offer)}
               </div>
               <div class="offer-variant-metrics">
-                <span class="pill ghost">Platinum ${formatMoney(offer.price_platinum)}</span>
+                <span class="pill ghost">${formatMoney(offer.price_platinum)}</span>
                 <span class="pill ${gapTone(offer)}">${escapeHtml(gapShortCopy(offer))}</span>
                 <span class="meta-chip">${escapeHtml(compactVerdictLabel(offerVerdict.label))}</span>
               </div>
@@ -781,33 +802,43 @@ function renderWineFamilies(deals) {
         })
         .join("")
 
+      const regionChips = group.topRegions
+        .map((item) => `<span class="meta-chip">${escapeHtml(item.label)} ${formatInteger(item.count)}</span>`)
+        .join("")
+
+      const actionButton = state.styleFamily === group.styleLabel
+        ? `<button class="link-chip secondary is-compact" type="button" data-style-group-clear="true">Show all styles</button>`
+        : `<button class="link-chip primary is-compact" type="button" data-style-group-filter="${escapeHtml(group.styleLabel)}">Filter ${escapeHtml(group.styleLabel)}</button>`
+
       return `
         <details class="family-card">
           <summary class="family-summary">
             <div class="family-copy">
               <div class="pick-meta">
-                <span class="verdict-chip ${verdict.tone}">${escapeHtml(compactVerdictLabel(verdict.label))}</span>
-                <span class="meta-chip">${escapeHtml(family.styleLabel)}</span>
-                ${family.grapes ? `<span class="meta-chip">${escapeHtml(family.grapes)}</span>` : ""}
-                ${family.vintageLabel ? `<span class="meta-chip">${escapeHtml(family.vintageLabel)}</span>` : ""}
+                <span class="verdict-chip calm">${escapeHtml(group.styleLabel)}</span>
+                <span class="meta-chip">${formatInteger(group.wineCount)} wines</span>
+                <span class="meta-chip">${formatInteger(group.platinumCheaperCount)} cheaper</span>
               </div>
-              <h3>${escapeHtml(family.title)}</h3>
-              <p class="panel-note">${escapeHtml(familyOriginLine(family))}</p>
+              <h3>${escapeHtml(group.styleLabel)}</h3>
+              <p class="panel-note">${formatInteger(group.countryCount)} countries · ${escapeHtml(group.topCountries.join(" · ") || "Mixed origins")}</p>
             </div>
             <div class="family-aside">
-              ${renderRatingBadge(best)}
               <div class="family-price">${formatMoney(best.price_platinum)}</div>
-              <div class="cell-subline">Best Platinum price</div>
+              <div class="cell-subline">Best value pick</div>
               <span class="pill ${gapTone(best)}">${escapeHtml(gapShortCopy(best))}</span>
               <span class="family-toggle meta-chip">
-                <span class="toggle-closed">${escapeHtml(`Show ${formatFormatCount(family.offers.length)}`)}</span>
-                <span class="toggle-open">Hide formats</span>
+                <span class="toggle-closed">${escapeHtml(`Show ${Math.min(group.topOffers.length, 3)} picks`)}</span>
+                <span class="toggle-open">Hide picks</span>
               </span>
+              ${actionButton}
             </div>
           </summary>
           <div class="family-body">
+            <div class="family-stats">
+              ${regionChips}
+            </div>
             <div class="offer-variant-grid">
-              ${offerRows}
+              ${topRows}
             </div>
           </div>
         </details>
@@ -1147,6 +1178,74 @@ function groupDealsIntoFamilies(deals) {
       }
     })
     .sort((left, right) => right.familyScore - left.familyScore || left.title.localeCompare(right.title))
+}
+
+function groupDealsIntoStyleGroups(deals) {
+  const preferredOrder = ["Red", "White", "Champagne", "Sparkling", "Rose", "Sweet / Dessert", "Orange", "Unclassified"]
+  const order = new Map(preferredOrder.map((value, index) => [value, index]))
+  const groups = new Map()
+
+  deals.forEach((deal) => {
+    const styleLabel = deal.style_family || deal.wine_type || "Unclassified"
+    if (!groups.has(styleLabel)) {
+      groups.set(styleLabel, {
+        styleLabel,
+        offers: [],
+        countries: new Map(),
+        regions: new Map(),
+      })
+    }
+
+    const bucket = groups.get(styleLabel)
+    bucket.offers.push(deal)
+
+    const country = deal.country || "Unknown"
+    bucket.countries.set(country, (bucket.countries.get(country) || 0) + 1)
+
+    const region = deal.region || "Unknown region"
+    bucket.regions.set(region, (bucket.regions.get(region) || 0) + 1)
+  })
+
+  return Array.from(groups.values())
+    .map((group) => {
+      const offers = group.offers
+        .slice()
+        .sort((left, right) => {
+          return (
+            recommendationScore(right) - recommendationScore(left) ||
+            compareNumbersAsc(left.price_platinum, right.price_platinum) ||
+            compareNumbersDesc(left.vivino_rating, right.vivino_rating) ||
+            left.wine_name.localeCompare(right.wine_name)
+          )
+        })
+
+      const wineFamilies = groupDealsIntoFamilies(offers)
+      const bestOffer = wineFamilies[0]?.bestOffer || offers[0]
+      const sortedCountries = Array.from(group.countries.entries())
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      const sortedRegions = Array.from(group.regions.entries())
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+
+      return {
+        styleLabel: group.styleLabel,
+        offers,
+        bestOffer,
+        wineCount: wineFamilies.length,
+        topOffers: wineFamilies.slice(0, 3).map((family) => family.bestOffer),
+        platinumCheaperCount: wineFamilies.filter((family) => family.offers.some((offer) => offer.cheaper_side === "Platinum Cheaper")).length,
+        countryCount: sortedCountries.length,
+        topCountries: sortedCountries.slice(0, 3).map(([label]) => label),
+        topRegions: sortedRegions.slice(0, 4).map(([label, count]) => ({ label, count })),
+      }
+    })
+    .sort((left, right) => {
+      const leftRank = order.has(left.styleLabel) ? order.get(left.styleLabel) : preferredOrder.length
+      const rightRank = order.has(right.styleLabel) ? order.get(right.styleLabel) : preferredOrder.length
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank
+      }
+      return right.wineCount - left.wineCount || left.styleLabel.localeCompare(right.styleLabel)
+    })
 }
 
 function describeWineFamily(deal) {
