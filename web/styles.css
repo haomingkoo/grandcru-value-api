@@ -685,6 +685,102 @@ h2 {
   color: var(--ink);
 }
 
+.family-panel {
+  padding: 22px;
+}
+
+.family-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.family-card {
+  border: 1px solid rgba(23, 34, 37, 0.08);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(124, 41, 66, 0.08), transparent 34%),
+    linear-gradient(165deg, rgba(255, 253, 248, 0.98), rgba(244, 236, 223, 0.94));
+  overflow: hidden;
+}
+
+.family-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto;
+  gap: 18px;
+  padding: 20px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.family-summary::-webkit-details-marker {
+  display: none;
+}
+
+.family-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.family-copy h3 {
+  font-size: 1.34rem;
+}
+
+.family-aside {
+  display: grid;
+  align-content: start;
+  justify-items: end;
+  gap: 8px;
+  text-align: right;
+}
+
+.family-price {
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.family-pill-row,
+.family-stats,
+.offer-variant-metrics,
+.offer-variant-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.family-body {
+  display: grid;
+  gap: 14px;
+  padding: 0 20px 20px;
+}
+
+.offer-variant-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.offer-variant {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 252, 246, 0.82);
+  border: 1px solid rgba(23, 34, 37, 0.08);
+}
+
+.offer-variant-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.offer-variant-head strong {
+  font-size: 0.98rem;
+}
+
 .field {
   display: grid;
   gap: 8px;
@@ -949,7 +1045,8 @@ h2 {
   }
 
   .pick-grid,
-  .controls-grid {
+  .controls-grid,
+  .family-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -975,7 +1072,8 @@ h2 {
   .controls-grid,
   .stat-grid,
   .quick-filter-layout,
-  .country-grid {
+  .country-grid,
+  .family-grid {
     grid-template-columns: 1fr;
   }
 
@@ -983,9 +1081,19 @@ h2 {
     min-height: 320px;
   }
 
+  .family-summary,
   .country-card-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .family-summary {
+    display: flex;
+  }
+
+  .family-aside {
+    justify-items: start;
+    text-align: left;
   }
 
   .map-overlay {

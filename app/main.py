@@ -57,6 +57,7 @@ WEB_DIR = ROOT_DIR / "web"
 
 DEAL_EXTRA_COLUMNS = (
     ("producer", "VARCHAR(255)"),
+    ("label_name", "VARCHAR(255)"),
     ("country", "VARCHAR(128)"),
     ("region", "VARCHAR(128)"),
     ("wine_type", "VARCHAR(64)"),

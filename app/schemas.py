@@ -10,6 +10,7 @@ class DealOut(BaseModel):
     quantity: int | None = None
     volume: str | None = None
     producer: str | None = None
+    label_name: str | None = None
     country: str | None = None
     region: str | None = None
     wine_type: str | None = None

@@ -32,6 +32,7 @@ class WineDeal(Base):
     vivino_num_ratings: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vivino_match_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     producer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    label_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     country: Mapped[str | None] = mapped_column(String(128), nullable=True)
     region: Mapped[str | None] = mapped_column(String(128), nullable=True)
     wine_type: Mapped[str | None] = mapped_column(String(64), nullable=True)

@@ -13,6 +13,7 @@ class MetadataAndInsightsTests(unittest.TestCase):
             volume="750ml",
         )
 
+        self.assertEqual(metadata.label_name, "Gattinara Vigneto Molsino")
         self.assertEqual(metadata.country, "Italy")
         self.assertEqual(metadata.region, "Piedmont")
         self.assertEqual(metadata.grapes, "Nebbiolo")

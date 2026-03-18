@@ -40,6 +40,7 @@ _ALLOWED_TABLES = {"wine_deals", "wine_deal_snapshots", "ingestion_runs"}
 _ALLOWED_COLUMNS = {
     "vivino_match_method",
     "producer",
+    "label_name",
     "country",
     "region",
     "wine_type",

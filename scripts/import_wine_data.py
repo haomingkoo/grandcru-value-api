@@ -32,6 +32,7 @@ logger = logging.getLogger("grandcru.import")
 
 DEAL_EXTRA_COLUMNS = (
     ("producer", "VARCHAR(255)"),
+    ("label_name", "VARCHAR(255)"),
     ("country", "VARCHAR(128)"),
     ("region", "VARCHAR(128)"),
     ("wine_type", "VARCHAR(64)"),
@@ -480,6 +481,7 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 "vivino_num_ratings": vivino_num_ratings,
                 "vivino_match_method": match_method,
                 "producer": metadata.producer,
+                "label_name": metadata.label_name,
                 "country": metadata.country,
                 "region": metadata.region,
                 "wine_type": metadata.wine_type,

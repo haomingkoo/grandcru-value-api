@@ -19,6 +19,7 @@ _COLOR_MAP = {
 @dataclass(frozen=True)
 class DerivedWineMetadata:
     producer: str | None = None
+    label_name: str | None = None
     country: str | None = None
     region: str | None = None
     wine_type: str | None = None
@@ -361,6 +362,7 @@ def derive_wine_metadata(
 
     return DerivedWineMetadata(
         producer=producer,
+        label_name=label,
         country=country,
         region=region,
         wine_type=wine_type,

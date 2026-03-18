@@ -73,6 +73,7 @@ function captureElements() {
   els.topPicks = document.getElementById("topPicks")
   els.resultsMeta = document.getElementById("resultsMeta")
   els.activeFilters = document.getElementById("activeFilters")
+  els.familyBoard = document.getElementById("familyBoard")
   els.dealTableBody = document.getElementById("dealTableBody")
   els.markerLayer = document.getElementById("markerLayer")
   els.mapSelection = document.getElementById("mapSelection")
@@ -249,6 +250,7 @@ async function loadDashboard() {
     renderCountryQuickFilters(stats.countries || [])
     renderStyleQuickFilters(stats.style_families || [])
     renderRegionGuide(deals)
+    renderWineFamilies(deals)
     renderTopPicks(deals)
     renderMap(mapPoints)
     renderTable(deals)
@@ -397,8 +399,9 @@ function syncSortButtons() {
 }
 
 function renderResultsMeta(deals) {
+  const familyCount = groupDealsIntoFamilies(deals).length
   const comparableCopy = state.comparableOnly ? "comparable" : "visible"
-  els.resultsMeta.textContent = `${deals.length} ${comparableCopy} wines in view - ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
+  els.resultsMeta.textContent = `${familyCount} families · ${deals.length} ${comparableCopy} offers - ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
 }
 
 function renderHeroStats(deals, mapPoints) {
@@ -658,9 +661,9 @@ function renderBarList(container, items, mapper) {
 }
 
 function renderTopPicks(deals) {
-  const picks = deals
+  const picks = groupDealsIntoFamilies(deals)
     .slice()
-    .sort((left, right) => recommendationScore(right) - recommendationScore(left))
+    .sort((left, right) => right.familyScore - left.familyScore || left.title.localeCompare(right.title))
     .slice(0, 3)
 
   if (!picks.length) {
@@ -669,25 +672,28 @@ function renderTopPicks(deals) {
   }
 
   els.topPicks.innerHTML = picks
-    .map((deal) => {
+    .map((family) => {
+      const deal = family.bestOffer
       const verdict = resolveVerdict(deal)
-      const styleLabel = deal.style_family || deal.wine_type || "Unclassified"
+      const styleLabel = family.styleLabel
       return `
         <article class="pick-card">
           <div>
             <div class="pick-meta">
               <span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>
               <span class="meta-chip">${escapeHtml(styleLabel)}</span>
+              <span class="meta-chip">${formatInteger(family.offers.length)} offer${family.offers.length > 1 ? "s" : ""}</span>
+              ${family.vintageLabel ? `<span class="meta-chip">Vintages ${escapeHtml(family.vintageLabel)}</span>` : ""}
               ${deal.metadata_confidence ? `<span class="meta-chip">Metadata ${escapeHtml(deal.metadata_confidence)}</span>` : ""}
             </div>
-            <h3>${escapeHtml(deal.wine_name)}</h3>
-            <p class="panel-note">${escapeHtml(deal.region || "Region unknown")}, ${escapeHtml(deal.country || "Country unknown")}</p>
+            <h3>${escapeHtml(family.title)}</h3>
+            <p class="panel-note">${escapeHtml(family.region || "Region unknown")}, ${escapeHtml(family.country || "Country unknown")}</p>
           </div>
           <div class="pick-meta">
-            <span class="pill ghost">Platinum ${formatMoney(deal.price_platinum)}</span>
+            <span class="pill ghost">Best offer ${formatMoney(deal.price_platinum)}</span>
             <span class="pill ${gapTone(deal)}">${escapeHtml(gapNarrative(deal))}</span>
           </div>
-          <p>${escapeHtml(grapeNarrative(deal))}</p>
+          <p>${escapeHtml(familyFamilyNarrative(family))}</p>
           <p class="cell-subline">${escapeHtml(metadataNarrative(deal))}</p>
           <div class="pick-meta">
             ${renderTrendChip("P 7d", deal.price_platinum_change_7d, deal.platinum_trend_7d)}
@@ -699,6 +705,83 @@ function renderTopPicks(deals) {
             ${actionLink(deal.vivino_url, "Vivino")}
           </div>
         </article>
+      `
+    })
+    .join("")
+}
+
+function renderWineFamilies(deals) {
+  const families = groupDealsIntoFamilies(deals)
+
+  if (!families.length) {
+    els.familyBoard.innerHTML = `<div class="empty-state">No wine families match the current filter combination.</div>`
+    return
+  }
+
+  els.familyBoard.innerHTML = families
+    .map((family) => {
+      const best = family.bestOffer
+      const verdict = resolveVerdict(best)
+      const offerRows = family.offers
+        .map((offer) => {
+          const offerVerdict = resolveVerdict(offer)
+          return `
+            <article class="offer-variant">
+              <div class="offer-variant-head">
+                <div>
+                  <strong>${escapeHtml(offer.offering_type || "Unknown offer")}</strong>
+                  <div class="cell-subline">${escapeHtml(volumeQuantityCopy(offer))}</div>
+                </div>
+                <span class="verdict-chip ${offerVerdict.tone}">${escapeHtml(offerVerdict.label)}</span>
+              </div>
+              <div class="offer-variant-metrics">
+                <span class="pill ghost">Platinum ${formatMoney(offer.price_platinum)}</span>
+                <span class="pill ${gapTone(offer)}">${escapeHtml(gapNarrative(offer))}</span>
+                ${offer.vivino_rating != null ? `<span class="meta-chip">Vivino ${escapeHtml(offer.vivino_rating.toFixed(1))}</span>` : ""}
+              </div>
+              <div class="offer-variant-links">
+                ${actionLink(offer.platinum_url, "Platinum")}
+                ${actionLink(offer.grand_cru_url, "Grand Cru")}
+                ${actionLink(offer.vivino_url, "Vivino")}
+              </div>
+            </article>
+          `
+        })
+        .join("")
+
+      return `
+        <details class="family-card"${family.offers.length === 1 ? " open" : ""}>
+          <summary class="family-summary">
+            <div class="family-copy">
+              <div class="pick-meta">
+                <span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>
+                <span class="meta-chip">${escapeHtml(family.styleLabel)}</span>
+                <span class="meta-chip">${formatInteger(family.offers.length)} offer${family.offers.length > 1 ? "s" : ""}</span>
+                ${family.vintageLabel ? `<span class="meta-chip">Vintages ${escapeHtml(family.vintageLabel)}</span>` : ""}
+              </div>
+              <h3>${escapeHtml(family.title)}</h3>
+              <p class="panel-note">${escapeHtml(family.region || "Region unknown")}, ${escapeHtml(family.country || "Country unknown")} · ${escapeHtml(family.grapes || "Grape blend unknown")}</p>
+              <p class="cell-subline">${escapeHtml(familyFamilyNarrative(family))}</p>
+            </div>
+            <div class="family-aside">
+              <div class="family-price">${formatMoney(best.price_platinum)}</div>
+              <div class="cell-subline">Best current Platinum offer</div>
+              <div class="family-pill-row">
+                <span class="pill ${gapTone(best)}">${escapeHtml(gapNarrative(best))}</span>
+              </div>
+            </div>
+          </summary>
+          <div class="family-body">
+            <div class="family-stats">
+              <span class="meta-chip">${formatInteger(family.platinumCheaperCount)} cheaper on Platinum</span>
+              <span class="meta-chip">${formatInteger(family.comparableCount)} comparable</span>
+              ${family.priceBand ? `<span class="meta-chip">Price band ${escapeHtml(family.priceBand)}</span>` : ""}
+            </div>
+            <div class="offer-variant-grid">
+              ${offerRows}
+            </div>
+          </div>
+        </details>
       `
     })
     .join("")
@@ -854,6 +937,149 @@ function renderTable(deals) {
     .join("")
 }
 
+function groupDealsIntoFamilies(deals) {
+  const families = new Map()
+
+  deals.forEach((deal) => {
+    const descriptor = describeWineFamily(deal)
+    if (!families.has(descriptor.key)) {
+      families.set(descriptor.key, {
+        ...descriptor,
+        offers: [],
+      })
+    }
+    families.get(descriptor.key).offers.push(deal)
+  })
+
+  return Array.from(families.values())
+    .map((family) => {
+      const offers = family.offers
+        .slice()
+        .sort((left, right) => {
+          return (
+            recommendationScore(right) - recommendationScore(left) ||
+            compareNumbersAsc(left.price_platinum, right.price_platinum) ||
+            compareNumbersDesc(left.price_diff_pct_abs, right.price_diff_pct_abs) ||
+            (left.offering_type || "").localeCompare(right.offering_type || "")
+          )
+        })
+      const bestOffer = offers[0]
+      const platinumCheaperCount = offers.filter((offer) => offer.cheaper_side === "Platinum Cheaper").length
+      const comparableCount = offers.filter((offer) => offer.has_competitor_match).length
+      const prices = offers.map((offer) => offer.price_platinum).filter((value) => typeof value === "number")
+      const vintages = Array.from(new Set(offers.map((offer) => formatVintage(offer.vintage)))).filter(Boolean)
+      const priceBand = prices.length
+        ? `${formatMoney(Math.min(...prices))}${prices.length > 1 && Math.min(...prices) !== Math.max(...prices) ? ` to ${formatMoney(Math.max(...prices))}` : ""}`
+        : null
+
+      return {
+        ...family,
+        offers,
+        bestOffer,
+        platinumCheaperCount,
+        comparableCount,
+        priceBand,
+        vintageLabel: vintages.join(", "),
+        familyScore: recommendationScore(bestOffer) + Math.min(offers.length, 4),
+      }
+    })
+    .sort((left, right) => right.familyScore - left.familyScore || left.title.localeCompare(right.title))
+}
+
+function describeWineFamily(deal) {
+  const producer = (deal.producer || "").trim()
+  const labelName = (deal.label_name || fallbackLabelName(deal)).trim()
+  const country = deal.country || ""
+  const region = deal.region || ""
+  const styleLabel = deal.style_family || deal.wine_type || "Unclassified"
+  const title = [producer, labelName].filter(Boolean).join(" ").trim() || deal.wine_name
+  const key = [
+    producer.toLowerCase(),
+    labelName.toLowerCase(),
+    region.toLowerCase(),
+    country.toLowerCase(),
+  ].join("|")
+
+  return {
+    key,
+    title,
+    producer,
+    labelName,
+    country,
+    region,
+    styleLabel,
+    grapes: deal.grapes || null,
+  }
+}
+
+function fallbackLabelName(deal) {
+  const parts = String(deal.wine_name || "")
+    .split(" - ")
+    .map((part) => part.trim())
+    .filter(Boolean)
+  const colorIndex = parts.findIndex((part) => ["red", "white", "rose", "orange"].includes(part.toLowerCase()))
+  const body = colorIndex >= 0 ? parts.slice(0, colorIndex) : parts
+  if (!body.length) {
+    return deal.wine_name || "Wine"
+  }
+
+  const trimmedFirst = body[0].replace(/^(?:19|20)\d{2}\s+|^nv\s+/i, "").trim()
+  const normalized = [trimmedFirst, ...body.slice(1)]
+  if (normalized.length >= 2) {
+    return normalized[normalized.length - 1]
+  }
+  if (deal.producer && normalized[0].toLowerCase() === String(deal.producer).trim().toLowerCase()) {
+    return deal.wine_name || "Wine"
+  }
+  return normalized[0]
+}
+
+function familyFamilyNarrative(family) {
+  const best = family.bestOffer
+  const offerCopy = family.offers.length === 1 ? "single offer" : `${family.offers.length} offer variants`
+  const ratingCopy = best.vivino_rating != null
+    ? `${best.vivino_rating.toFixed(1)} on Vivino${best.vivino_num_ratings ? ` from ${formatInteger(best.vivino_num_ratings)} ratings` : ""}`
+    : "quality signal still thin"
+  const grapeCopy = family.grapes ? family.grapes.toLowerCase() : "grape identity still fuzzy"
+  const vintageCopy = family.vintageLabel ? `vintages ${family.vintageLabel}` : "vintage mix unknown"
+  return `${offerCopy} · ${vintageCopy} · ${family.styleLabel.toLowerCase()} family · ${grapeCopy} · ${ratingCopy}.`
+}
+
+function volumeQuantityCopy(offer) {
+  const quantity = Number(offer.quantity || 1)
+  return `${formatVintage(offer.vintage)} · ${offer.volume || "-"} · ${quantity} bottle${quantity > 1 ? "s" : ""}`
+}
+
+function formatVintage(vintage) {
+  return vintage || "NV"
+}
+
+function compareNumbersAsc(left, right) {
+  const leftIsNumber = typeof left === "number"
+  const rightIsNumber = typeof right === "number"
+  if (leftIsNumber && rightIsNumber) {
+    if (left === right) {
+      return 0
+    }
+    return left < right ? -1 : 1
+  }
+  if (leftIsNumber) {
+    return -1
+  }
+  if (rightIsNumber) {
+    return 1
+  }
+  return 0
+}
+
+function compareNumbersDesc(left, right) {
+  const result = compareNumbersAsc(right, left)
+  if (result === 0) {
+    return 0
+  }
+  return result
+}
+
 function renderActiveFilters() {
   const chips = []
 
@@ -891,6 +1117,8 @@ function renderErrorState(error) {
   const message = error instanceof Error ? error.message : "The dashboard could not load."
   els.resultsMeta.textContent = "Something broke while loading the board."
   els.topPicks.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`
+  els.familyBoard.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`
+  els.regionGuide.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`
   els.dealTableBody.innerHTML = `
     <tr>
       <td colspan="8">
@@ -1112,7 +1340,7 @@ async function fetchJson(path) {
 }
 
 function setLoading(isLoading) {
-  ;[els.heroStats, els.dealMixChart, els.offeringChart, els.topPicks].forEach((element) => {
+  ;[els.heroStats, els.dealMixChart, els.offeringChart, els.topPicks, els.familyBoard, els.regionGuide].forEach((element) => {
     element.classList.toggle("loading-sheen", isLoading)
   })
   els.dealTableBody.classList.toggle("loading-sheen", isLoading)
