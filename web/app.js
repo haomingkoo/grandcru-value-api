@@ -183,12 +183,22 @@ function bindEvents() {
   })
 
   els.mapSelection.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-map-country-filter]")
-    if (!button) {
+    const filterButton = event.target.closest("[data-map-country-filter]")
+    if (filterButton) {
+      mapFocusCountry = ""
+      state.country = filterButton.dataset.mapCountryFilter || ""
+      state.region = ""
+      syncControlsFromState()
+      loadDashboard()
+      return
+    }
+
+    const clearButton = event.target.closest("[data-map-clear-filter]")
+    if (!clearButton) {
       return
     }
     mapFocusCountry = ""
-    state.country = button.dataset.mapCountryFilter || ""
+    state.country = ""
     state.region = ""
     syncControlsFromState()
     loadDashboard()
@@ -648,7 +658,7 @@ function renderRegionGuide(deals) {
           </div>
           ${
             lead
-              ? `<div class="country-spotlight"><strong>Lead bottle:</strong> ${escapeHtml(lead.wine_name)} · ${escapeHtml(resolveVerdict(lead).label)}</div>`
+              ? `<div class="country-spotlight"><strong>Top pick here:</strong> ${escapeHtml(lead.wine_name)} · ${escapeHtml(resolveVerdict(lead).label)}</div>`
               : ""
           }
         </article>
@@ -716,7 +726,7 @@ function renderTopPicks(deals) {
           </div>
           <div class="pick-price-row">
             <div class="pick-meta">
-              <span class="meta-chip">Best Platinum</span>
+              <span class="meta-chip">Best Platinum price</span>
               <strong class="pick-price">${formatMoney(deal.price_platinum)}</strong>
             </div>
             <span class="pill ${gapTone(deal)}">${escapeHtml(gapShortCopy(deal))}</span>
@@ -787,10 +797,10 @@ function renderWineFamilies(deals) {
             <div class="family-aside">
               ${renderRatingBadge(best)}
               <div class="family-price">${formatMoney(best.price_platinum)}</div>
-              <div class="cell-subline">Best Platinum</div>
+              <div class="cell-subline">Best Platinum price</div>
               <span class="pill ${gapTone(best)}">${escapeHtml(gapShortCopy(best))}</span>
               <span class="family-toggle meta-chip">
-                <span class="toggle-closed">${escapeHtml(`Open ${formatFormatCount(family.offers.length)}`)}</span>
+                <span class="toggle-closed">${escapeHtml(`Show ${formatFormatCount(family.offers.length)}`)}</span>
                 <span class="toggle-open">Hide formats</span>
               </span>
             </div>
@@ -868,14 +878,20 @@ function renderMapSelection(point) {
   }
 
   const avgGapCopy = point.average_price_diff_pct === null ? null : `${formatSignedPct(point.average_price_diff_pct, 1)} avg gap`
-  const isFiltered = state.country === point.country && !state.region
+  const isCountryFiltered = state.country === point.country && !state.region
+  const hasOriginFilter = Boolean(state.country || state.region)
 
   els.mapSelection.innerHTML = `
     <div class="map-selection-head">
       <h3>${escapeHtml(point.country)}</h3>
       ${
-        isFiltered
-          ? `<span class="meta-chip">Filtered</span>`
+        hasOriginFilter
+          ? `
+            <div class="map-selection-actions">
+              ${isCountryFiltered ? `<span class="meta-chip">Filtered</span>` : ""}
+              <button class="link-chip secondary is-compact" type="button" data-map-clear-filter="true">Show all countries</button>
+            </div>
+          `
           : `<button class="link-chip primary is-compact" type="button" data-map-country-filter="${escapeHtml(point.country)}">Filter country</button>`
       }
     </div>
