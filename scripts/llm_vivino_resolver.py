@@ -169,8 +169,24 @@ For vivino_query, use just: producer + wine name + vintage. Drop color, bottle s
 # ── Vivino fetching ────────────────────────────────────────────────────
 
 
+def _force_english_vivino_url(url: str) -> str:
+    """Rewrite Vivino URLs to use the /en/ locale."""
+    return re.sub(
+        r"(vivino\.com/)([a-z]{2})(/)",
+        r"\1US/en/",
+        url.replace("/sv/", "/US/en/")
+            .replace("/de/", "/US/en/")
+            .replace("/fr/", "/US/en/")
+            .replace("/it/", "/US/en/")
+            .replace("/es/", "/US/en/")
+            .replace("/ja/", "/US/en/")
+            .replace("/zh/", "/US/en/"),
+    )
+
+
 def fetch_html(url: str, timeout: int = 20) -> str:
     """Fetch a URL and return HTML content."""
+    url = _force_english_vivino_url(url)
     req = Request(url, headers={
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -240,9 +256,9 @@ def search_vivino_via_brave(query: str, brave_api_key: str) -> str | None:
     for result in (data.get("web") or {}).get("results", []):
         link = (result.get("url") or "").strip()
         if "vivino.com" in link and "/w/" in link:
-            # Clean URL: keep path up to wine ID, strip query params.
+            # Clean URL: keep path up to wine ID, strip query params, force English.
             clean = link.split("?")[0].rstrip("/")
-            return clean
+            return _force_english_vivino_url(clean)
 
     return None
 

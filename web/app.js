@@ -1828,7 +1828,13 @@ function continentColor(country) {
 
 function cleanVivinoDescription(desc) {
   if (!desc) return ""
-  const garbage = ["underage", "forbidden", "page is forbidden", "yikes", "alternative great wines", "Try searching"]
+  const garbage = [
+    "underage", "forbidden", "page is forbidden", "yikes",
+    "alternative great wines", "Try searching",
+    "minderårig", "förbjuden", "fantastisk", "sidan är",
+    "minderjährig", "verboten",
+    "mineur", "interdit",
+  ]
   if (garbage.some((word) => desc.toLowerCase().includes(word.toLowerCase()))) return ""
   if (desc.length < 20) return ""
   return desc
