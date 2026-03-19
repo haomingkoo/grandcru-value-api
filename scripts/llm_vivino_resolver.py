@@ -169,18 +169,19 @@ For vivino_query, use just: producer + wine name + vintage. Drop color, bottle s
 # ── Vivino fetching ────────────────────────────────────────────────────
 
 
+_VIVINO_LOCALE = "SG/en"
+
+
 def _force_english_vivino_url(url: str) -> str:
-    """Rewrite Vivino URLs to use the /en/ locale."""
+    """Rewrite Vivino URLs to use Singapore English locale for SGD prices."""
     return re.sub(
-        r"(vivino\.com/)([a-z]{2})(/)",
-        r"\1US/en/",
-        url.replace("/sv/", "/US/en/")
-            .replace("/de/", "/US/en/")
-            .replace("/fr/", "/US/en/")
-            .replace("/it/", "/US/en/")
-            .replace("/es/", "/US/en/")
-            .replace("/ja/", "/US/en/")
-            .replace("/zh/", "/US/en/"),
+        r"(vivino\.com/)([A-Za-z]{2})/([a-z]{2})/",
+        rf"\1{_VIVINO_LOCALE}/",
+        re.sub(
+            r"(vivino\.com/)([a-z]{2})(/)",
+            rf"\1{_VIVINO_LOCALE}/",
+            url,
+        ),
     )
 
 
