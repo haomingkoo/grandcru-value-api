@@ -216,10 +216,20 @@ def parse_vivino_rating(html: str) -> tuple[str, str]:
 
 
 _DESCRIPTION_RE = re.compile(r'"description"\s*:\s*"([^"]{10,500})"')
-_PRICE_RE = re.compile(r'"price"\s*:\s*"?(?P<price>[\d.]+)"?')
-_OFFERS_PRICE_RE = re.compile(
-    r'"offers"\s*:\s*\{[^}]*"price"\s*:\s*"?(?P<price>[\d.]+)"?',
+
+# Match JSON-LD: "@type":"Offer" ... "price":"XXX" within the same block
+_JSONLD_OFFER_PRICE_RE = re.compile(
+    r'"@type"\s*:\s*"Offer"[^}]*"price"\s*:\s*"?(?P<price>\d+(?:\.\d+)?)"?',
     re.DOTALL,
+)
+# Fallback: "offers": { ... "@type":"Offer" ... "price":"XXX" }
+_OFFERS_BLOCK_PRICE_RE = re.compile(
+    r'"offers"\s*:\s*\{[^}]*"@type"\s*:\s*"Offer"[^}]*"price"\s*:\s*"?(?P<price>\d+(?:\.\d+)?)"?',
+    re.DOTALL,
+)
+# Last resort: look for price near "priceCurrency" (structured data pattern)
+_PRICE_WITH_CURRENCY_RE = re.compile(
+    r'"price"\s*:\s*"?(?P<price>\d+(?:\.\d+)?)"?\s*,\s*"priceCurrency"',
 )
 
 
@@ -231,9 +241,19 @@ def parse_vivino_extras(html: str) -> dict[str, str]:
         desc = m_desc.group(1).replace("\\n", " ").replace("\\u0026", "&").strip()
         if len(desc) > 15:
             extras["description"] = desc[:500]
-    m_price = _OFFERS_PRICE_RE.search(html) or _PRICE_RE.search(html)
+
+    # Try structured data patterns in order of specificity
+    m_price = (
+        _JSONLD_OFFER_PRICE_RE.search(html)
+        or _OFFERS_BLOCK_PRICE_RE.search(html)
+        or _PRICE_WITH_CURRENCY_RE.search(html)
+    )
     if m_price:
-        extras["price"] = m_price.group("price")
+        price_str = m_price.group("price")
+        price_val = float(price_str)
+        # Sanity check: wine prices are typically $5-$50,000
+        if 5 <= price_val <= 50000:
+            extras["price"] = price_str
     return extras
 
 
