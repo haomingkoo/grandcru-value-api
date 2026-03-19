@@ -234,10 +234,23 @@ def parse_vivino_extras(html: str) -> dict[str, str]:
         except _json.JSONDecodeError:
             ld = {}
 
-        # Description from JSON-LD
+        # Description from JSON-LD (often empty on Vivino)
         desc = (ld.get("description") or "").strip()
         if len(desc) > 15:
             extras["description"] = desc[:500]
+
+        # If no description, build one from wine style + facts in the HTML
+        if not extras.get("description"):
+            style_match = re.search(
+                r'"seo_name":"([^"]+)"[^}]*"body":(\d)',
+                html,
+            )
+            style_text = re.search(
+                r'Wine style</[^>]+>[^<]*<[^>]+>([^<]{5,80})<',
+                html,
+            )
+            if style_text:
+                extras["description"] = style_text.group(1).strip()
 
         # Price from offers array — prefer SGD AggregateOffer
         offers = ld.get("offers") or []
