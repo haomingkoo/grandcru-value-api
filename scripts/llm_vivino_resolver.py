@@ -324,6 +324,71 @@ def search_vivino_for_url(query: str, brave_api_key: str = "") -> str | None:
     return None
 
 
+# ── Vivino API ─────────────────────────────────────────────────────────
+
+_WINE_ID_RE = re.compile(r"/w/(\d+)")
+
+
+def extract_wine_id(vivino_url: str) -> str | None:
+    """Extract the numeric wine ID from a Vivino URL."""
+    m = _WINE_ID_RE.search(vivino_url)
+    return m.group(1) if m else None
+
+
+def _vivino_api_get(endpoint: str, wine_id: str = "") -> dict:
+    """Call a Vivino internal API endpoint and return JSON."""
+    req = Request(
+        f"https://www.vivino.com/api/{endpoint}",
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": f"https://www.vivino.com/SG/en/w/{wine_id}" if wine_id else "https://www.vivino.com/",
+        },
+    )
+    with urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def fetch_vivino_tasting_notes(wine_id: str) -> str:
+    """Build a tasting summary from Vivino's tastes + reviews APIs."""
+    parts: list[str] = []
+
+    # Flavor keywords from /api/wines/{id}/tastes
+    try:
+        tastes = _vivino_api_get(f"wines/{wine_id}/tastes", wine_id)
+        flavor_groups = (tastes.get("tastes") or {}).get("flavor") or []
+        keywords: list[str] = []
+        for group in flavor_groups[:4]:
+            for kw in (group.get("primary_keywords") or [])[:2]:
+                name = kw.get("name", "")
+                if name and name not in keywords:
+                    keywords.append(name)
+        if keywords:
+            parts.append(", ".join(keywords[:8]))
+    except Exception:
+        pass
+
+    # Top review from /api/wines/{id}/reviews
+    try:
+        reviews = _vivino_api_get(f"wines/{wine_id}/reviews?per_page=1", wine_id)
+        for review in (reviews.get("reviews") or [])[:1]:
+            note = (review.get("note") or "").strip()
+            # Clean up multi-line notes
+            note = " ".join(note.split())
+            if len(note) > 30:
+                if len(note) > 200:
+                    note = note[:197] + "..."
+                parts.append(note)
+    except Exception:
+        pass
+
+    return ". ".join(parts) if parts else ""
+
+
 # ── Resolution ─────────────────────────────────────────────────────────
 
 
@@ -380,7 +445,7 @@ def resolve_wine(
 
     result["vivino_url"] = vivino_url
 
-    # Step 3: Fetch the Vivino wine page for metrics.
+    # Step 3: Fetch the Vivino wine page for metrics + price.
     time.sleep(sleep_seconds)
     try:
         page_html = fetch_html(vivino_url)
@@ -390,10 +455,19 @@ def resolve_wine(
         extras = parse_vivino_extras(page_html)
         if extras.get("price"):
             result["vivino_price"] = extras["price"]
-        if extras.get("description"):
-            result["vivino_description"] = extras["description"]
     except Exception as exc:
         result["notes"] += f" metric_fetch_error={exc}"
+
+    # Step 4: Fetch tasting notes from Vivino API.
+    wine_id = extract_wine_id(vivino_url)
+    if wine_id:
+        time.sleep(sleep_seconds)
+        try:
+            description = fetch_vivino_tasting_notes(wine_id)
+            if description:
+                result["vivino_description"] = description
+        except Exception as exc:
+            result["notes"] += f" taste_fetch_error={exc}"
 
     return result
 
