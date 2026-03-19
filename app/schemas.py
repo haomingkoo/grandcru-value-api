@@ -48,7 +48,7 @@ class DealOut(BaseModel):
         description="How Vivino metadata was attached: exact, canonical, fuzzy, platinum, or none.",
     )
     deal_score: float = Field(
-        description="0-100 ranking score. Discount contributes up to 60 points, Vivino rating up to 30 points, and rating-count confidence up to 10 points.",
+        description="0-100 ranking score. Retailer discount (vs Grand Cru) up to 30 pts, market discount (vs Vivino) up to 30 pts, rating quality up to 25 pts, confidence up to 10 pts, bonus for beating both up to 5 pts.",
     )
     price_platinum_7d_ago: float | None = None
     price_platinum_change_7d: float | None = None

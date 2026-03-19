@@ -496,7 +496,13 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 "origin_latitude": metadata.origin_latitude,
                 "origin_longitude": metadata.origin_longitude,
                 "origin_precision": metadata.origin_precision,
-                "deal_score": compute_deal_score(price_diff_pct, vivino_rating, vivino_num_ratings),
+                "deal_score": compute_deal_score(
+                    price_diff_pct,
+                    vivino_rating,
+                    vivino_num_ratings,
+                    price_platinum=price_platinum,
+                    vivino_price=parse_float(vivino.get("vivino_price")),
+                ),
             }
             merged_records.append(WineDeal(**deal_payload))
             snapshot_payload = {key: value for key, value in deal_payload.items() if key in SNAPSHOT_FIELDS}
