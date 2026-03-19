@@ -1200,6 +1200,50 @@ h2 {
   animation: shimmer 1.4s infinite;
 }
 
+.methodology {
+  margin-top: 0;
+}
+
+.methodology-body {
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.methodology-body p {
+  margin: 0 0 14px;
+}
+
+.methodology-body strong {
+  color: var(--ink);
+}
+
+.method-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 0.9rem;
+}
+
+.method-table th,
+.method-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.method-table th {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.method-table td:nth-child(2) {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 @keyframes shimmer {
   to {
     transform: translateX(100%);

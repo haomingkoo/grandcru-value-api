@@ -250,6 +250,29 @@
         </table>
       </div>
     </section>
+
+    <footer class="methodology reveal">
+      <details class="filter-drawer">
+        <summary class="filter-drawer-toggle">
+          <span>How the Deal Score works</span>
+        </summary>
+        <div class="filter-drawer-body methodology-body">
+          <p>Each wine is scored <strong>0 &ndash; 100</strong> based on five components:</p>
+          <table class="method-table">
+            <thead><tr><th>Component</th><th>Max</th><th>What it measures</th></tr></thead>
+            <tbody>
+              <tr><td>Retailer discount</td><td>30 pts</td><td>How much cheaper Platinum is vs Grand Cru. Bigger discount = more points.</td></tr>
+              <tr><td>Market discount</td><td>30 pts</td><td>How much cheaper Platinum is vs the Vivino market price. This catches &ldquo;fake deals&rdquo; where Grand Cru is just overpriced.</td></tr>
+              <tr><td>Wine quality</td><td>25 pts</td><td>Vivino community rating (0 &ndash; 5 scale). Higher rated wines score more.</td></tr>
+              <tr><td>Confidence</td><td>10 pts</td><td>Number of Vivino ratings. More ratings = more reliable signal.</td></tr>
+              <tr><td>Double-beat bonus</td><td>5 pts</td><td>Bonus when Platinum beats <em>both</em> Grand Cru and Vivino market price.</td></tr>
+            </tbody>
+          </table>
+          <p class="panel-note">A score of 70+ means the wine is well-rated, well-reviewed, and genuinely cheaper on Platinum than both the competitor and the open market. Scores update with each data refresh.</p>
+          <p class="panel-note">Data sourced from Platinum Wine Club, Grand Cru Wines, and Vivino. Prices are in SGD. Vivino ratings and market prices are community-sourced and may vary.</p>
+        </div>
+      </details>
+    </footer>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
