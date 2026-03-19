@@ -78,6 +78,50 @@ select {
   font: inherit;
 }
 
+.site-nav {
+  border-bottom: 1px solid var(--line);
+}
+
+.site-nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 14px 16px;
+}
+
+.site-logo {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--ink);
+  text-decoration: none;
+  letter-spacing: -0.04em;
+  transition: color 0.18s ease;
+}
+
+.site-logo:hover {
+  color: #60a5fa;
+}
+
+.site-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.site-nav-links a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: color 0.18s ease;
+}
+
+.site-nav-links a:hover {
+  color: var(--ink);
+}
+
 .page-shell {
   position: relative;
   z-index: 1;
