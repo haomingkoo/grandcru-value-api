@@ -1009,17 +1009,11 @@ function renderMap(points) {
     )
 
     marker.on("click", () => {
-      // First click: focus on country. Second click: filter and show wines.
-      if (mapFocusCountry === point.country) {
-        mapFocusCountry = ""
-        state.country = point.country
-        state.region = ""
-        syncControlsFromState()
-        loadDashboard().then(() => scrollToOffers())
-      } else {
-        mapFocusCountry = point.country
-        renderMap(points)
-      }
+      mapFocusCountry = point.country
+      state.country = point.country
+      state.region = ""
+      syncControlsFromState()
+      loadDashboard().then(() => scrollToOffers())
     })
 
     marker.addTo(originMarkerLayer)
@@ -1042,16 +1036,10 @@ function renderMapSelection(point) {
   els.mapSelection.innerHTML = `
     <div class="map-selection-head">
       <h3>${escapeHtml(point.country)}</h3>
-      ${
-        hasOriginFilter
-          ? `
-            <div class="map-selection-actions">
-              ${isCountryFiltered ? `<span class="meta-chip">Filtered</span>` : ""}
-              <button class="link-chip secondary is-compact" type="button" data-map-clear-filter="true">Show all countries</button>
-            </div>
-          `
-          : `<button class="link-chip primary is-compact" type="button" data-map-country-filter="${escapeHtml(point.country)}">Filter country</button>`
-      }
+      <div class="map-selection-actions">
+        ${isCountryFiltered ? `<span class="meta-chip">Showing</span>` : ""}
+        <button class="link-chip secondary is-compact" type="button" data-map-clear-filter="true">Show all countries</button>
+      </div>
     </div>
     <div class="map-selection-stats">
       <span class="meta-chip">${formatInteger(point.wineCount)} wines</span>
