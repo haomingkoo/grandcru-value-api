@@ -104,31 +104,45 @@ function initScrollReveal() {
 }
 
 function initDiscoveryFocus() {
-  const sections = document.querySelectorAll(".browse-section")
-  const hub = document.querySelector(".discovery-hub")
   const cards = document.querySelectorAll(".discovery-card[data-focus]")
 
   cards.forEach((card) => {
     card.addEventListener("click", (event) => {
       event.preventDefault()
-      const show = new Set(card.dataset.focus.split(","))
-      // Always keep offers visible so filter actions can scroll to it
-      show.add("offersSection")
-
-      sections.forEach((section) => {
-        section.classList.toggle("is-hidden", !show.has(section.id))
-        if (show.has(section.id)) {
-          section.classList.add("visible")
-        }
-      })
-
-      hub.classList.add("is-hidden")
-      showBackButton()
-
-      const firstVisible = document.querySelector(".browse-section:not(.is-hidden)")
-      if (firstVisible) firstVisible.scrollIntoView({ behavior: "smooth", block: "start" })
+      const ids = card.dataset.focus.split(",")
+      // Always include offers table
+      if (!ids.includes("offersSection")) ids.push("offersSection")
+      activateSections(ids)
     })
   })
+}
+
+function activateSections(ids) {
+  const sections = document.querySelectorAll(".browse-section")
+  const hub = document.querySelector(".discovery-hub")
+  const show = new Set(ids)
+
+  sections.forEach((section) => {
+    if (show.has(section.id)) {
+      section.classList.add("is-active", "visible")
+    } else {
+      section.classList.remove("is-active")
+    }
+  })
+
+  if (hub) hub.classList.add("is-hidden")
+  showBackButton()
+
+  // Invalidate map size if it just became visible
+  if (show.has("mapSection") && originMap) {
+    window.setTimeout(() => {
+      originMap.invalidateSize()
+      if (latestMapPoints.length) renderMap(latestMapPoints)
+    }, 100)
+  }
+
+  const first = document.querySelector(".browse-section.is-active")
+  if (first) first.scrollIntoView({ behavior: "smooth", block: "start" })
 }
 
 function showBackButton() {
@@ -139,12 +153,10 @@ function showBackButton() {
   backBtn.className = "back-to-top"
   backBtn.type = "button"
   backBtn.textContent = "Back to explore"
-  backBtn.addEventListener("click", () => {
-    exitFocusMode()
-  })
+  backBtn.addEventListener("click", () => exitFocusMode())
 
-  const firstVisible = document.querySelector(".browse-section:not(.is-hidden)")
-  if (firstVisible) firstVisible.before(backBtn)
+  const first = document.querySelector(".browse-section.is-active")
+  if (first) first.before(backBtn)
 }
 
 function exitFocusMode() {
@@ -152,8 +164,8 @@ function exitFocusMode() {
   const hub = document.querySelector(".discovery-hub")
   const backBtn = document.querySelector(".back-to-top")
 
-  // Re-hide all sections (default state)
-  sections.forEach((section) => section.classList.add("is-hidden"))
+  // Hide all sections, show hub
+  sections.forEach((section) => section.classList.remove("is-active"))
   if (hub) hub.classList.remove("is-hidden")
   if (backBtn) backBtn.remove()
 
@@ -165,21 +177,11 @@ function exitFocusMode() {
   window.scrollTo({ top: 0, behavior: "smooth" })
 }
 
-function unfocusAndShowAll() {
-  const sections = document.querySelectorAll(".browse-section")
-  const hub = document.querySelector(".discovery-hub")
-  const backBtn = document.querySelector(".back-to-top")
-  sections.forEach((section) => {
-    section.classList.remove("is-hidden")
-    section.classList.add("visible")
-  })
-  if (hub) hub.classList.remove("is-hidden")
-  if (backBtn) backBtn.remove()
-}
-
 function scrollToOffers() {
   const section = document.getElementById("offersSection")
-  if (section) section.scrollIntoView({ behavior: "smooth", block: "start" })
+  if (!section) return
+  section.classList.add("is-active", "visible")
+  section.scrollIntoView({ behavior: "smooth", block: "start" })
 }
 
 function captureElements() {
@@ -308,7 +310,6 @@ function bindEvents() {
       mapFocusCountry = ""
       state.country = filterButton.dataset.mapCountryFilter || ""
       state.region = ""
-      unfocusAndShowAll()
       syncControlsFromState()
       loadDashboard().then(() => scrollToOffers())
       return
@@ -353,7 +354,6 @@ function bindEvents() {
     }
     state.country = button.dataset.countryPick || ""
     state.region = button.dataset.regionPick || ""
-    unfocusAndShowAll()
     syncControlsFromState()
     loadDashboard().then(() => scrollToOffers())
   })
@@ -364,7 +364,6 @@ function bindEvents() {
       event.preventDefault()
       event.stopPropagation()
       state.styleFamily = filterButton.dataset.styleGroupFilter || ""
-      unfocusAndShowAll()
       syncControlsFromState()
       loadDashboard().then(() => scrollToOffers())
       return
@@ -1010,8 +1009,17 @@ function renderMap(points) {
     )
 
     marker.on("click", () => {
-      mapFocusCountry = mapFocusCountry === point.country ? "" : point.country
-      renderMap(points)
+      // First click: focus on country. Second click: filter and show wines.
+      if (mapFocusCountry === point.country) {
+        mapFocusCountry = ""
+        state.country = point.country
+        state.region = ""
+        syncControlsFromState()
+        loadDashboard().then(() => scrollToOffers())
+      } else {
+        mapFocusCountry = point.country
+        renderMap(points)
+      }
     })
 
     marker.addTo(originMarkerLayer)

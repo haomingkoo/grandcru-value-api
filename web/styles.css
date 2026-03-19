@@ -199,7 +199,23 @@ h2 {
   text-align: center;
 }
 
-.browse-section.is-hidden,
+.browse-section {
+  display: none;
+}
+
+.browse-section.is-active {
+  display: grid;
+}
+
+/* hero-layout uses grid already, others need block */
+.browse-section.is-active.hero-layout {
+  display: grid;
+}
+
+.browse-section.is-active:not(.hero-layout) {
+  display: block;
+}
+
 .discovery-hub.is-hidden {
   display: none;
 }
