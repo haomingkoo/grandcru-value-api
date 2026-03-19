@@ -862,14 +862,15 @@ function renderTopPicks(deals) {
             <span class="meta-chip">${escapeHtml(family.styleLabel)}</span>
             ${family.vintageLabel ? `<span class="meta-chip">${escapeHtml(family.vintageLabel)}</span>` : ""}
           </div>
-          <div class="pick-price-row">
-            <div class="pick-meta">
-              <span class="meta-chip">Platinum</span>
-              <strong class="pick-price">${formatMoney(deal.price_platinum)}</strong>
-            </div>
-            <span class="pill ${gapTone(deal)}">${escapeHtml(gapShortCopy(deal))}</span>
+          <div class="price-stack">
+            <div class="price-line"><span class="price-label">Platinum</span><strong class="pick-price">${formatMoney(deal.price_platinum)}</strong></div>
+            ${deal.price_grand_cru ? `<div class="price-line"><span class="price-label muted">Grand Cru</span><span class="muted">${formatMoney(deal.price_grand_cru)}</span></div>` : ""}
+            ${deal.vivino_price ? `<div class="price-line"><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span></div>` : ""}
           </div>
-          ${deal.vivino_price ? `<div class="pick-meta"><span class="meta-chip">Vivino ${formatMoney(deal.vivino_price)}</span>${pickVivinoLabel(deal)}</div>` : ""}
+          <div class="pick-meta">
+            <span class="pill ${gapTone(deal)}">${escapeHtml(gapShortCopy(deal))}</span>
+            ${pickVivinoLabel(deal)}
+          </div>
           <div class="pick-actions">
             ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
             ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
