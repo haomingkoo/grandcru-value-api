@@ -971,6 +971,44 @@ h2 {
   cursor: pointer;
 }
 
+.filter-drawer {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.filter-drawer-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  list-style: none;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.filter-drawer-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.filter-drawer-toggle::after {
+  content: "+";
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.filter-drawer[open] .filter-drawer-toggle::after {
+  content: "−";
+}
+
+.filter-drawer-body {
+  padding: 0 18px 18px;
+}
+
 .results-meta {
   align-self: center;
   color: var(--muted);
@@ -1732,5 +1770,59 @@ h1 {
   .map-overlay {
     position: static;
     padding: 12px 12px 0;
+  }
+
+  /* Mobile card layout for deal table */
+  .deal-table {
+    min-width: 0;
+  }
+
+  .deal-table thead {
+    display: none;
+  }
+
+  .deal-table,
+  .deal-table tbody {
+    display: grid;
+    gap: 14px;
+  }
+
+  .deal-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .deal-row td {
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 12px;
+  }
+
+  .deal-row td:first-child {
+    grid-column: 1 / -1;
+    border-radius: 18px 18px 0 0 !important;
+  }
+
+  .deal-row td:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
+  .deal-row td:nth-child(3) {
+    display: none;
+  }
+
+  .deal-row td:last-child {
+    border-radius: 0 0 18px 18px !important;
+  }
+
+  .table-scroll {
+    overflow: visible;
+  }
+
+  .controls-grid {
+    grid-template-columns: 1fr;
   }
 }

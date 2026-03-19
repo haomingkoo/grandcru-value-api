@@ -149,78 +149,85 @@
           </div>
         </div>
 
-        <form id="filtersForm" class="controls-grid">
-          <label class="field">
-            <span>Search wine</span>
-            <input id="searchInput" type="search" placeholder="Producer, label, or vintage">
-          </label>
+        <details class="filter-drawer">
+          <summary class="filter-drawer-toggle">
+            <span>Filters &amp; sorting</span>
+          </summary>
+          <div class="filter-drawer-body">
+            <form id="filtersForm" class="controls-grid">
+              <label class="field">
+                <span>Search wine</span>
+                <input id="searchInput" type="search" placeholder="Producer, label, or vintage">
+              </label>
 
-          <label class="field">
-            <span>Sort by</span>
-            <select id="sortSelect">
-              <option value="deal_score:desc">Best overall</option>
-              <option value="price_diff_pct:asc">Biggest Platinum discount</option>
-              <option value="price_diff_pct_abs:desc">Largest gap either way</option>
-              <option value="vivino_rating:desc">Highest Vivino rating</option>
-              <option value="price_platinum:asc">Lowest Platinum price</option>
-              <option value="wine_name:asc">Alphabetical</option>
-            </select>
-          </label>
+              <label class="field">
+                <span>Sort by</span>
+                <select id="sortSelect">
+                  <option value="deal_score:desc">Best overall</option>
+                  <option value="price_diff_pct:asc">Biggest Platinum discount</option>
+                  <option value="price_diff_pct_abs:desc">Largest gap either way</option>
+                  <option value="vivino_rating:desc">Highest Vivino rating</option>
+                  <option value="price_platinum:asc">Lowest Platinum price</option>
+                  <option value="wine_name:asc">Alphabetical</option>
+                </select>
+              </label>
 
-          <label class="field">
-            <span>Country</span>
-            <select id="countrySelect"></select>
-          </label>
+              <label class="field">
+                <span>Country</span>
+                <select id="countrySelect"></select>
+              </label>
 
-          <label class="field">
-            <span>Region</span>
-            <select id="regionSelect"></select>
-          </label>
+              <label class="field">
+                <span>Region</span>
+                <select id="regionSelect"></select>
+              </label>
 
-          <label class="field">
-            <span>Wine type</span>
-            <select id="wineTypeSelect"></select>
-          </label>
+              <label class="field">
+                <span>Wine type</span>
+                <select id="wineTypeSelect"></select>
+              </label>
 
-          <label class="field">
-            <span>Browse style</span>
-            <select id="styleFamilySelect"></select>
-          </label>
+              <label class="field">
+                <span>Browse style</span>
+                <select id="styleFamilySelect"></select>
+              </label>
 
-          <label class="field">
-            <span>Grape</span>
-            <select id="grapeSelect"></select>
-          </label>
+              <label class="field">
+                <span>Grape</span>
+                <select id="grapeSelect"></select>
+              </label>
 
-          <label class="field">
-            <span>Offering</span>
-            <select id="offeringSelect"></select>
-          </label>
+              <label class="field">
+                <span>Offering</span>
+                <select id="offeringSelect"></select>
+              </label>
 
-          <label class="field">
-            <span>Producer</span>
-            <select id="producerSelect"></select>
-          </label>
-        </form>
+              <label class="field">
+                <span>Producer</span>
+                <select id="producerSelect"></select>
+              </label>
+            </form>
 
-        <div class="toggle-row">
-          <label class="toggle-pill">
-            <input id="comparableOnlyToggle" type="checkbox">
-            <span>Comparable only</span>
-          </label>
-          <label class="toggle-pill">
-            <input id="platinumOnlyToggle" type="checkbox">
-            <span>Platinum cheaper only</span>
-          </label>
-          <label class="toggle-pill">
-            <input id="ratingToggle" type="checkbox">
-            <span>4.0+ rated</span>
-          </label>
-          <label class="toggle-pill">
-            <input id="confidenceToggle" type="checkbox">
-            <span>100+ ratings</span>
-          </label>
-        </div>
+            <div class="toggle-row">
+              <label class="toggle-pill">
+                <input id="comparableOnlyToggle" type="checkbox">
+                <span>Comparable only</span>
+              </label>
+              <label class="toggle-pill">
+                <input id="platinumOnlyToggle" type="checkbox">
+                <span>Platinum cheaper only</span>
+              </label>
+              <label class="toggle-pill">
+                <input id="ratingToggle" type="checkbox">
+                <span>4.0+ rated</span>
+              </label>
+              <label class="toggle-pill">
+                <input id="confidenceToggle" type="checkbox">
+                <span>100+ ratings</span>
+              </label>
+            </div>
+          </div>
+        </details>
 
         <div id="activeFilters" class="active-filters"></div>
       </div>
