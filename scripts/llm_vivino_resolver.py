@@ -216,45 +216,48 @@ def parse_vivino_rating(html: str) -> tuple[str, str]:
     return rating, count
 
 
-_DESCRIPTION_RE = re.compile(r'"description"\s*:\s*"([^"]{10,500})"')
-
-# Match JSON-LD: "@type":"Offer" ... "price":"XXX" within the same block
-_JSONLD_OFFER_PRICE_RE = re.compile(
-    r'"@type"\s*:\s*"Offer"[^}]*"price"\s*:\s*"?(?P<price>\d+(?:\.\d+)?)"?',
-    re.DOTALL,
-)
-# Fallback: "offers": { ... "@type":"Offer" ... "price":"XXX" }
-_OFFERS_BLOCK_PRICE_RE = re.compile(
-    r'"offers"\s*:\s*\{[^}]*"@type"\s*:\s*"Offer"[^}]*"price"\s*:\s*"?(?P<price>\d+(?:\.\d+)?)"?',
-    re.DOTALL,
-)
-# Last resort: look for price near "priceCurrency" (structured data pattern)
-_PRICE_WITH_CURRENCY_RE = re.compile(
-    r'"price"\s*:\s*"?(?P<price>\d+(?:\.\d+)?)"?\s*,\s*"priceCurrency"',
-)
-
-
 def parse_vivino_extras(html: str) -> dict[str, str]:
-    """Extract description and price from Vivino page HTML."""
+    """Extract description and price from Vivino page JSON-LD."""
+    import json as _json
+
     extras: dict[str, str] = {}
-    m_desc = _DESCRIPTION_RE.search(html)
-    if m_desc:
-        desc = m_desc.group(1).replace("\\n", " ").replace("\\u0026", "&").strip()
+
+    # Extract JSON-LD block
+    ld_match = re.search(
+        r'<script\s+type="application/ld\+json">\s*(\{.*?\})\s*</script>',
+        html,
+        re.DOTALL,
+    )
+    if ld_match:
+        try:
+            ld = _json.loads(ld_match.group(1))
+        except _json.JSONDecodeError:
+            ld = {}
+
+        # Description from JSON-LD
+        desc = (ld.get("description") or "").strip()
         if len(desc) > 15:
             extras["description"] = desc[:500]
 
-    # Try structured data patterns in order of specificity
-    m_price = (
-        _JSONLD_OFFER_PRICE_RE.search(html)
-        or _OFFERS_BLOCK_PRICE_RE.search(html)
-        or _PRICE_WITH_CURRENCY_RE.search(html)
-    )
-    if m_price:
-        price_str = m_price.group("price")
-        price_val = float(price_str)
-        # Sanity check: wine prices are typically $5-$50,000
-        if 5 <= price_val <= 50000:
-            extras["price"] = price_str
+        # Price from offers array — prefer SGD AggregateOffer
+        offers = ld.get("offers") or []
+        if isinstance(offers, dict):
+            offers = [offers]
+        sgd_price = None
+        any_price = None
+        for offer in offers:
+            low = offer.get("lowPrice") or offer.get("price")
+            if not low:
+                continue
+            price_val = float(low)
+            if offer.get("priceCurrency") == "SGD":
+                sgd_price = price_val
+                break
+            if any_price is None:
+                any_price = price_val
+        best_price = sgd_price or any_price
+        if best_price and 5 <= best_price <= 50000:
+            extras["price"] = str(best_price)
     return extras
 
 
