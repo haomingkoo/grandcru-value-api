@@ -110,8 +110,6 @@ function initDiscoveryFocus() {
     card.addEventListener("click", (event) => {
       event.preventDefault()
       const ids = card.dataset.focus.split(",")
-      // Always include offers table
-      if (!ids.includes("offersSection")) ids.push("offersSection")
       activateSections(ids)
     })
   })
@@ -181,6 +179,7 @@ function scrollToOffers() {
   const section = document.getElementById("offersSection")
   if (!section) return
   section.classList.add("is-active", "visible")
+  showBackButton()
   section.scrollIntoView({ behavior: "smooth", block: "start" })
 }
 
@@ -870,6 +869,7 @@ function renderTopPicks(deals) {
             </div>
             <span class="pill ${gapTone(deal)}">${escapeHtml(gapShortCopy(deal))}</span>
           </div>
+          ${deal.vivino_price ? `<div class="pick-meta"><span class="meta-chip">Vivino ${formatMoney(deal.vivino_price)}</span>${pickVivinoLabel(deal)}</div>` : ""}
           <div class="pick-actions">
             ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
             ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
@@ -1715,6 +1715,16 @@ function vivinoGapHtml(deal) {
   const tone = diff < 0 ? "gain" : "loss"
   const label = diff < 0 ? "below" : "above"
   return `<div class="gap-figure ${tone}" style="margin-top:6px;font-size:0.9rem">${formatPct(pct, 0)} ${label}</div><div class="cell-subline">vs Vivino market</div>`
+}
+
+function pickVivinoLabel(deal) {
+  if (!deal.vivino_price || !deal.price_platinum) return ""
+  const diff = deal.price_platinum - deal.vivino_price
+  const pct = Math.abs(diff / deal.vivino_price * 100)
+  if (pct < 1) return `<span class="pill calm">Market price</span>`
+  return diff < 0
+    ? `<span class="pill gain">${formatPct(pct, 0)} below market</span>`
+    : `<span class="pill loss">${formatPct(pct, 0)} above market</span>`
 }
 
 function gapTone(deal) {
