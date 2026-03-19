@@ -1062,12 +1062,14 @@ function ensureOriginMap() {
     originMap = window.L.map(els.originMap, {
       zoomControl: true,
       scrollWheelZoom: false,
-      worldCopyJump: true,
+      worldCopyJump: false,
       zoomSnap: 0.1,
       zoomDelta: 0.25,
-      minZoom: 0.6,
+      minZoom: 1,
       maxZoom: 5.5,
-    }).setView([18, 18], 0.9)
+      maxBounds: [[-70, -180], [85, 180]],
+      maxBoundsViscosity: 1.0,
+    }).setView([25, 10], 1.2)
 
     window.L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
@@ -1152,8 +1154,8 @@ function fitCountryMap(map, points) {
 
   if (!state.country && !state.region) {
     map.fitBounds(bounds, {
-      padding: [28, 28],
-      maxZoom: 0.9,
+      padding: [20, 20],
+      maxZoom: 2,
     })
     return
   }
