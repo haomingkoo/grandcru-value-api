@@ -152,7 +152,8 @@ function exitFocusMode() {
   const hub = document.querySelector(".discovery-hub")
   const backBtn = document.querySelector(".back-to-top")
 
-  sections.forEach((section) => section.classList.remove("is-hidden"))
+  // Re-hide all sections (default state)
+  sections.forEach((section) => section.classList.add("is-hidden"))
   if (hub) hub.classList.remove("is-hidden")
   if (backBtn) backBtn.remove()
 
