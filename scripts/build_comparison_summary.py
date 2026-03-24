@@ -285,26 +285,20 @@ def build_summary(matched_rows: list[dict[str, object]]) -> list[dict[str, objec
 
         price_plat_total = parse_price(row.get("price_plat"))
         price_main_total = parse_price(row.get("price_main"))
-        if (
-            price_plat_total is not None
-            and price_main_total is not None
-            and quantity_plat == quantity_main
-        ):
-            # Same pack size on both sides: compare direct listed totals.
-            price_plat_num = round(price_plat_total, 2)
-            price_main_num = round(price_main_total, 2)
-        else:
-            # Different pack sizes: compare normalized per-bottle price.
-            price_plat_num = (
-                round(price_plat_total / max(quantity_plat, 1), 2)
-                if price_plat_total is not None
-                else None
-            )
-            price_main_num = (
-                round(price_main_total / max(quantity_main, 1), 2)
-                if price_main_total is not None
-                else None
-            )
+
+        # Always normalize to per-bottle prices for consistent comparison.
+        # This ensures Vivino (always per-bottle) can be compared fairly
+        # and the UI shows per-bottle values regardless of bundle size.
+        price_plat_num = (
+            round(price_plat_total / max(quantity_plat, 1), 2)
+            if price_plat_total is not None
+            else None
+        )
+        price_main_num = (
+            round(price_main_total / max(quantity_main, 1), 2)
+            if price_main_total is not None
+            else None
+        )
 
         price_diff = None
         if price_plat_num is not None and price_main_num is not None:
@@ -329,6 +323,7 @@ def build_summary(matched_rows: list[dict[str, object]]) -> list[dict[str, objec
                 "year_plat": row["year_plat"],
                 "quantity_plat": row["quantity_plat"],
                 "volume_plat": row["volume_plat"],
+                "quantity_main": quantity_main,
                 "price_plat": f"{price_plat_num:.2f}" if price_plat_num is not None else row["price_plat"],
                 "price_main": f"{price_main_num:.2f}" if price_main_num is not None else row["price_main"],
                 "price_diff": price_diff,
@@ -406,6 +401,7 @@ def main() -> None:
             "year_plat",
             "quantity_plat",
             "volume_plat",
+            "quantity_main",
             "price_plat",
             "price_main",
             "price_diff",

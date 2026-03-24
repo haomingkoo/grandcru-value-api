@@ -261,6 +261,9 @@ def _build_deals_stmt(
         stmt = stmt.where(
             WineDeal.wine_name.ilike(pattern, escape="\\")
             | WineDeal.vivino_description.ilike(pattern, escape="\\")
+            | WineDeal.grapes.ilike(pattern, escape="\\")
+            | WineDeal.region.ilike(pattern, escape="\\")
+            | WineDeal.producer.ilike(pattern, escape="\\")
         )
 
     if min_vivino_rating is not None:

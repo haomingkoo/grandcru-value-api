@@ -466,6 +466,47 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 volume=volume,
             )
 
+            # --- Volume-aware Vivino price ---
+            # Vivino always prices per 750ml bottle. For magnums (1.5L)
+            # and other non-standard volumes, scale accordingly so the
+            # market discount comparison is apples-to-apples.
+            raw_vivino_price = parse_float(vivino.get("vivino_price"))
+            vivino_price_adjusted = raw_vivino_price
+            volume_lower = (volume or "").lower()
+            if raw_vivino_price and volume_lower in ("1.5l", "1500ml", "magnum"):
+                vivino_price_adjusted = round(raw_vivino_price * 2, 2)
+            elif raw_vivino_price and volume_lower in ("3l", "3000ml", "double magnum", "jeroboam"):
+                vivino_price_adjusted = round(raw_vivino_price * 4, 2)
+
+            # --- Gift set detection ---
+            gc_url_lower = (grand_cru_url or "").lower()
+            gc_name_lower = wine_name.lower()
+            _GIFT_TOKENS = ("gift-box", "gift box", "gift-set", "gift set", "2-glasses", "2 glasses")
+            is_gift_set = any(tok in gc_url_lower or tok in gc_name_lower for tok in _GIFT_TOKENS)
+            if is_gift_set:
+                logger.info("gift_set_detected wine=%s gc_url=%s", wine_name, grand_cru_url)
+
+            # --- Vivino metadata for gap-fill (Phase 5) ---
+            # Fill metadata gaps with Vivino-extracted data (grapes, region).
+            vivino_grapes = (vivino.get("vivino_grapes") or "").strip()
+            vivino_region_raw = (vivino.get("vivino_region") or "").strip()
+
+            gap_fill: dict[str, str] = {}
+            if not metadata.grapes and vivino_grapes:
+                gap_fill["grapes"] = vivino_grapes
+                gap_fill["grape_source"] = "vivino"
+            if vivino_region_raw and "/" in vivino_region_raw:
+                parts = [p.strip() for p in vivino_region_raw.split("/")]
+                if not metadata.country and len(parts) >= 1:
+                    gap_fill["country"] = parts[0]
+                if not metadata.region and len(parts) >= 2:
+                    gap_fill["region"] = parts[1]
+            if gap_fill:
+                from dataclasses import replace as _dc_replace
+                metadata = _dc_replace(metadata, **gap_fill)
+
+            vivino_desc = (vivino.get("vivino_description") or "").strip() or None
+
             deal_payload = {
                 "wine_name": wine_name,
                 "vintage": parse_int(row.get("year_plat")),
@@ -481,8 +522,8 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 "vivino_url": vivino_url,
                 "vivino_rating": vivino_rating,
                 "vivino_num_ratings": vivino_num_ratings,
-                "vivino_price": parse_float(vivino.get("vivino_price")),
-                "vivino_description": (vivino.get("vivino_description") or "").strip() or None,
+                "vivino_price": vivino_price_adjusted,
+                "vivino_description": vivino_desc,
                 "vivino_match_method": match_method,
                 "producer": metadata.producer,
                 "label_name": metadata.label_name,
@@ -501,7 +542,7 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                     vivino_rating,
                     vivino_num_ratings,
                     price_platinum=price_platinum,
-                    vivino_price=parse_float(vivino.get("vivino_price")),
+                    vivino_price=vivino_price_adjusted,
                 ),
             }
             merged_records.append(WineDeal(**deal_payload))
