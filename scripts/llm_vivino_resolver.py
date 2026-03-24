@@ -217,8 +217,13 @@ def parse_vivino_rating(html: str) -> tuple[str, str]:
 
 
 def parse_vivino_extras(html: str) -> dict[str, str]:
-    """Extract description and price from Vivino page JSON-LD."""
+    """Extract description, price, grapes, and region from Vivino page.
+
+    Uses JSON-LD first, then falls back to visible page text for price
+    and metadata that JSON-LD often omits.
+    """
     import json as _json
+    from html import unescape as _unescape
 
     extras: dict[str, str] = {}
 
@@ -228,49 +233,97 @@ def parse_vivino_extras(html: str) -> dict[str, str]:
         html,
         re.DOTALL,
     )
+    ld: dict = {}
     if ld_match:
         try:
             ld = _json.loads(ld_match.group(1))
         except _json.JSONDecodeError:
-            ld = {}
+            pass
 
-        # Description from JSON-LD (often empty on Vivino)
-        desc = (ld.get("description") or "").strip()
-        if len(desc) > 15:
-            extras["description"] = desc[:500]
+    # JSON-LD wine name (for match validation downstream)
+    ld_name = (ld.get("name") or "").strip()
+    if ld_name:
+        extras["vivino_wine_name"] = ld_name
 
-        # If no description, build one from wine style + facts in the HTML
-        if not extras.get("description"):
-            style_match = re.search(
-                r'"seo_name":"([^"]+)"[^}]*"body":(\d)',
-                html,
-            )
-            style_text = re.search(
-                r'Wine style</[^>]+>[^<]*<[^>]+>([^<]{5,80})<',
-                html,
-            )
-            if style_text:
-                extras["description"] = style_text.group(1).strip()
+    # Description from JSON-LD (often empty on Vivino)
+    desc = (ld.get("description") or "").strip()
+    if len(desc) > 15:
+        extras["description"] = desc[:500]
 
-        # Price from offers array — prefer SGD AggregateOffer
-        offers = ld.get("offers") or []
-        if isinstance(offers, dict):
-            offers = [offers]
-        sgd_price = None
-        any_price = None
-        for offer in offers:
-            low = offer.get("lowPrice") or offer.get("price")
-            if not low:
-                continue
+    # If no description, build one from wine style + facts in the HTML
+    if not extras.get("description"):
+        style_text = re.search(
+            r'Wine style</[^>]+>[^<]*<[^>]+>([^<]{5,80})<',
+            html,
+        )
+        if style_text:
+            extras["description"] = style_text.group(1).strip()
+
+    # --- Price ---
+    # Priority 1: JSON-LD offers — prefer SGD AggregateOffer
+    offers = ld.get("offers") or []
+    if isinstance(offers, dict):
+        offers = [offers]
+    sgd_price = None
+    any_price = None
+    for offer in offers:
+        low = offer.get("lowPrice") or offer.get("price")
+        if not low:
+            continue
+        try:
             price_val = float(low)
-            if offer.get("priceCurrency") == "SGD":
-                sgd_price = price_val
-                break
-            if any_price is None:
-                any_price = price_val
-        best_price = sgd_price or any_price
-        if best_price and 5 <= best_price <= 50000:
-            extras["price"] = str(best_price)
+        except (ValueError, TypeError):
+            continue
+        if offer.get("priceCurrency") == "SGD":
+            sgd_price = price_val
+            break
+        if any_price is None:
+            any_price = price_val
+    best_price = sgd_price or any_price
+    if best_price and 5 <= best_price <= 50000:
+        extras["price"] = str(best_price)
+
+    # Priority 2: visible text — "$111 ... Price is per bottle"
+    if not extras.get("price"):
+        text = re.sub(r"<[^>]+>", "\n", html)
+        text = _unescape(text)
+        text = re.sub(r"[ \t]+", " ", text)
+        price_match = re.search(
+            r"\$(\d+(?:\.\d{2})?)\s*\n\s*Price is per bottle",
+            text,
+        )
+        if price_match:
+            pval = float(price_match.group(1))
+            if 5 <= pval <= 50000:
+                extras["price"] = price_match.group(1)
+        else:
+            cart_pos = text.find("Add to cart")
+            if cart_pos > 0:
+                prices = re.findall(r"\$(\d+(?:\.\d{2})?)", text[:cart_pos])
+                if prices:
+                    pval = float(prices[-1])
+                    if 5 <= pval <= 50000:
+                        extras["price"] = prices[-1]
+
+    # --- Grapes (from rendered text) ---
+    text_for_facts = re.sub(r"<[^>]+>", "\n", html)
+    text_for_facts = _unescape(text_for_facts)
+    grapes_match = re.search(r"Grapes?\s*\n\s*(.+?)(?:\n|$)", text_for_facts)
+    if grapes_match:
+        grapes = grapes_match.group(1).strip()
+        if 2 < len(grapes) < 200 and "Contains" not in grapes and "sulfite" not in grapes.lower():
+            extras["grapes"] = grapes
+
+    # --- Region (from rendered text) ---
+    region_match = re.search(
+        r"Region\s*\n\s*([\w\s\u00C0-\u024F]+(?:\s*/\s*[\w\s\u00C0-\u024F]+)*)",
+        text_for_facts,
+    )
+    if region_match:
+        region = region_match.group(1).strip()
+        if 3 < len(region) < 120:
+            extras["region"] = region
+
     return extras
 
 

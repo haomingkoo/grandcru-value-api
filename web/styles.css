@@ -1230,6 +1230,13 @@ h2 {
   color: var(--muted);
 }
 
+.deal-signal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 160px;
+}
+
 .loading-sheen {
   position: relative;
   overflow: hidden;

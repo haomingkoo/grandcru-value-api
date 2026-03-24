@@ -1173,7 +1173,7 @@ function renderTable(deals) {
   if (!deals.length) {
     els.dealTableBody.innerHTML = `
       <tr>
-        <td colspan="8">
+        <td colspan="9">
           <div class="empty-state">No wines match the current filter combination.</div>
         </td>
       </tr>
@@ -1232,6 +1232,9 @@ function renderTable(deals) {
               <span class="muted">${deal.vivino_num_ratings ? `${formatInteger(deal.vivino_num_ratings)} ratings` : "low confidence"}</span>
             </div>
             <div class="cell-subline">${escapeHtml(qualityNarrative(deal))}</div>
+          </td>
+          <td>
+            <div class="deal-signal">${dealSignalHtml(deal)}</div>
           </td>
           <td>
             <div class="score-stack">
@@ -1502,7 +1505,7 @@ function renderErrorState(error) {
   els.regionGuide.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`
   els.dealTableBody.innerHTML = `
     <tr>
-      <td colspan="8">
+      <td colspan="9">
         <div class="empty-state">${escapeHtml(message)}</div>
       </td>
     </tr>
@@ -1720,6 +1723,46 @@ function gapTone(deal) {
   if (deal.cheaper_side === "Platinum Cheaper") return "gain"
   if (deal.cheaper_side === "Grand Cru Cheaper") return "loss"
   return "flat"
+}
+
+function dealSignalHtml(deal) {
+  // Produce a clear "is this a real deal?" indicator combining GC + Vivino data
+  const signals = []
+
+  // GC comparison signal
+  if (deal.price_diff_pct != null) {
+    const absPct = Math.abs(deal.price_diff_pct)
+    if (deal.cheaper_side === "Platinum Cheaper" && absPct >= 5) {
+      signals.push({ tone: "gain", text: `${formatPct(absPct, 0)} cheaper than Grand Cru` })
+    } else if (deal.cheaper_side === "Grand Cru Cheaper" && absPct >= 5) {
+      signals.push({ tone: "loss", text: `${formatPct(absPct, 0)} more than Grand Cru` })
+    }
+  }
+
+  // Vivino market signal
+  if (deal.vivino_price != null && deal.price_platinum != null) {
+    const diff = deal.price_platinum - deal.vivino_price
+    const pct = Math.abs(diff / deal.vivino_price * 100)
+    if (pct >= 3) {
+      if (diff < 0) {
+        signals.push({ tone: "gain", text: `${formatPct(pct, 0)} below Vivino market` })
+      } else {
+        signals.push({ tone: "loss", text: `${formatPct(pct, 0)} above Vivino market` })
+      }
+    } else {
+      signals.push({ tone: "flat", text: "At market price" })
+    }
+  }
+
+  // Rating signal
+  if (deal.vivino_rating != null && deal.vivino_rating >= 4.0 && deal.vivino_num_ratings >= 100) {
+    signals.push({ tone: "gain", text: `${deal.vivino_rating.toFixed(1)} Vivino (${formatInteger(deal.vivino_num_ratings)})` })
+  }
+
+  if (!signals.length) return ""
+  return signals.map(s =>
+    `<span class="pill ${s.tone}" style="font-size:0.72rem;margin:1px 2px">${escapeHtml(s.text)}</span>`
+  ).join("")
 }
 
 function renderTrendChip(label, change, direction) {
