@@ -194,7 +194,9 @@ app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 cors_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 if not cors_origins:
-    cors_origins = ["*"]
+    logger.warning("CORS_ORIGINS is empty; falling back to DEFAULT_CORS_ORIGINS")
+    from app.config import DEFAULT_CORS_ORIGINS
+    cors_origins = [o.strip() for o in DEFAULT_CORS_ORIGINS.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
