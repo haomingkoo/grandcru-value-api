@@ -1082,7 +1082,7 @@ h2 {
 
 .deal-table {
   width: 100%;
-  min-width: 1320px;
+  min-width: 1500px;
   border-collapse: separate;
   border-spacing: 0 12px;
 }
@@ -1091,13 +1091,6 @@ h2 {
   padding: 0 14px 4px;
   text-align: left;
 }
-
-/* Minimum widths to prevent overlap */
-.deal-table td:nth-child(1) { min-width: 170px; }  /* Wine */
-.deal-table td:nth-child(2) { min-width: 160px; }  /* Notes */
-.deal-table td:nth-child(4) { min-width: 180px; white-space: nowrap; }  /* Prices */
-.deal-table td:nth-child(5) { min-width: 80px; }   /* Gap % */
-.deal-table td:nth-child(7) { min-width: 200px; }  /* Score + signals */
 
 .sort-button {
   display: inline-flex;
