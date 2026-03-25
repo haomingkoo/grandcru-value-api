@@ -361,7 +361,9 @@ def search_vivino_via_brave(query: str, brave_api_key: str) -> str | None:
 def search_vivino_for_url(query: str, brave_api_key: str = "") -> str | None:
     """Find a Vivino wine URL — uses Brave Search API if key available."""
     if brave_api_key:
-        return search_vivino_via_brave(query, brave_api_key)
+        result = search_vivino_via_brave(query, brave_api_key)
+        if result:
+            return result
 
     # Fallback: direct Vivino search (works only if page isn't JS-rendered).
     search_url = f"https://www.vivino.com/en/search/wines?q={quote_plus(query)}"
