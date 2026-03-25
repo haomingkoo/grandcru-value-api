@@ -1120,6 +1120,11 @@ h2 {
   background: var(--card-strong);
   border-top: 1px solid rgba(23, 34, 37, 0.08);
   border-bottom: 1px solid rgba(23, 34, 37, 0.08);
+}
+
+.deal-row td:first-child,
+.deal-row td:nth-child(2),
+.deal-row td:nth-child(3) {
   overflow: hidden;
   word-break: break-word;
 }
@@ -1172,6 +1177,7 @@ h2 {
   display: flex;
   align-items: baseline;
   gap: 8px;
+  white-space: nowrap;
 }
 
 .price-label {
@@ -1180,6 +1186,7 @@ h2 {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   min-width: 5.5ch;
+  white-space: nowrap;
 }
 
 .money {
