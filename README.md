@@ -16,7 +16,7 @@ Grand Cru (API)    Bundle detection       Gemini LLM fallback  Prices           
                    Per-bottle pricing     Direct Vivino search  Grapes, region    Filters, map, trends
 ```
 
-Platinum Wine Club is scoped as the source of truth for inventory. Grand Cru products are included for price comparison even if sold out. Vivino provides independent market pricing and community ratings.
+Platinum Wine Club is scoped as the source of truth for inventory — only in-stock items are shown. Grand Cru products are included for price comparison even if sold out. Vivino provides independent market pricing and community ratings.
 
 ## Tech Stack
 
@@ -28,6 +28,18 @@ Platinum Wine Club is scoped as the source of truth for inventory. Grand Cru pro
 | Search | Brave Search API, Google Generative AI (Gemini Flash) |
 | Frontend | Vanilla JS, Leaflet.js, Tailwind CSS |
 | Deployment | Docker, Railway (auto-deploy from `main`) |
+
+## Infrastructure
+
+Three Railway services under project **zonal-purpose**:
+
+| Service | Role | Schedule |
+|---------|------|----------|
+| **web** | FastAPI app + static frontend | Always on |
+| **daily-ingest** | Scrape Platinum/Grand Cru, Brave resolver, import | Daily cron |
+| **weekly-ingest** | Full pipeline + LLM resolver with cache bypass | Mondays 02:00 UTC |
+
+Data flows into a shared PostgreSQL database. The web service reads from the DB — it does not re-import from CSVs if the daily cron has already refreshed the data within 20 hours.
 
 ## Quick Start
 
@@ -48,7 +60,7 @@ Open [localhost:8000](http://localhost:8000).
 | Endpoint | Description |
 |----------|-------------|
 | `GET /` | Web dashboard |
-| `GET /health` | DB status and ingestion freshness |
+| `GET /health` | DB status, ingestion freshness, last update timestamp |
 | `GET /deals` | List deals (filters, sort, pagination, limit 500) |
 | `GET /deals/filters` | Filter dimensions with counts |
 | `GET /deals/stats` | Aggregates by offering type |
@@ -79,6 +91,14 @@ Five stages, orchestrated by `scripts/refresh_pipeline.py`:
 | 4. LLM Resolve | `llm_vivino_resolver.py` | Gemini Flash extracts wine identity, finds Vivino pages, scrapes prices/ratings |
 | 5. Import | `import_wine_data.py` | Merge sources, compute deal scores, write to DB |
 
+### Startup Import Logic
+
+On deploy, the web service runs `import_wine_data.py --skip-if-fresh 20`:
+- If the daily cron imported data in the last 20 hours, the CSV import is **skipped** (trusts the DB)
+- If no recent ingestion exists (first deploy or cron failure), it imports from the committed seed CSVs as a safety net
+
+This ensures code pushes never overwrite fresh cron data.
+
 ### Deal Score (0-100)
 
 | Component | Max | How |
@@ -106,6 +126,10 @@ python scripts/refresh_pipeline.py \
   --scrape-and-build \
   --resolve-vivino --resolver-provider brave --resolver-auto-apply \
   --llm-resolve --llm-resolve-all --llm-resolve-force
+
+# Run LLM resolver locally (Vivino blocks Railway IPs)
+railway run python scripts/llm_vivino_resolver.py \
+  --force --all --auto-apply --sleep 3
 
 # Trigger on Railway
 curl -X POST https://wine.kooexperience.com/ops/refresh/trigger \
@@ -167,12 +191,12 @@ scripts/
   import_wine_data.py
 web/
   index.html           Dashboard UI
-  app.js               Client-side logic
+  app.js               Client-side logic (~2000 lines)
   styles.css           Dark theme styles
 seed/
-  comparison_summary.csv
-  vivino_results.csv
-  vivino_overrides.csv
+  comparison_summary.csv   Platinum vs Grand Cru (committed, fallback for deploys)
+  vivino_results.csv       Pre-known Vivino URLs
+  vivino_overrides.csv     LLM resolver output (committed, fallback for deploys)
 ```
 
 ## Legal
