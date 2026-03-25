@@ -1082,15 +1082,34 @@ h2 {
 
 .deal-table {
   width: 100%;
-  min-width: 1020px;
+  min-width: 1100px;
   border-collapse: separate;
   border-spacing: 0 12px;
+  table-layout: fixed;
 }
 
 .deal-table th {
   padding: 0 14px 4px;
   text-align: left;
 }
+
+/* Column widths — 8 columns */
+.deal-table th:nth-child(1),
+.deal-table td:nth-child(1) { width: 20%; }  /* Wine */
+.deal-table th:nth-child(2),
+.deal-table td:nth-child(2) { width: 16%; }  /* Notes */
+.deal-table th:nth-child(3),
+.deal-table td:nth-child(3) { width: 13%; }  /* Origin */
+.deal-table th:nth-child(4),
+.deal-table td:nth-child(4) { width: 14%; }  /* Prices */
+.deal-table th:nth-child(5),
+.deal-table td:nth-child(5) { width: 9%; }   /* Gap % */
+.deal-table th:nth-child(6),
+.deal-table td:nth-child(6) { width: 9%; }   /* Vivino */
+.deal-table th:nth-child(7),
+.deal-table td:nth-child(7) { width: 12%; }  /* Score */
+.deal-table th:nth-child(8),
+.deal-table td:nth-child(8) { width: 7%; }   /* Offer */
 
 .sort-button {
   display: inline-flex;

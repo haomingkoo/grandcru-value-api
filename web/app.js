@@ -1187,10 +1187,13 @@ function renderTable(deals) {
       const styleLabel = deal.style_family || deal.wine_type || "Unclassified"
       const subtypeLabel = deal.wine_type && deal.wine_type !== styleLabel ? ` · ${deal.wine_type}` : ""
       const formattedNotes = formatVivinoNotes(deal.vivino_description)
+      const displayName = deal.label_name
+        ? `${deal.vintage || ""} ${deal.label_name}`.trim()
+        : deal.wine_name.replace(/ - (Red|White|Rose|Sparkling) - .+$/, "")
       return `
         <tr class="deal-row">
           <td>
-            <div class="wine-title">${escapeHtml(deal.wine_name)}</div>
+            <div class="wine-title">${escapeHtml(displayName)}</div>
             <div class="wine-subline">${escapeHtml(deal.producer || "Producer unknown")}</div>
             <div class="wine-links">
               ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
