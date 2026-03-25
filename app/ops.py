@@ -99,6 +99,7 @@ def build_refresh_command(
                 "0",
                 "--llm-resolve",
                 "--llm-resolve-all",
+                "--llm-resolve-force",
             ]
         )
     elif mode == "import_only":
