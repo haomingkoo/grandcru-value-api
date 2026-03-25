@@ -466,6 +466,7 @@ def main() -> None:
     parser.add_argument("--llm-resolve-limit", type=int, default=0, help="Max wines for LLM resolver (0 = all)")
     parser.add_argument("--llm-resolve-all", action="store_true", help="Resolve ALL wines, not just unmatched")
     parser.add_argument("--llm-resolve-sleep", type=float, default=2.0)
+    parser.add_argument("--llm-resolve-force", action="store_true", help="Bypass LLM resolver 30-day cache")
     parser.add_argument(
         "--health-url",
         default=None,
@@ -586,6 +587,8 @@ def main() -> None:
             ]
             if brave_key:
                 llm_cmd.extend(["--brave-api-key", brave_key])
+            if args.llm_resolve_force:
+                llm_cmd.append("--force")
             if args.llm_resolve_all:
                 llm_cmd.append("--all")
             if args.llm_resolve_limit > 0:
