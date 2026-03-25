@@ -1095,21 +1095,21 @@ h2 {
 
 /* Column widths — 8 columns */
 .deal-table th:nth-child(1),
-.deal-table td:nth-child(1) { width: 20%; }  /* Wine */
+.deal-table td:nth-child(1) { width: 16%; }  /* Wine */
 .deal-table th:nth-child(2),
-.deal-table td:nth-child(2) { width: 16%; }  /* Notes */
+.deal-table td:nth-child(2) { width: 14%; }  /* Notes */
 .deal-table th:nth-child(3),
-.deal-table td:nth-child(3) { width: 13%; }  /* Origin */
+.deal-table td:nth-child(3) { width: 10%; }  /* Origin */
 .deal-table th:nth-child(4),
-.deal-table td:nth-child(4) { width: 14%; }  /* Prices */
+.deal-table td:nth-child(4) { width: 13%; }  /* Prices */
 .deal-table th:nth-child(5),
-.deal-table td:nth-child(5) { width: 9%; }   /* Gap % */
+.deal-table td:nth-child(5) { width: 8%; }   /* Gap % */
 .deal-table th:nth-child(6),
-.deal-table td:nth-child(6) { width: 9%; }   /* Vivino */
+.deal-table td:nth-child(6) { width: 7%; }   /* Vivino */
 .deal-table th:nth-child(7),
-.deal-table td:nth-child(7) { width: 12%; }  /* Score */
+.deal-table td:nth-child(7) { width: 23%; }  /* Score + signals */
 .deal-table th:nth-child(8),
-.deal-table td:nth-child(8) { width: 7%; }   /* Offer */
+.deal-table td:nth-child(8) { width: 9%; }   /* Offer */
 
 .sort-button {
   display: inline-flex;
