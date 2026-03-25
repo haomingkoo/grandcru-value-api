@@ -687,6 +687,8 @@ def main() -> None:
                     "vivino_url": result.get("vivino_url", ""),
                     "vivino_rating": result.get("vivino_rating", ""),
                     "vivino_num_ratings": result.get("vivino_num_ratings", ""),
+                    "vivino_price": result.get("vivino_price", ""),
+                    "vivino_description": result.get("vivino_description", ""),
                     "resolved_at": int(time.time()),
                     "notes": result.get("notes", ""),
                 }
@@ -709,7 +711,8 @@ def main() -> None:
                     "wine_name": cached.get("wine_name", ""),
                     "vivino_rating": cached.get("vivino_rating", ""),
                     "vivino_num_ratings": cached.get("vivino_num_ratings", ""),
-                    "vivino_price": "",
+                    "vivino_price": cached.get("vivino_price", ""),
+                    "vivino_description": cached.get("vivino_description", ""),
                     "vivino_url": cached.get("vivino_url", ""),
                     "notes": f"cached resolved_at={cached.get('resolved_at', '')}",
                 })
