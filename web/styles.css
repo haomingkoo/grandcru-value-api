@@ -1082,10 +1082,9 @@ h2 {
 
 .deal-table {
   width: 100%;
-  min-width: 1100px;
+  min-width: 1320px;
   border-collapse: separate;
   border-spacing: 0 12px;
-  table-layout: fixed;
 }
 
 .deal-table th {
@@ -1093,23 +1092,12 @@ h2 {
   text-align: left;
 }
 
-/* Column widths — 8 columns */
-.deal-table th:nth-child(1),
-.deal-table td:nth-child(1) { width: 16%; }  /* Wine */
-.deal-table th:nth-child(2),
-.deal-table td:nth-child(2) { width: 14%; }  /* Notes */
-.deal-table th:nth-child(3),
-.deal-table td:nth-child(3) { width: 10%; }  /* Origin */
-.deal-table th:nth-child(4),
-.deal-table td:nth-child(4) { width: 13%; }  /* Prices */
-.deal-table th:nth-child(5),
-.deal-table td:nth-child(5) { width: 8%; }   /* Gap % */
-.deal-table th:nth-child(6),
-.deal-table td:nth-child(6) { width: 7%; }   /* Vivino */
-.deal-table th:nth-child(7),
-.deal-table td:nth-child(7) { width: 23%; }  /* Score + signals */
-.deal-table th:nth-child(8),
-.deal-table td:nth-child(8) { width: 9%; }   /* Offer */
+/* Minimum widths to prevent overlap */
+.deal-table td:nth-child(1) { min-width: 170px; }  /* Wine */
+.deal-table td:nth-child(2) { min-width: 160px; }  /* Notes */
+.deal-table td:nth-child(4) { min-width: 180px; white-space: nowrap; }  /* Prices */
+.deal-table td:nth-child(5) { min-width: 80px; }   /* Gap % */
+.deal-table td:nth-child(7) { min-width: 200px; }  /* Score + signals */
 
 .sort-button {
   display: inline-flex;
