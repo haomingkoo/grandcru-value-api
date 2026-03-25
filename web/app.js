@@ -1200,7 +1200,6 @@ function renderTable(deals) {
           </td>
           <td>
             ${wineNotes ? `<div class="wine-desc">${escapeHtml(wineNotes)}</div>` : `<span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>`}
-            <div class="cell-subline">${escapeHtml(verdict.detail)}</div>
           </td>
           <td>
             <div class="cell-subline">
@@ -1208,7 +1207,6 @@ function renderTable(deals) {
               ${escapeHtml(deal.country || "Unknown country")}<br>
               ${escapeHtml(styleLabel)}${escapeHtml(subtypeLabel)} · ${escapeHtml(deal.grapes || "Grape blend unknown")}
             </div>
-            <div class="cell-subline">${escapeHtml(metadataNarrative(deal))}</div>
           </td>
           <td>
             <div class="price-stack">
@@ -1229,9 +1227,8 @@ function renderTable(deals) {
           <td>
             <div class="rating-stack">
               <span class="money">${deal.vivino_rating != null ? deal.vivino_rating.toFixed(1) : "-"}</span>
-              <span class="muted">${deal.vivino_num_ratings ? `${formatInteger(deal.vivino_num_ratings)} ratings` : "low confidence"}</span>
+              <span class="muted">${deal.vivino_num_ratings ? `${formatInteger(deal.vivino_num_ratings)} ratings` : ""}</span>
             </div>
-            <div class="cell-subline">${escapeHtml(qualityNarrative(deal))}</div>
           </td>
           <td>
             <div class="deal-signal">${dealSignalHtml(deal)}</div>

@@ -260,55 +260,53 @@ def parse_vivino_extras(html: str) -> dict[str, str]:
             extras["description"] = style_text.group(1).strip()
 
     # --- Price ---
-    # Priority 1: JSON-LD offers — prefer SGD AggregateOffer
-    offers = ld.get("offers") or []
-    if isinstance(offers, dict):
-        offers = [offers]
-    sgd_price = None
-    any_price = None
-    for offer in offers:
-        low = offer.get("lowPrice") or offer.get("price")
-        if not low:
-            continue
-        try:
-            price_val = float(low)
-        except (ValueError, TypeError):
-            continue
-        if offer.get("priceCurrency") == "SGD":
-            sgd_price = price_val
-            break
-        if any_price is None:
-            any_price = price_val
-    best_price = sgd_price or any_price
-    if best_price and 5 <= best_price <= 50000:
-        extras["price"] = str(best_price)
+    # Priority 1: visible text — "$111 ... Price is per bottle" (most reliable for SGD)
+    text = re.sub(r"<[^>]+>", "\n", html)
+    text = _unescape(text)
+    text = re.sub(r"[ \t]+", " ", text)
+    price_match = re.search(
+        r"\$(\d+(?:\.\d{2})?)\s*\n\s*Price is per bottle",
+        text,
+    )
+    if price_match:
+        pval = float(price_match.group(1))
+        if 5 <= pval <= 50000:
+            extras["price"] = price_match.group(1)
+    else:
+        cart_pos = text.find("Add to cart")
+        if cart_pos > 0:
+            prices = re.findall(r"\$(\d+(?:\.\d{2})?)", text[:cart_pos])
+            if prices:
+                pval = float(prices[-1])
+                if 5 <= pval <= 50000:
+                    extras["price"] = prices[-1]
 
-    # Priority 2: visible text — "$111 ... Price is per bottle"
+    # Priority 2: JSON-LD offers — prefer SGD AggregateOffer
     if not extras.get("price"):
-        text = re.sub(r"<[^>]+>", "\n", html)
-        text = _unescape(text)
-        text = re.sub(r"[ \t]+", " ", text)
-        price_match = re.search(
-            r"\$(\d+(?:\.\d{2})?)\s*\n\s*Price is per bottle",
-            text,
-        )
-        if price_match:
-            pval = float(price_match.group(1))
-            if 5 <= pval <= 50000:
-                extras["price"] = price_match.group(1)
-        else:
-            cart_pos = text.find("Add to cart")
-            if cart_pos > 0:
-                prices = re.findall(r"\$(\d+(?:\.\d{2})?)", text[:cart_pos])
-                if prices:
-                    pval = float(prices[-1])
-                    if 5 <= pval <= 50000:
-                        extras["price"] = prices[-1]
+        offers = ld.get("offers") or []
+        if isinstance(offers, dict):
+            offers = [offers]
+        sgd_price = None
+        any_price = None
+        for offer in offers:
+            low = offer.get("lowPrice") or offer.get("price")
+            if not low:
+                continue
+            try:
+                price_val = float(low)
+            except (ValueError, TypeError):
+                continue
+            if offer.get("priceCurrency") == "SGD":
+                sgd_price = price_val
+                break
+            if any_price is None:
+                any_price = price_val
+        best_price = sgd_price or any_price
+        if best_price and 5 <= best_price <= 50000:
+            extras["price"] = str(best_price)
 
     # --- Grapes (from rendered text) ---
-    text_for_facts = re.sub(r"<[^>]+>", "\n", html)
-    text_for_facts = _unescape(text_for_facts)
-    grapes_match = re.search(r"Grapes?\s*\n\s*(.+?)(?:\n|$)", text_for_facts)
+    grapes_match = re.search(r"Grapes?\s*\n\s*(.+?)(?:\n|$)", text)
     if grapes_match:
         grapes = grapes_match.group(1).strip()
         if 2 < len(grapes) < 200 and "Contains" not in grapes and "sulfite" not in grapes.lower():
@@ -317,12 +315,19 @@ def parse_vivino_extras(html: str) -> dict[str, str]:
     # --- Region (from rendered text) ---
     region_match = re.search(
         r"Region\s*\n\s*([\w\s\u00C0-\u024F]+(?:\s*/\s*[\w\s\u00C0-\u024F]+)*)",
-        text_for_facts,
+        text,
     )
     if region_match:
         region = region_match.group(1).strip()
         if 3 < len(region) < 120:
             extras["region"] = region
+
+    # --- Wine style (from rendered text) ---
+    style_match = re.search(r"Wine style\s*\n\s*(.+?)(?:\n|$)", text)
+    if style_match:
+        style = style_match.group(1).strip()
+        if 3 < len(style) < 100:
+            extras["wine_style"] = style
 
     return extras
 
@@ -509,18 +514,31 @@ def resolve_wine(
         if extras.get("price"):
             result["vivino_price"] = extras["price"]
     except Exception as exc:
+        extras = {}
         result["notes"] += f" metric_fetch_error={exc}"
 
     # Step 4: Fetch tasting notes from Vivino API.
+    tasting_notes = ""
     wine_id = extract_wine_id(vivino_url)
     if wine_id:
         time.sleep(sleep_seconds)
         try:
-            description = fetch_vivino_tasting_notes(wine_id)
-            if description:
-                result["vivino_description"] = description
+            tasting_notes = fetch_vivino_tasting_notes(wine_id)
         except Exception as exc:
             result["notes"] += f" taste_fetch_error={exc}"
+
+    # Step 5: Compose vivino_description from page facts + tasting notes.
+    desc_parts: list[str] = []
+    if extras.get("grapes"):
+        desc_parts.append(extras["grapes"])
+    if extras.get("wine_style"):
+        desc_parts.append(extras["wine_style"])
+    elif extras.get("region"):
+        desc_parts.append(extras["region"])
+    if tasting_notes:
+        desc_parts.append(tasting_notes)
+    if desc_parts:
+        result["vivino_description"] = " · ".join(desc_parts)[:500]
 
     return result
 
