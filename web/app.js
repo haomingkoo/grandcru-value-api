@@ -215,6 +215,8 @@ function captureElements() {
 }
 
 function bindEvents() {
+  document.getElementById("filtersForm").addEventListener("submit", (e) => e.preventDefault())
+
   els.searchInput.addEventListener("input", (event) => {
     window.clearTimeout(searchDebounce)
     searchDebounce = window.setTimeout(() => {
