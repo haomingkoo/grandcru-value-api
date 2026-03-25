@@ -1173,7 +1173,7 @@ function renderTable(deals) {
   if (!deals.length) {
     els.dealTableBody.innerHTML = `
       <tr>
-        <td colspan="9">
+        <td colspan="8">
           <div class="empty-state">No wines match the current filter combination.</div>
         </td>
       </tr>
@@ -1186,7 +1186,7 @@ function renderTable(deals) {
       const verdict = resolveVerdict(deal)
       const styleLabel = deal.style_family || deal.wine_type || "Unclassified"
       const subtypeLabel = deal.wine_type && deal.wine_type !== styleLabel ? ` · ${deal.wine_type}` : ""
-      const wineNotes = cleanVivinoDescription(deal.vivino_description)
+      const formattedNotes = formatVivinoNotes(deal.vivino_description)
       return `
         <tr class="deal-row">
           <td>
@@ -1199,7 +1199,7 @@ function renderTable(deals) {
             </div>
           </td>
           <td>
-            ${wineNotes ? `<div class="wine-desc">${escapeHtml(wineNotes)}</div>` : `<span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>`}
+            ${formattedNotes ? `<div class="wine-notes-cell">${formattedNotes}</div>` : `<span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>`}
           </td>
           <td>
             <div class="cell-subline">
@@ -1231,13 +1231,11 @@ function renderTable(deals) {
             </div>
           </td>
           <td>
-            <div class="deal-signal">${dealSignalHtml(deal)}</div>
-          </td>
-          <td>
             <div class="score-stack">
               <span class="money">${deal.deal_score.toFixed(1)}</span>
               <div class="score-bar"><span style="width:${Math.max(6, Math.min(100, deal.deal_score))}%"></span></div>
             </div>
+            <div class="deal-signal">${dealSignalHtml(deal)}</div>
           </td>
           <td>
             <div class="offer-stack">
@@ -1923,6 +1921,22 @@ function cleanVivinoDescription(desc) {
   if (garbage.some((word) => desc.toLowerCase().includes(word.toLowerCase()))) return ""
   if (desc.length < 20) return ""
   return desc
+}
+
+function formatVivinoNotes(desc) {
+  const clean = cleanVivinoDescription(desc)
+  if (!clean) return ""
+  const parts = clean.split(" · ")
+  if (parts.length < 2) return escapeHtml(clean)
+  const regionStyle = parts.slice(0, -1).join(" · ")
+  const notes = parts[parts.length - 1]
+  const noteParts = notes.split(". ")
+  const tastingLine = noteParts[0] || ""
+  const communityNote = noteParts.slice(1).join(". ").trim()
+  let html = `<span class="notes-region">${escapeHtml(regionStyle)}</span>`
+  if (tastingLine) html += `<span class="notes-tasting">${escapeHtml(tastingLine)}</span>`
+  if (communityNote) html += `<span class="notes-community">${escapeHtml(communityNote)}</span>`
+  return html
 }
 
 function escapeHtml(value) {
