@@ -1082,7 +1082,7 @@ h2 {
 
 .deal-table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 1020px;
   border-collapse: separate;
   border-spacing: 0 12px;
 }
@@ -1165,6 +1165,37 @@ h2 {
   overflow: hidden;
 }
 
+.wine-notes-cell {
+  display: grid;
+  gap: 4px;
+  max-width: 220px;
+}
+
+.notes-region {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--wine);
+}
+
+.notes-tasting {
+  font-size: 0.82rem;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.notes-community {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .price-stack,
 .rating-stack,
 .score-stack,
@@ -1242,8 +1273,9 @@ h2 {
 .deal-signal {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
-  max-width: 160px;
+  gap: 3px;
+  margin-top: 8px;
+  max-width: 180px;
 }
 
 .loading-sheen {
