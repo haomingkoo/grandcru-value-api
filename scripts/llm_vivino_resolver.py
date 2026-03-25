@@ -272,7 +272,19 @@ def parse_vivino_extras(html: str) -> dict[str, str]:
         pval = float(price_match.group(1))
         if 5 <= pval <= 50000:
             extras["price"] = price_match.group(1)
-    else:
+
+    # Priority 1b: "Average online price from external shops" (no Add to cart)
+    if not extras.get("price"):
+        avg_match = re.search(
+            r"\$(\d+(?:\.\d{2})?)\s*\n\s*Average online price",
+            text,
+        )
+        if avg_match:
+            pval = float(avg_match.group(1))
+            if 5 <= pval <= 50000:
+                extras["price"] = avg_match.group(1)
+
+    if not extras.get("price"):
         cart_pos = text.find("Add to cart")
         if cart_pos > 0:
             prices = re.findall(r"\$(\d+(?:\.\d{2})?)", text[:cart_pos])
