@@ -86,7 +86,33 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadFilterOptions()
   syncControlsFromState()
   await loadDashboard()
+  loadDataFreshness()
 })
+
+async function loadDataFreshness() {
+  try {
+    const res = await fetch("/health")
+    const data = await res.json()
+    const ingestion = data.latest_ingestion
+    if (ingestion && ingestion.finished_at) {
+      const dt = new Date(ingestion.finished_at)
+      const ago = formatTimeAgo(dt)
+      const el = document.getElementById("dataFreshness")
+      if (el) el.textContent = `Data updated ${ago} \u00b7 ${ingestion.merged_rows} wines`
+    }
+  } catch (_) { /* silent */ }
+}
+
+function formatTimeAgo(date) {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (seconds < 60) return "just now"
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
 
 function initScrollReveal() {
   const observer = new IntersectionObserver(
