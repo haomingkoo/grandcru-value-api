@@ -1120,6 +1120,8 @@ h2 {
   background: var(--card-strong);
   border-top: 1px solid rgba(23, 34, 37, 0.08);
   border-bottom: 1px solid rgba(23, 34, 37, 0.08);
+  overflow: hidden;
+  word-break: break-word;
 }
 
 .deal-row td:first-child {
@@ -1386,10 +1388,13 @@ h1 {
 .pick-card,
 .country-card,
 .family-card,
-.offer-variant,
-.deal-row td {
+.offer-variant {
   border-color: var(--line);
   box-shadow: var(--shadow);
+}
+
+.deal-row td {
+  border-color: var(--line);
 }
 
 .panel {
