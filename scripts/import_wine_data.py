@@ -588,6 +588,32 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
         session.close()
 
 
+def _db_has_fresh_data(max_age_hours: float = 2.0) -> bool:
+    """Check if the database already has recent data from a cron run."""
+    from datetime import datetime, timedelta, UTC
+    try:
+        Base.metadata.create_all(bind=engine)
+        with Session(engine) as session:
+            from app.service import get_latest_ingestion
+            latest = get_latest_ingestion(session)
+            if latest is None or latest.finished_at is None:
+                return False
+            finished = latest.finished_at
+            if finished.tzinfo is None:
+                finished = finished.replace(tzinfo=UTC)
+            age = datetime.now(UTC) - finished
+            if age < timedelta(hours=max_age_hours):
+                logger.info(
+                    "import_skipped reason=fresh_data age_hours=%.1f last_ingestion=%s",
+                    age.total_seconds() / 3600,
+                    finished.isoformat(),
+                )
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Import wine deal data into database")
     parser.add_argument(
@@ -608,7 +634,16 @@ def main() -> None:
         default=Path("seed/vivino_overrides.csv"),
         help="Optional path to manual vivino overrides CSV.",
     )
+    parser.add_argument(
+        "--skip-if-fresh",
+        type=float,
+        default=0,
+        metavar="HOURS",
+        help="Skip import if DB has data newer than HOURS (0 = always import).",
+    )
     args = parser.parse_args()
+    if args.skip_if_fresh > 0 and _db_has_fresh_data(args.skip_if_fresh):
+        return
     import_data(args.comparison, args.vivino, args.vivino_overrides)
 
 

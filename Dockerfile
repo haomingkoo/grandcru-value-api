@@ -48,4 +48,4 @@ COPY . .
 
 ENV PORT=8000
 ENV CHROME_BIN=/usr/bin/chromium
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "python scripts/import_wine_data.py --skip-if-fresh 20 && uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
