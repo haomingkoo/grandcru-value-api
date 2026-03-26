@@ -126,10 +126,12 @@ select {
   position: relative;
   z-index: 1;
   width: min(1400px, calc(100% - 32px));
+  max-width: 100%;
   margin: 0 auto;
   padding: 30px 0 72px;
   display: grid;
   gap: 24px;
+  overflow-x: hidden;
 }
 
 .panel {
@@ -346,8 +348,9 @@ h2 {
 
 .hero-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.95fr);
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 0.95fr);
   gap: 20px;
+  max-width: 100%;
 }
 
 .map-panel,
