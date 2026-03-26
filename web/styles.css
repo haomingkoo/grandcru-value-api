@@ -1087,9 +1087,9 @@ h2 {
 
 .deal-table {
   width: 100%;
-  min-width: 1200px;
   border-collapse: separate;
   border-spacing: 0 10px;
+  table-layout: fixed;
 }
 
 .deal-table th {
@@ -1127,9 +1127,7 @@ h2 {
   border-bottom: 1px solid rgba(23, 34, 37, 0.08);
 }
 
-.deal-row td:first-child,
-.deal-row td:nth-child(2),
-.deal-row td:nth-child(3) {
+.deal-row td {
   overflow: hidden;
   word-break: break-word;
 }
@@ -1217,11 +1215,11 @@ h2 {
 }
 
 .price-label {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  min-width: 5.5ch;
+  letter-spacing: 0.04em;
+  min-width: 4.5ch;
   white-space: nowrap;
 }
 
