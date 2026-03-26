@@ -1087,13 +1087,13 @@ h2 {
 
 .deal-table {
   width: 100%;
-  min-width: 1500px;
+  min-width: 1200px;
   border-collapse: separate;
-  border-spacing: 0 12px;
+  border-spacing: 0 10px;
 }
 
 .deal-table th {
-  padding: 0 14px 4px;
+  padding: 0 10px 4px;
   text-align: left;
 }
 
@@ -1120,7 +1120,7 @@ h2 {
 }
 
 .deal-row td {
-  padding: 18px 14px;
+  padding: 14px 10px;
   vertical-align: top;
   background: var(--card-strong);
   border-top: 1px solid rgba(23, 34, 37, 0.08);
@@ -1173,7 +1173,7 @@ h2 {
 .wine-notes-cell {
   display: grid;
   gap: 4px;
-  max-width: 220px;
+  max-width: 180px;
 }
 
 .notes-region {
@@ -1226,7 +1226,7 @@ h2 {
 }
 
 .money {
-  font-size: 1.08rem;
+  font-size: 0.95rem;
   font-weight: 800;
 }
 
@@ -1280,7 +1280,7 @@ h2 {
   flex-wrap: wrap;
   gap: 3px;
   margin-top: 8px;
-  max-width: 180px;
+  max-width: 150px;
 }
 
 .loading-sheen {
