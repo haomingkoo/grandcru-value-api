@@ -1863,6 +1863,10 @@ h1 {
     overflow-x: hidden;
   }
 
+  .advanced-filter {
+    display: none;
+  }
+
   .masthead,
   .panel-heading,
   .split-heading {
