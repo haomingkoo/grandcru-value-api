@@ -358,6 +358,8 @@ h2 {
 .picks-panel,
 .table-panel {
   padding: 22px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .insight-rail {
