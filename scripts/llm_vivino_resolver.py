@@ -172,31 +172,14 @@ def call_gemini_with_search(
     return ""
 
 
-def resolve_vivino_via_grounding(
-    wine_name: str, api_key: str,
-) -> dict[str, str]:
-    """Use Gemini + Google Search grounding to find Vivino data for a wine.
-
-    Bypasses direct Vivino scraping — works from datacenter IPs where
-    Vivino blocks HTTP requests.
-    """
-    prompt = (
-        f'Search Vivino.com for: "{wine_name}"\n'
-        "Return ONLY a JSON object (no markdown) with these keys:\n"
-        "vivino_url, vivino_rating (decimal), vivino_num_ratings (integer),\n"
-        "vivino_price_sgd (number or null), wine_style, grapes,\n"
-        "tasting_keywords (comma-separated string of 8 keywords),\n"
-        "top_review (one short user review under 200 chars or empty).\n"
-        "Only include data from Vivino. Do not fabricate."
-    )
-    raw = call_gemini_with_search(prompt, api_key)
+def _parse_grounding_json(raw: str) -> dict:
+    """Best-effort parse JSON from Gemini grounding, handling code fences
+    and truncated responses."""
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip())
     cleaned = re.sub(r"\s*```$", "", cleaned)
-    # Handle truncated JSON by trying to find the last complete field.
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        # Try to fix truncated JSON by closing it.
         truncated = cleaned.rstrip().rstrip(",")
         if truncated.startswith("{") and not truncated.endswith("}"):
             truncated += "}"
@@ -204,10 +187,86 @@ def resolve_vivino_via_grounding(
                 return json.loads(truncated)
             except json.JSONDecodeError:
                 pass
-        logger.warning(
-            "Grounding parse failed for '%s': %s", wine_name, raw[:300],
+    return {}
+
+
+def resolve_vivino_via_grounding(
+    wine_name: str,
+    api_key: str,
+    *,
+    vivino_url_hint: str = "",
+) -> dict[str, str]:
+    """Use Gemini + Google Search grounding to find Vivino data for a wine.
+
+    Bypasses direct Vivino scraping — works from datacenter IPs where
+    Vivino blocks HTTP requests.
+
+    If vivino_url_hint is provided (e.g. from Brave Search), Gemini is
+    asked to look up that specific page first, which is more reliable
+    than a broad search.
+    """
+    json_schema = (
+        "vivino_url, vivino_rating (decimal), vivino_num_ratings (integer),\n"
+        "vivino_price_sgd (number or null), wine_style, grapes,\n"
+        "tasting_keywords (comma-separated string of 8 keywords),\n"
+        "top_review (one short user review under 200 chars or empty)."
+    )
+
+    # Attempt 1: If we have a URL from Brave, ask about that specific page.
+    if vivino_url_hint:
+        prompt = (
+            f'Look up this Vivino wine page: {vivino_url_hint}\n'
+            f'The wine is: "{wine_name}"\n'
+            f"Return ONLY a JSON object (no markdown) with keys:\n"
+            f"{json_schema}\n"
+            f"Only include data from Vivino. Do not fabricate."
         )
-        return {}
+        raw = call_gemini_with_search(prompt, api_key)
+        data = _parse_grounding_json(raw)
+        if data.get("vivino_rating"):
+            if not data.get("vivino_url"):
+                data["vivino_url"] = vivino_url_hint
+            return data
+        logger.info(
+            "Grounding with URL hint got no rating for '%s', retrying broad search...",
+            wine_name,
+        )
+
+    # Attempt 2: Broad search by wine name.
+    prompt = (
+        f'Search Vivino.com for: "{wine_name}"\n'
+        f"Return ONLY a JSON object (no markdown) with keys:\n"
+        f"{json_schema}\n"
+        f"Only include data from Vivino. Do not fabricate."
+    )
+    raw = call_gemini_with_search(prompt, api_key)
+    data = _parse_grounding_json(raw)
+    if data.get("vivino_rating"):
+        return data
+
+    # Attempt 3: Simplified name (drop vintage, bottle size, color).
+    simple_name = re.sub(
+        r"\s*-\s*(Red|White|Rose|Sparkling)\s*-.*$", "", wine_name,
+    )
+    simple_name = re.sub(r"^\d{4}\s+", "", simple_name)  # drop year
+    simple_name = re.sub(r"^NV\s+", "", simple_name)
+    if simple_name != wine_name:
+        logger.info(
+            "Retrying grounding with simplified name: '%s'", simple_name,
+        )
+        prompt = (
+            f'Search Vivino.com for wine: "{simple_name}"\n'
+            f"Return ONLY a JSON object (no markdown) with keys:\n"
+            f"{json_schema}\n"
+            f"Only include data from Vivino. Do not fabricate."
+        )
+        raw = call_gemini_with_search(prompt, api_key)
+        data = _parse_grounding_json(raw)
+        if data.get("vivino_rating"):
+            return data
+
+    logger.warning("All grounding attempts failed for '%s'", wine_name)
+    return {}
 
 
 def extract_vivino_query(wine_name: str, api_key: str) -> dict:
@@ -623,7 +682,9 @@ def resolve_wine(
             "HTML scraping got no rating for '%s', trying Gemini grounding...",
             wine_name,
         )
-        grounding = resolve_vivino_via_grounding(wine_name, api_key)
+        grounding = resolve_vivino_via_grounding(
+            wine_name, api_key, vivino_url_hint=vivino_url or "",
+        )
         if grounding.get("vivino_rating"):
             result["vivino_rating"] = str(grounding["vivino_rating"])
             result["vivino_num_ratings"] = str(
