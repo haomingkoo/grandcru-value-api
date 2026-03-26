@@ -1867,6 +1867,93 @@ h1 {
     display: none;
   }
 
+  /* Compact quick filters: horizontal scroll strips instead of wrapping pills */
+  .quick-filter-layout {
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .quick-filter-block {
+    gap: 6px;
+  }
+
+  .quick-filter-block .eyebrow {
+    font-size: 0.6rem;
+    margin-bottom: 0;
+  }
+
+  .quick-filter-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    padding-bottom: 2px;
+  }
+
+  .quick-filter-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .quick-filter-button,
+  .country-jump,
+  .region-pill {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .quick-filter-button span,
+  .region-pill span {
+    min-width: 20px;
+    min-height: 20px;
+    padding: 0 5px;
+    font-size: 0.7rem;
+  }
+
+  /* Tighten filter drawer */
+  .filter-drawer {
+    margin-top: 10px;
+  }
+
+  .filter-drawer-toggle {
+    padding: 10px 14px;
+    font-size: 0.88rem;
+  }
+
+  .filter-drawer-body {
+    padding: 0 14px 14px;
+  }
+
+  /* Compact toggle row */
+  .toggle-row {
+    gap: 6px;
+  }
+
+  .toggle-pill {
+    font-size: 0.78rem;
+    padding: 6px 10px;
+  }
+
+  /* Tighten panel heading */
+  .table-panel {
+    padding: 14px;
+  }
+
+  .table-panel .panel-heading h2 {
+    font-size: 1.2rem;
+  }
+
+  .table-panel .eyebrow {
+    font-size: 0.6rem;
+  }
+
+  .results-meta {
+    font-size: 0.78rem;
+  }
+
   .masthead,
   .panel-heading,
   .split-heading {
