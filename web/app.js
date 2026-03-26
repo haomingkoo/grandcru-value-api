@@ -1759,9 +1759,9 @@ function dealSignalHtml(deal) {
   if (deal.price_diff_pct != null) {
     const absPct = Math.abs(deal.price_diff_pct)
     if (deal.cheaper_side === "Platinum Cheaper" && absPct >= 5) {
-      signals.push({ tone: "gain", text: `${formatPct(absPct, 0)} cheaper than Grand Cru` })
+      signals.push({ tone: "gain", text: `${formatPct(absPct, 0)} cheaper` })
     } else if (deal.cheaper_side === "Grand Cru Cheaper" && absPct >= 5) {
-      signals.push({ tone: "loss", text: `${formatPct(absPct, 0)} more than Grand Cru` })
+      signals.push({ tone: "loss", text: `${formatPct(absPct, 0)} more vs GC` })
     }
   }
 
@@ -1771,9 +1771,9 @@ function dealSignalHtml(deal) {
     const pct = Math.abs(diff / deal.vivino_price * 100)
     if (pct >= 3) {
       if (diff < 0) {
-        signals.push({ tone: "gain", text: `${formatPct(pct, 0)} below Vivino market` })
+        signals.push({ tone: "gain", text: `${formatPct(pct, 0)} below mkt` })
       } else {
-        signals.push({ tone: "loss", text: `${formatPct(pct, 0)} above Vivino market` })
+        signals.push({ tone: "loss", text: `${formatPct(pct, 0)} above mkt` })
       }
     } else {
       signals.push({ tone: "flat", text: "At market price" })
@@ -1782,7 +1782,7 @@ function dealSignalHtml(deal) {
 
   // Rating signal
   if (deal.vivino_rating != null && deal.vivino_rating >= 4.0 && deal.vivino_num_ratings >= 100) {
-    signals.push({ tone: "gain", text: `${deal.vivino_rating.toFixed(1)} Vivino (${formatInteger(deal.vivino_num_ratings)})` })
+    signals.push({ tone: "gain", text: `★ ${deal.vivino_rating.toFixed(1)} (${formatInteger(deal.vivino_num_ratings)})` })
   }
 
   if (!signals.length) return ""
