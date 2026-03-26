@@ -139,6 +139,77 @@ def call_gemini(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> s
     return parts[0].get("text", "") if parts else ""
 
 
+def call_gemini_with_search(
+    prompt: str, api_key: str, model: str = "gemini-2.5-flash",
+) -> str:
+    """Call Gemini API with Google Search grounding enabled."""
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent"
+    )
+    body = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 4096,
+        },
+    }).encode("utf-8")
+    req = Request(url, data=body, method="POST", headers={
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    })
+    with urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    candidates = data.get("candidates", [])
+    if not candidates:
+        return ""
+    # Take only the first text part — grounding sometimes duplicates.
+    parts = candidates[0].get("content", {}).get("parts", [])
+    for p in parts:
+        if "text" in p:
+            return p["text"]
+    return ""
+
+
+def resolve_vivino_via_grounding(
+    wine_name: str, api_key: str,
+) -> dict[str, str]:
+    """Use Gemini + Google Search grounding to find Vivino data for a wine.
+
+    Bypasses direct Vivino scraping — works from datacenter IPs where
+    Vivino blocks HTTP requests.
+    """
+    prompt = (
+        f'Search Vivino.com for: "{wine_name}"\n'
+        "Return ONLY a JSON object (no markdown) with these keys:\n"
+        "vivino_url, vivino_rating (decimal), vivino_num_ratings (integer),\n"
+        "vivino_price_sgd (number or null), wine_style, grapes,\n"
+        "tasting_keywords (comma-separated string of 8 keywords),\n"
+        "top_review (one short user review under 200 chars or empty).\n"
+        "Only include data from Vivino. Do not fabricate."
+    )
+    raw = call_gemini_with_search(prompt, api_key)
+    cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip())
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    # Handle truncated JSON by trying to find the last complete field.
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        # Try to fix truncated JSON by closing it.
+        truncated = cleaned.rstrip().rstrip(",")
+        if truncated.startswith("{") and not truncated.endswith("}"):
+            truncated += "}"
+            try:
+                return json.loads(truncated)
+            except json.JSONDecodeError:
+                pass
+        logger.warning(
+            "Grounding parse failed for '%s': %s", wine_name, raw[:300],
+        )
+        return {}
+
+
 def extract_vivino_query(wine_name: str, api_key: str) -> dict:
     """Ask Gemini to parse a retailer wine name into structured data."""
     prompt = f"""You are a wine expert. Given this wine listing from a retailer:
@@ -513,35 +584,71 @@ def resolve_wine(
             f"https://www.vivino.com/en/search/wines?q={quote_plus(query)}"
         )
         result["notes"] += " no_direct_match"
-        return result
+        # Fall through to grounding fallback below.
 
-    result["vivino_url"] = vivino_url
+    if vivino_url:
+        result["vivino_url"] = vivino_url
 
     # Step 3: Fetch the Vivino wine page for metrics + price.
-    time.sleep(sleep_seconds)
-    try:
-        page_html = fetch_html(vivino_url)
-        rating, count = parse_vivino_rating(page_html)
-        result["vivino_rating"] = rating
-        result["vivino_num_ratings"] = count
-        extras = parse_vivino_extras(page_html)
-        if extras.get("price"):
-            result["vivino_price"] = extras["price"]
-    except Exception as exc:
-        extras = {}
-        result["notes"] += f" metric_fetch_error={exc}"
+    extras: dict[str, str] = {}
+    if vivino_url:
+        time.sleep(sleep_seconds)
+        try:
+            page_html = fetch_html(vivino_url)
+            rating, count = parse_vivino_rating(page_html)
+            result["vivino_rating"] = rating
+            result["vivino_num_ratings"] = count
+            extras = parse_vivino_extras(page_html)
+            if extras.get("price"):
+                result["vivino_price"] = extras["price"]
+        except Exception as exc:
+            result["notes"] += f" metric_fetch_error={exc}"
 
     # Step 4: Fetch tasting notes from Vivino API.
     tasting_notes = ""
-    wine_id = extract_wine_id(vivino_url)
-    if wine_id:
-        time.sleep(sleep_seconds)
-        try:
-            tasting_notes = fetch_vivino_tasting_notes(wine_id)
-        except Exception as exc:
-            result["notes"] += f" taste_fetch_error={exc}"
+    if vivino_url:
+        wine_id = extract_wine_id(vivino_url)
+        if wine_id:
+            time.sleep(sleep_seconds)
+            try:
+                tasting_notes = fetch_vivino_tasting_notes(wine_id)
+            except Exception as exc:
+                result["notes"] += f" taste_fetch_error={exc}"
 
-    # Step 5: Compose vivino_description from page facts + tasting notes.
+    # Step 5: Grounding fallback — if we got no rating from HTML scraping,
+    # use Gemini with Google Search to look up Vivino data. This works
+    # from datacenter IPs where Vivino blocks direct HTTP requests.
+    if not result.get("vivino_rating"):
+        logger.info(
+            "HTML scraping got no rating for '%s', trying Gemini grounding...",
+            wine_name,
+        )
+        grounding = resolve_vivino_via_grounding(wine_name, api_key)
+        if grounding.get("vivino_rating"):
+            result["vivino_rating"] = str(grounding["vivino_rating"])
+            result["vivino_num_ratings"] = str(
+                grounding.get("vivino_num_ratings", ""),
+            )
+            if grounding.get("vivino_url"):
+                result["vivino_url"] = grounding["vivino_url"]
+            if grounding.get("vivino_price_sgd"):
+                result["vivino_price"] = str(grounding["vivino_price_sgd"])
+            # Build description from grounding data.
+            g_parts: list[str] = []
+            if grounding.get("wine_style"):
+                g_parts.append(f"Regions · {grounding['wine_style']}")
+            if grounding.get("grapes"):
+                g_parts.append(grounding["grapes"])
+            if grounding.get("tasting_keywords"):
+                g_parts.append(grounding["tasting_keywords"])
+            if grounding.get("top_review"):
+                g_parts.append(grounding["top_review"])
+            if g_parts:
+                result["vivino_description"] = " · ".join(g_parts)[:500]
+            result["notes"] += " resolved_via=grounding"
+            return result
+
+    # Step 6: Compose vivino_description from page facts + tasting notes.
     desc_parts: list[str] = []
     if extras.get("grapes"):
         desc_parts.append(extras["grapes"])
