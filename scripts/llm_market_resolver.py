@@ -34,6 +34,7 @@ from scripts.llm_utils import (  # noqa: E402
     load_cache,
     save_cache,
 )
+from scripts.validate_market_prices import validate_row  # noqa: E402
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -190,6 +191,169 @@ def resolve_market_price(
     return result
 
 
+def _build_retry_query(wine_name: str) -> str | None:
+    """Build a tighter search query for wines that failed validation.
+
+    Uses the parsed producer + label directly, and adds exclusions
+    for common mis-classifications (e.g., exclude 'premier cru' for
+    village-level wines).
+    """
+    parts = [p.strip() for p in wine_name.split(" - ")]
+    colours = {"red", "white", "rose", "rosé"}
+
+    # Find colour position to split producer from label
+    colour_idx = None
+    for i, p in enumerate(parts):
+        if p.lower() in colours:
+            colour_idx = i
+            break
+
+    if colour_idx and colour_idx >= 2:
+        producer_parts = parts[0:colour_idx - 1]
+        producer_raw = " ".join(producer_parts)
+        label = parts[colour_idx - 1]
+    elif len(parts) >= 2:
+        producer_raw = parts[0]
+        label = parts[1] if parts[1].lower() not in colours else ""
+    else:
+        return None
+
+    # Strip vintage from producer
+    vintage_match = re.match(r"^(NV|\d{4})\s+(.+)", producer_raw)
+    vintage = ""
+    if vintage_match:
+        vintage = vintage_match.group(1)
+        producer_raw = vintage_match.group(2)
+
+    producer = producer_raw.strip()
+    label = label.strip()
+    lower = wine_name.lower()
+
+    # Build query: producer + label + vintage
+    query_parts = [producer, label]
+    if vintage and vintage != "NV":
+        query_parts.append(vintage)
+
+    # Add exclusions for classification mismatches
+    exclusions = []
+    if "premier cru" not in lower and "1er cru" not in lower:
+        exclusions.append("-\"premier cru\"")
+    if "grand cru" not in lower:
+        exclusions.append("-\"grand cru\"")
+
+    query = f"site:wine-searcher.com {' '.join(query_parts)} average price"
+    if exclusions:
+        query += " " + " ".join(exclusions)
+
+    return query
+
+
+def resolve_with_validation(
+    wine_name: str,
+    brave_api_key: str,
+    *,
+    usd_to_sgd: float = _DEFAULT_USD_TO_SGD,
+    sleep_between: float = 0.5,
+) -> dict[str, str]:
+    """Resolve → validate → retry with tighter query → validate again.
+
+    Returns the result dict with an extra 'validation' field:
+    'passed', 'passed_retry', or 'tried_failed'.
+    """
+    # Attempt 1: standard query
+    result = resolve_market_price(wine_name, brave_api_key, usd_to_sgd=usd_to_sgd)
+
+    if result.get("retailer_url"):
+        issues = validate_row(wine_name, result["retailer_url"])
+        if not issues:
+            result["notes"] += " validation=passed"
+            return result
+        logger.info("  Attempt 1 failed validation: %s", "; ".join(issues))
+    else:
+        issues = ["no URL returned"]
+
+    # Attempt 2: tighter query with exclusions
+    time.sleep(sleep_between)
+    retry_query = _build_retry_query(wine_name)
+    if not retry_query:
+        result["notes"] += " validation=tried_failed"
+        return result
+
+    logger.info("  Retrying with: %s", retry_query[:80])
+
+    retry_url = (
+        f"https://api.search.brave.com/res/v1/web/search"
+        f"?q={quote_plus(retry_query)}&count=5"
+    )
+
+    try:
+        req = Request(retry_url, headers={
+            "Accept": "application/json",
+            "X-Subscription-Token": brave_api_key,
+        })
+        with urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+    except Exception as exc:
+        result["notes"] += f" retry_error={exc} validation=tried_failed"
+        return result
+
+    web_results = data.get("web", {}).get("results", [])
+
+    search_words = set(
+        w.lower() for w in re.findall(r"[a-zA-Z]{3,}", retry_query)
+        if w.lower() not in (
+            "wine", "the", "and", "red", "white", "rose",
+            "site", "searcher", "com", "average", "price",
+            "premier", "grand", "cru",
+        )
+    )
+
+    for r in web_results:
+        ws_url = r.get("url", "")
+        title = r.get("title", "")
+        desc = r.get("description", "")
+
+        if "wine-searcher.com" not in ws_url:
+            continue
+
+        text = f"{title} {desc}"
+
+        # Validate URL first before extracting price
+        url_issues = validate_row(wine_name, ws_url)
+        if url_issues:
+            continue  # Skip results that fail validation
+
+        # Extract price
+        avg_match = re.search(r"Avg Price[^$]*\$\s*(\d+(?:\.\d{2})?)", text)
+        if avg_match:
+            prices = [float(avg_match.group(1))]
+        else:
+            price_matches = re.findall(r"\$\s*(\d+(?:\.\d{2})?)", text)
+            prices = [float(p) for p in price_matches if 5 <= float(p) <= 5000]
+
+        if not prices:
+            continue
+
+        avg_usd = prices[0]
+        avg_sgd = round(avg_usd * usd_to_sgd, 2)
+
+        store_match = re.search(r"(\d+)\s+(?:stores?|shops?|merchants?|offers?)", text)
+        stores = int(store_match.group(1)) if store_match else None
+        stores_str = f" ({stores} stores)" if stores else ""
+
+        result["retailer_name"] = f"Wine-Searcher avg{stores_str}"
+        result["retailer_url"] = ws_url
+        result["price_sgd"] = str(avg_sgd)
+        result["currency_confirmed"] = "true"
+        result["notes"] = f"resolved_via=brave_wine_searcher_retry usd={avg_usd} validation=passed_retry"
+        return result
+
+    # Both attempts failed
+    result["notes"] += " validation=tried_failed"
+    logger.info("  Both attempts failed validation — marking tried_failed")
+    return result
+
+
 def write_csv(path: Path, rows: list[dict], fieldnames: list[str]) -> None:
     """Write rows to a CSV file."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -281,7 +445,11 @@ def main() -> None:
             i + 1, len(wines), name[:60],
         )
 
-        result = resolve_market_price(name, brave_key, usd_to_sgd=usd_to_sgd)
+        result = resolve_with_validation(
+            name, brave_key,
+            usd_to_sgd=usd_to_sgd,
+            sleep_between=args.sleep,
+        )
         results.append(result)
 
         cache[key] = {
