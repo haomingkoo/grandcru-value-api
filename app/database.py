@@ -53,6 +53,9 @@ _ALLOWED_COLUMNS = {
     "origin_latitude",
     "origin_longitude",
     "origin_precision",
+    "price_market",
+    "market_retailer_name",
+    "market_retailer_url",
 }
 
 
