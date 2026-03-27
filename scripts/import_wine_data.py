@@ -714,8 +714,8 @@ def main() -> None:
     parser.add_argument(
         "--market-prices",
         type=Path,
-        default=None,
-        help="Optional path to market_prices.csv from llm_market_resolver.",
+        default=Path("seed/market_prices.csv"),
+        help="Path to market_prices.csv from llm_market_resolver.",
     )
     parser.add_argument(
         "--skip-if-fresh",
