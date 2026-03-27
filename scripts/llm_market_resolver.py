@@ -42,7 +42,26 @@ logging.basicConfig(
 logger = logging.getLogger("grandcru.market_resolver")
 
 CACHE_TTL_DAYS = 30
-USD_TO_SGD = 1.35
+_DEFAULT_USD_TO_SGD = 1.30
+
+
+def _fetch_usd_to_sgd() -> float:
+    """Fetch live USD→SGD rate, fall back to default on error."""
+    try:
+        req = Request(
+            "https://open.er-api.com/v6/latest/USD",
+            headers={"Accept": "application/json"},
+        )
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        rate = data.get("rates", {}).get("SGD")
+        if rate and isinstance(rate, (int, float)) and 1.0 < rate < 2.0:
+            logger.info("Live USD→SGD rate: %.4f", rate)
+            return round(rate, 4)
+    except Exception as exc:
+        logger.warning("Failed to fetch exchange rate: %s", exc)
+    logger.info("Using default USD→SGD rate: %.2f", _DEFAULT_USD_TO_SGD)
+    return _DEFAULT_USD_TO_SGD
 
 _OUTPUT_FIELDS = [
     "match_name",
@@ -75,6 +94,8 @@ def _clean_wine_name_for_search(name: str) -> str:
 def resolve_market_price(
     wine_name: str,
     brave_api_key: str,
+    *,
+    usd_to_sgd: float = _DEFAULT_USD_TO_SGD,
 ) -> dict[str, str]:
     """Search Brave for Wine-Searcher page, extract price from snippet."""
     result: dict[str, str] = {f: "" for f in _OUTPUT_FIELDS}
@@ -149,7 +170,7 @@ def resolve_market_price(
             result["notes"] = f"price_outlier usd={avg_usd}"
             continue
 
-        avg_sgd = round(avg_usd * USD_TO_SGD, 2)
+        avg_sgd = round(avg_usd * usd_to_sgd, 2)
 
         # Extract store count if available
         store_match = re.search(
@@ -219,6 +240,9 @@ def main() -> None:
 
     logger.info("Loaded %d wines from comparison", len(wines))
 
+    # Fetch live exchange rate once
+    usd_to_sgd = _fetch_usd_to_sgd()
+
     cache = load_cache(cache_path)
     results: list[dict[str, str]] = []
     resolved_count = 0
@@ -257,7 +281,7 @@ def main() -> None:
             i + 1, len(wines), name[:60],
         )
 
-        result = resolve_market_price(name, brave_key)
+        result = resolve_market_price(name, brave_key, usd_to_sgd=usd_to_sgd)
         results.append(result)
 
         cache[key] = {
