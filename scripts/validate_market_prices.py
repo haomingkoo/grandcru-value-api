@@ -134,10 +134,60 @@ def validate_row(name: str, url: str) -> list[str]:
     return issues
 
 
+def validate_price_sanity(
+    name: str,
+    price_sgd: float | None,
+    comparison_lookup: dict[str, dict],
+) -> list[str]:
+    """Check if market price is reasonable vs Platinum/Grand Cru prices."""
+    if price_sgd is None or price_sgd <= 0:
+        return []
+
+    comp = comparison_lookup.get(name)
+    if not comp:
+        return []
+
+    issues = []
+    plat_per = float(comp.get("price_plat") or 0)
+    gc_per = float(comp.get("price_main") or 0)
+    ref = plat_per or gc_per  # Use whichever is available
+
+    if ref <= 0:
+        return []
+
+    ratio = price_sgd / ref
+    if ratio > 3.0:
+        issues.append(
+            f"market S${price_sgd:.0f} is {ratio:.1f}× retailer "
+            f"S${ref:.0f}/btl — likely wrong wine"
+        )
+    elif ratio < 0.15:
+        issues.append(
+            f"market S${price_sgd:.0f} is only {ratio:.1%} of retailer "
+            f"S${ref:.0f}/btl — suspiciously cheap"
+        )
+
+    return issues
+
+
+def _load_comparison_lookup(path: Path) -> dict[str, dict]:
+    """Load comparison CSV keyed by wine name."""
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    return {r.get("name_plat", ""): r for r in rows if r.get("name_plat")}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fix", action="store_true", help="Remove flagged rows")
     parser.add_argument("--path", type=Path, default=MARKET_PATH)
+    parser.add_argument(
+        "--comparison", type=Path,
+        default=ROOT / "seed" / "comparison_summary.csv",
+        help="Comparison CSV for price sanity check",
+    )
     args = parser.parse_args()
 
     if not args.path.exists():
@@ -149,13 +199,25 @@ def main() -> None:
         rows = list(reader)
         fieldnames = reader.fieldnames
 
+    comp_lookup = _load_comparison_lookup(args.comparison)
+
     clean_rows = []
     flagged = 0
 
     for row in rows:
         name = row.get("match_name", "")
         url = row.get("retailer_url", "")
+        price_str = row.get("price_sgd", "")
+
+        # Check 1: URL validation (producer, label, classification)
         issues = validate_row(name, url)
+
+        # Check 2: Price sanity vs retailer prices
+        try:
+            price_val = float(price_str) if price_str else None
+        except ValueError:
+            price_val = None
+        issues.extend(validate_price_sanity(name, price_val, comp_lookup))
 
         if issues:
             flagged += 1
