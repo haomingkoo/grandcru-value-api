@@ -60,6 +60,78 @@ def is_cache_fresh(entry: dict, ttl_days: int) -> bool:
     return age_days < ttl_days
 
 
+# ── Identity Cache ────────────────────────────────────────────────────
+# Permanent wine→URL mappings. No TTL — entries persist until flagged.
+# Separate from data caches (ratings/prices) which have TTLs.
+
+IDENTITY_CACHE_PATH = ROOT / "data" / "identity_cache.json"
+
+
+def load_identity_cache(path: Path = IDENTITY_CACHE_PATH) -> dict[str, dict]:
+    """Load the permanent identity cache."""
+    return load_cache(path)
+
+
+def save_identity_cache(
+    cache: dict[str, dict], path: Path = IDENTITY_CACHE_PATH,
+) -> None:
+    """Persist the identity cache."""
+    save_cache(path, cache)
+
+
+def get_identity(cache: dict[str, dict], wine_name: str) -> dict | None:
+    """Get a validated, unflagged identity entry. Returns None if missing/flagged."""
+    key = cache_key(wine_name)
+    entry = cache.get(key)
+    if not entry:
+        return None
+    if not entry.get("validated", False):
+        return None
+    if entry.get("flags"):
+        return None
+    return entry
+
+
+def set_identity(
+    cache: dict[str, dict],
+    wine_name: str,
+    *,
+    vivino_url: str | None = None,
+    wine_searcher_url: str | None = None,
+    source: str = "",
+    validated: bool = True,
+) -> None:
+    """Upsert an identity entry. Merges URLs — doesn't overwrite existing with None."""
+    key = cache_key(wine_name)
+    existing = cache.get(key, {})
+    entry = {
+        "wine_name": wine_name,
+        "vivino_url": vivino_url or existing.get("vivino_url"),
+        "wine_searcher_url": wine_searcher_url or existing.get("wine_searcher_url"),
+        "source": source or existing.get("source", ""),
+        "validated": validated,
+        "flags": [],
+        "resolved_at": time.time(),
+    }
+    cache[key] = entry
+
+
+def flag_identity(cache: dict[str, dict], wine_name: str, flag: str) -> None:
+    """Flag an identity entry for re-resolution."""
+    key = cache_key(wine_name)
+    entry = cache.get(key)
+    if entry:
+        flags = entry.get("flags", [])
+        if flag not in flags:
+            flags.append(flag)
+        entry["flags"] = flags
+
+
+def needs_resolution(cache: dict[str, dict], wine_name: str) -> bool:
+    """True if wine has no validated identity or is flagged."""
+    return get_identity(cache, wine_name) is None
+
+
 # ── Gemini API ─────────────────────────────────────────────────────────
 
 

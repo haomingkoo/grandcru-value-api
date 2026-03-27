@@ -93,13 +93,10 @@ def build_refresh_command(
         cmd.extend(
             [
                 "--resolver-max-api-queries",
-                "300",
+                "50",
                 "--no-resolver-only-new-unresolved",
-                "--resolver-cache-ttl-hours",
-                "0",
                 "--llm-resolve",
                 "--llm-resolve-all",
-                "--llm-resolve-force",
                 "--resolve-market-prices",
             ]
         )

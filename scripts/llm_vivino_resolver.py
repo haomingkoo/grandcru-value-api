@@ -492,52 +492,67 @@ def resolve_wine(
     brave_api_key: str = "",
     dry_run: bool = False,
     sleep_seconds: float = 2.0,
+    known_vivino_url: str = "",
 ) -> dict:
-    """Resolve a single wine: LLM parse -> Vivino search -> fetch metrics."""
+    """Resolve a single wine: LLM parse -> Vivino search -> fetch metrics.
+
+    If known_vivino_url is provided (from identity cache), skips the
+    Brave search and goes straight to fetching data from the known URL.
+    Saves 1-2 Brave API calls per wine.
+    """
     result: dict[str, str] = {f: "" for f in _OVERRIDE_FIELDS}
     result["match_name"] = wine_name
 
-    # Step 1: LLM parses the wine name.
-    parsed = extract_vivino_query(wine_name, api_key)
-    if not parsed:
-        result["notes"] = "gemini_parse_failed"
-        return result
+    vivino_url = ""
 
-    query = parsed.get("vivino_query", "").strip()
-    producer = parsed.get("producer", "").strip()
-    wine = parsed.get("wine", "").strip()
-    vintage = parsed.get("vintage", "").strip()
-    result["wine_name"] = f"{producer} {wine}".strip()
-    result["notes"] = f"llm_query={query}"
-
-    if not query:
-        result["notes"] = "gemini_empty_query"
-        return result
-
-    if dry_run:
-        result["notes"] = f"dry_run query={query}"
-        return result
-
-    # Step 2: Search for Vivino URL via Brave (or direct fallback).
-    time.sleep(sleep_seconds)
-    vivino_url = search_vivino_for_url(query, brave_api_key)
-
-    if not vivino_url and vintage and vintage != "NV":
-        fallback_query = f"{producer} {wine}".strip()
-        if fallback_query != query:
-            time.sleep(sleep_seconds)
-            vivino_url = search_vivino_for_url(fallback_query, brave_api_key)
-            result["notes"] += f" retry_query={fallback_query}"
-
-    if not vivino_url:
-        result["vivino_url"] = (
-            f"https://www.vivino.com/en/search/wines?q={quote_plus(query)}"
-        )
-        result["notes"] += " no_direct_match"
-        # Fall through to grounding fallback below.
-
-    if vivino_url:
+    if known_vivino_url:
+        # Identity cache hit — skip LLM parsing and Brave search entirely
+        vivino_url = known_vivino_url
         result["vivino_url"] = vivino_url
+        result["notes"] = "identity_cache_hit"
+        logger.info("  Using cached Vivino URL: %s", vivino_url[:60])
+    else:
+        # Step 1: LLM parses the wine name.
+        parsed = extract_vivino_query(wine_name, api_key)
+        if not parsed:
+            result["notes"] = "gemini_parse_failed"
+            return result
+
+        query = parsed.get("vivino_query", "").strip()
+        producer = parsed.get("producer", "").strip()
+        wine = parsed.get("wine", "").strip()
+        vintage = parsed.get("vintage", "").strip()
+        result["wine_name"] = f"{producer} {wine}".strip()
+        result["notes"] = f"llm_query={query}"
+
+        if not query:
+            result["notes"] = "gemini_empty_query"
+            return result
+
+        if dry_run:
+            result["notes"] = f"dry_run query={query}"
+            return result
+
+        # Step 2: Search for Vivino URL via Brave (or direct fallback).
+        time.sleep(sleep_seconds)
+        vivino_url = search_vivino_for_url(query, brave_api_key)
+
+        if not vivino_url and vintage and vintage != "NV":
+            fallback_query = f"{producer} {wine}".strip()
+            if fallback_query != query:
+                time.sleep(sleep_seconds)
+                vivino_url = search_vivino_for_url(fallback_query, brave_api_key)
+                result["notes"] += f" retry_query={fallback_query}"
+
+        if not vivino_url:
+            result["vivino_url"] = (
+                f"https://www.vivino.com/en/search/wines?q={quote_plus(query)}"
+            )
+            result["notes"] += " no_direct_match"
+            # Fall through to grounding fallback below.
+
+        if vivino_url:
+            result["vivino_url"] = vivino_url
 
     # Step 3: Fetch the Vivino wine page for metrics + price.
     extras: dict[str, str] = {}
@@ -686,16 +701,22 @@ def main() -> None:
         print("Get a free key at: https://aistudio.google.com/apikey")
         sys.exit(1)
 
+    from scripts.llm_utils import get_identity, load_identity_cache
+
     # Load cache and data.
     vivino_cache = load_cache(args.cache_file)
+    identity_cache = load_identity_cache()
     comparison_rows = read_csv_rows(args.comparison)
     vivino_rows = read_csv_rows(args.vivino)
     override_rows = read_optional_csv_rows(args.vivino_overrides)
     lookup = build_vivino_lookup(vivino_rows + override_rows)
 
     # Determine which wines need resolving.
-    wines_to_resolve: list[dict[str, str]] = []
+    # Wines with a validated identity cache entry get their known URL
+    # passed through — skipping the Brave search step entirely.
+    wines_to_resolve: list[tuple[dict[str, str], str]] = []  # (row, known_url)
     cache_hits = 0
+    identity_hits = 0
     for row in comparison_rows:
         wine_name = (row.get("name_plat") or "").strip()
         if not wine_name:
@@ -715,21 +736,31 @@ def main() -> None:
             cache_hits += 1
             continue
 
-        wines_to_resolve.append(row)
+        # Check identity cache for known Vivino URL (skip Brave search)
+        identity = get_identity(identity_cache, wine_name)
+        known_url = ""
+        if identity and identity.get("vivino_url"):
+            known_url = identity["vivino_url"]
+            identity_hits += 1
+
+        wines_to_resolve.append((row, known_url))
 
     if args.limit > 0:
         wines_to_resolve = wines_to_resolve[:args.limit]
 
     total = len(wines_to_resolve)
+    brave_needed = sum(1 for _, url in wines_to_resolve if not url)
     print(
-        f"[llm_resolver] {total} wines to resolve, {cache_hits} cached "
+        f"[llm_resolver] {total} wines to resolve, {cache_hits} cached, "
+        f"{identity_hits} identity-cached (skip Brave), {brave_needed} need Brave "
         f"(from {len(comparison_rows)} total, ttl={args.cache_ttl_days}d)"
     )
 
     resolved: list[dict[str, str]] = []
-    for i, row in enumerate(wines_to_resolve, 1):
+    for i, (row, known_url) in enumerate(wines_to_resolve, 1):
         wine_name = row["name_plat"].strip()
-        print(f"[{i}/{total}] {wine_name[:65]}...")
+        label = "CACHED-URL" if known_url else "BRAVE"
+        print(f"[{i}/{total}] [{label}] {wine_name[:60]}...")
 
         try:
             result = resolve_wine(
@@ -737,6 +768,7 @@ def main() -> None:
                 args.gemini_api_key,
                 brave_api_key=args.brave_api_key,
                 dry_run=args.dry_run,
+                known_vivino_url=known_url,
                 sleep_seconds=args.sleep,
             )
             status = (
