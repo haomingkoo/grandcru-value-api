@@ -351,7 +351,53 @@ def build_vivino_search_url(query: str | None) -> str | None:
     return f"https://www.vivino.com/en/search/wines?q={quote_plus(cleaned)}"
 
 
-def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path: Path | None = None) -> None:
+def _build_market_lookup(path: Path | None) -> dict[str, dict[str, str]]:
+    """Build a lookup from wine name → market price data."""
+    if not path or not path.exists():
+        return {}
+    rows = read_optional_csv_rows(path)
+    lookup: dict[str, dict[str, str]] = {}
+    for row in rows:
+        name = (row.get("match_name") or "").strip()
+        price = row.get("price_sgd", "")
+        if name and price:
+            key = canonicalize_key(name)
+            if key:
+                lookup[key] = row
+    return lookup
+
+
+def _resolve_market_price(
+    wine_name: str, quantity: int, lookup: dict[str, dict[str, str]],
+) -> float | None:
+    """Look up market price and scale to Platinum's quantity."""
+    key = canonicalize_key(wine_name)
+    if not key or key not in lookup:
+        return None
+    raw = parse_float(lookup[key].get("price_sgd"))
+    if raw is None or raw <= 0:
+        return None
+    # Market price is per-bottle; scale to Platinum's quantity
+    return round(raw * max(quantity, 1), 2)
+
+
+def _resolve_market_field(
+    wine_name: str, lookup: dict[str, dict[str, str]], field: str,
+) -> str | None:
+    """Look up a string field from the market price lookup."""
+    key = canonicalize_key(wine_name)
+    if not key or key not in lookup:
+        return None
+    return lookup[key].get(field) or None
+
+
+def import_data(
+    comparison_path: Path,
+    vivino_path: Path,
+    vivino_overrides_path: Path | None = None,
+    *,
+    market_prices_path: Path | None = None,
+) -> None:
     if not comparison_path.exists():
         raise FileNotFoundError(f"comparison_summary missing: {comparison_path}")
     if not vivino_path.exists():
@@ -374,6 +420,7 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
     vivino_rows = vivino_rows_base + vivino_rows_override
     vivino_lookup = build_vivino_lookup(vivino_rows)
     vivino_by_url = build_vivino_url_index(vivino_rows)
+    market_lookup = _build_market_lookup(market_prices_path)
 
     logger.info(
         "import_start comparison=%s vivino=%s overrides=%s",
@@ -530,6 +577,15 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 "vivino_price": vivino_price_adjusted,
                 "vivino_description": vivino_desc,
                 "vivino_match_method": match_method,
+                "price_market": _resolve_market_price(
+                    wine_name, quantity, market_lookup,
+                ),
+                "market_retailer_name": _resolve_market_field(
+                    wine_name, market_lookup, "retailer_name",
+                ),
+                "market_retailer_url": _resolve_market_field(
+                    wine_name, market_lookup, "retailer_url",
+                ),
                 "producer": metadata.producer,
                 "label_name": metadata.label_name,
                 "country": metadata.country,
@@ -640,6 +696,12 @@ def main() -> None:
         help="Optional path to manual vivino overrides CSV.",
     )
     parser.add_argument(
+        "--market-prices",
+        type=Path,
+        default=None,
+        help="Optional path to market_prices.csv from llm_market_resolver.",
+    )
+    parser.add_argument(
         "--skip-if-fresh",
         type=float,
         default=0,
@@ -649,7 +711,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.skip_if_fresh > 0 and _db_has_fresh_data(args.skip_if_fresh):
         return
-    import_data(args.comparison, args.vivino, args.vivino_overrides)
+    import_data(
+        args.comparison, args.vivino, args.vivino_overrides,
+        market_prices_path=args.market_prices,
+    )
 
 
 if __name__ == "__main__":

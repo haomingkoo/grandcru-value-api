@@ -83,6 +83,9 @@ def _ensure_runtime_columns() -> None:
     ensure_column("wine_deals", "vivino_description", "VARCHAR(512)")
     for column, col_type in DEAL_EXTRA_COLUMNS:
         ensure_column("wine_deals", column, col_type)
+    ensure_column("wine_deals", "price_market", "FLOAT")
+    ensure_column("wine_deals", "market_retailer_name", "VARCHAR(128)")
+    ensure_column("wine_deals", "market_retailer_url", "VARCHAR(512)")
 
 
 def deal_filter_params(
