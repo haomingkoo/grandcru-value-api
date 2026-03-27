@@ -654,6 +654,8 @@ def resolve_matches(args: argparse.Namespace) -> None:
     if args.provider == "google_cse" and (not args.google_api_key or not args.google_cse_id):
         raise ValueError("GOOGLE_API_KEY and GOOGLE_CSE_ID are required for --provider google_cse")
 
+    from scripts.llm_utils import load_identity_cache, needs_resolution
+
     comparison_rows = read_csv_rows(args.comparison)
     vivino_rows = read_csv_rows(args.vivino)
     override_rows = read_optional_csv_rows(args.vivino_overrides)
@@ -663,6 +665,9 @@ def resolve_matches(args: argparse.Namespace) -> None:
         seen_unresolved = {}
         state["seen_unresolved"] = seen_unresolved
 
+    identity_cache = load_identity_cache()
+    identity_skipped = 0
+
     initial_lookup = build_vivino_lookup(vivino_rows + override_rows)
     unresolved_rows: list[dict[str, str]] = []
     unresolved_none_count = 0
@@ -671,6 +676,12 @@ def resolve_matches(args: argparse.Namespace) -> None:
         wine_name = (row.get("name_plat") or "").strip()
         if not wine_name:
             continue
+
+        # Skip wines with validated Vivino URL in identity cache
+        if not needs_resolution(identity_cache, wine_name):
+            identity_skipped += 1
+            continue
+
         matched_row, match_method = match_vivino_row(wine_name, initial_lookup)
         if match_method == "none":
             unresolved_rows.append(row)
@@ -702,6 +713,7 @@ def resolve_matches(args: argparse.Namespace) -> None:
         f"comparison={len(comparison_rows)}",
         f"vivino={len(vivino_rows)}",
         f"overrides={len(override_rows)}",
+        f"identity_cache_skipped={identity_skipped}",
         f"unresolved_before_filter={total_unresolved_before_filter}",
         f"unresolved_none={unresolved_none_count}",
         f"missing_url_enrichment={missing_url_enrichment_count}",

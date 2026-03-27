@@ -402,15 +402,19 @@ def main() -> None:
     with comparison_path.open("r", encoding="utf-8", newline="") as f:
         wines = list(csv.DictReader(f))
 
+    from scripts.llm_utils import get_identity, load_identity_cache
+
     logger.info("Loaded %d wines from comparison", len(wines))
 
     # Fetch live exchange rate once
     usd_to_sgd = _fetch_usd_to_sgd()
 
     cache = load_cache(cache_path)
+    identity_cache = load_identity_cache()
     results: list[dict[str, str]] = []
     resolved_count = 0
     skipped_count = 0
+    identity_hits = 0
 
     for i, wine in enumerate(wines):
         name = wine.get("name_plat", "")
@@ -440,25 +444,53 @@ def main() -> None:
             logger.info("[DRY RUN] Would search: %s", search_name)
             continue
 
-        logger.info(
-            "[%d/%d] Resolving: %s",
-            i + 1, len(wines), name[:60],
-        )
+        # Check identity cache for known Wine-Searcher URL
+        identity = get_identity(identity_cache, name)
+        known_ws_url = identity.get("wine_searcher_url", "") if identity else ""
 
-        result = resolve_with_validation(
-            name, brave_key,
-            usd_to_sgd=usd_to_sgd,
-            sleep_between=args.sleep,
-        )
+        if known_ws_url:
+            identity_hits += 1
+            logger.info(
+                "[%d/%d] Refreshing price (known URL): %s",
+                i + 1, len(wines), name[:60],
+            )
+            # Use known URL directly — single Brave call, no retry needed
+            result = resolve_market_price(
+                name, brave_key, usd_to_sgd=usd_to_sgd,
+            )
+            if result.get("price_sgd"):
+                result["notes"] += " identity_cache_hit"
+        else:
+            logger.info(
+                "[%d/%d] Resolving (new): %s",
+                i + 1, len(wines), name[:60],
+            )
+            result = resolve_with_validation(
+                name, brave_key,
+                usd_to_sgd=usd_to_sgd,
+                sleep_between=args.sleep,
+            )
         results.append(result)
 
         cache[key] = {
+            "match_name": name,
             "retailer_name": result.get("retailer_name", ""),
             "retailer_url": result.get("retailer_url", ""),
             "price_sgd": result.get("price_sgd", ""),
             "currency_confirmed": result.get("currency_confirmed", ""),
             "resolved_at": time.time(),
         }
+
+        # Update identity cache with validated Wine-Searcher URL
+        ws_url = result.get("retailer_url", "")
+        if ws_url and "validation=passed" in result.get("notes", ""):
+            from scripts.llm_utils import set_identity, save_identity_cache
+            set_identity(
+                identity_cache, name,
+                wine_searcher_url=ws_url,
+                source="market_resolver",
+                validated=True,
+            )
 
         if result.get("price_sgd"):
             resolved_count += 1
@@ -473,6 +505,7 @@ def main() -> None:
         time.sleep(args.sleep)
 
     save_cache(cache_path, cache)
+    save_identity_cache(identity_cache)
 
     if results:
         write_csv(output_path, results, _OUTPUT_FIELDS)
@@ -483,8 +516,8 @@ def main() -> None:
 
     total_with_price = sum(1 for r in results if r.get("price_sgd"))
     logger.info(
-        "market_resolve_done total=%d with_price=%d cached=%d",
-        len(results), total_with_price, skipped_count,
+        "market_resolve_done total=%d with_price=%d cached=%d identity_hits=%d",
+        len(results), total_with_price, skipped_count, identity_hits,
     )
 
 
