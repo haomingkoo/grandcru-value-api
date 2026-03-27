@@ -894,6 +894,7 @@ function renderTopPicks(deals) {
             <div class="price-line"><span class="price-label">Platinum</span><strong class="pick-price">${formatMoney(deal.price_platinum)}</strong> ${perUnitNote(deal.price_platinum, deal)}</div>
             ${deal.price_grand_cru ? `<div class="price-line"><span class="price-label muted">Grand Cru</span><span class="muted">${formatMoney(deal.price_grand_cru)}</span> ${perUnitNote(deal.price_grand_cru, deal)}</div>` : ""}
             ${deal.vivino_price ? `<div class="price-line"><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span> ${perUnitNote(deal.vivino_price, deal)}</div>` : ""}
+            ${deal.price_market ? `<div class="price-line"><span class="price-label muted">Global avg</span><span class="muted">${formatMoney(deal.price_market)}</span> ${perUnitNote(deal.price_market, deal)}</div>` : ""}
           </div>
           <div class="pick-meta">
             <span class="pill ${gapTone(deal)}">${escapeHtml(gapShortCopy(deal))}</span>
