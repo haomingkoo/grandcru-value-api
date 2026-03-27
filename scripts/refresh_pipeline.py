@@ -468,6 +468,11 @@ def main() -> None:
     parser.add_argument("--llm-resolve-sleep", type=float, default=2.0)
     parser.add_argument("--llm-resolve-force", action="store_true", help="Bypass LLM resolver 30-day cache")
     parser.add_argument(
+        "--resolve-market-prices",
+        action="store_true",
+        help="Run market price resolver (Brave + Wine-Searcher) with validation.",
+    )
+    parser.add_argument(
         "--health-url",
         default=None,
         help="Optional API /health URL to verify after import.",
@@ -595,6 +600,33 @@ def main() -> None:
                 llm_cmd.extend(["--limit", str(args.llm_resolve_limit)])
             print(f"[refresh] Running LLM Vivino resolver (limit={args.llm_resolve_limit or 'all'})")
             subprocess.run(llm_cmd, cwd=ROOT, env=env, check=True)
+
+    if args.resolve_market_prices:
+        brave_key = os.getenv("BRAVE_API_KEY", "")
+        if not brave_key:
+            print("[refresh] Skipping market resolver: no BRAVE_API_KEY set")
+        else:
+            market_output = ROOT / "seed" / "market_prices.csv"
+            market_cmd = [
+                sys.executable,
+                str(ROOT / "scripts" / "llm_market_resolver.py"),
+                "--comparison", str(comparison_path),
+                "--output", str(market_output),
+                "--brave-api-key", brave_key,
+                "--force",
+            ]
+            print("[refresh] Running market price resolver with validation")
+            subprocess.run(market_cmd, cwd=ROOT, env=env, check=True)
+            # Validate and strip bad matches
+            validate_cmd = [
+                sys.executable,
+                str(ROOT / "scripts" / "validate_market_prices.py"),
+                "--path", str(market_output),
+                "--comparison", str(comparison_path),
+                "--fix",
+            ]
+            print("[refresh] Validating market prices")
+            subprocess.run(validate_cmd, cwd=ROOT, env=env, check=True)
 
     if args.enrich_vivino_results:
         enrich_cmd = [

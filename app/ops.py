@@ -100,6 +100,7 @@ def build_refresh_command(
                 "--llm-resolve",
                 "--llm-resolve-all",
                 "--llm-resolve-force",
+                "--resolve-market-prices",
             ]
         )
     elif mode == "import_only":
