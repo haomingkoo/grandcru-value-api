@@ -1,6 +1,6 @@
 # Wine Intelligence API
 
-Three-way wine price comparison engine for Singapore. Compares **Platinum Wine Club**, **Grand Cru**, and **Vivino market prices** to surface genuine deals with AI-powered scoring.
+Wine price comparison engine for Singapore. Compares **Platinum Wine Club** and **Grand Cru** retailer prices with **Vivino** community ratings and market pricing to surface genuine deals with AI-powered scoring.
 
 **Live at** [wine.kooexperience.com](https://wine.kooexperience.com/)
 
@@ -12,11 +12,13 @@ Three-way wine price comparison engine for Singapore. Compares **Platinum Wine C
 Scrape             Match & Compare        Resolve Vivino        Enrich            Score & Serve
 ───────────────    ──────────────────     ────────────────     ───────────       ──────────────
 Platinum (DOM)  →  Fuzzy name matching →  Brave Search API  →  Ratings        →  Deal score 0-100
-Grand Cru (API)    Bundle detection       Gemini LLM fallback  Prices            FastAPI + JS UI
-                   Per-bottle pricing     Direct Vivino search  Grapes, region    Filters, map, trends
+Grand Cru (API)    Bundle detection       Gemini LLM fallback  Prices (SGD)      FastAPI + JS UI
+                   Total listing prices   Identity cache        Grapes, region    Filters, map, trends
 ```
 
-Platinum Wine Club is scoped as the source of truth for inventory — only in-stock items are shown. Grand Cru products are included for price comparison even if sold out. Vivino provides independent market pricing and community ratings.
+Platinum Wine Club is scoped as the source of truth for inventory — only in-stock items are shown. Grand Cru products are included for price comparison even if sold out. Vivino provides independent market pricing (SGD) and community ratings.
+
+All prices are displayed as **total listing prices** matching Platinum's bundle size — if Platinum sells a bundle of 3, Grand Cru and Vivino prices are also shown for 3 bottles. This ensures apples-to-apples comparison.
 
 ## Tech Stack
 
@@ -37,7 +39,7 @@ Three Railway services under project **zonal-purpose**:
 |---------|------|----------|
 | **web** | FastAPI app + static frontend | Always on |
 | **daily-ingest** | Scrape Platinum/Grand Cru, Brave resolver, import | Daily cron |
-| **weekly-ingest** | Full pipeline + LLM resolver with cache bypass | Mondays 02:00 UTC |
+| **weekly-ingest** | Full pipeline + LLM resolver (Vivino prices/descriptions) | Mondays 02:00 UTC |
 
 Data flows into a shared PostgreSQL database. The web service reads from the DB — it does not re-import from CSVs if the daily cron has already refreshed the data within 20 hours.
 
@@ -81,15 +83,20 @@ Open [localhost:8000](http://localhost:8000).
 
 ## Data Pipeline
 
-Five stages, orchestrated by `scripts/refresh_pipeline.py`:
+Six stages, orchestrated by `scripts/refresh_pipeline.py`:
 
 | Stage | Script | What it does |
 |-------|--------|-------------|
 | 1. Scrape | `scrape_sources.py` | Selenium for Platinum portal; Shopify API for Grand Cru |
-| 2. Match | `build_comparison_summary.py` | Fuzzy name matching, bundle detection, per-bottle normalization |
-| 3. Resolve | `resolve_vivino_matches.py` | Brave Search for Vivino URLs (fallback: Google CSE, Serper) |
-| 4. LLM Resolve | `llm_vivino_resolver.py` | Gemini Flash extracts wine identity, finds Vivino pages, scrapes prices/ratings |
-| 5. Import | `import_wine_data.py` | Merge sources, compute deal scores, write to DB |
+| 2. Match | `build_comparison_summary.py` | Fuzzy name matching, bundle detection, total listing prices |
+| 3. Resolve | `resolve_vivino_matches.py` | Brave Search for Vivino URLs (skips wines in identity cache) |
+| 4. LLM Resolve | `llm_vivino_resolver.py` | Gemini Flash extracts wine identity, fetches Vivino prices/ratings (uses cached URLs when available) |
+| 5. Validate | `validate_market_prices.py` | Checks URL matches against wine identity (producer, label, classification) and price sanity |
+| 6. Import | `import_wine_data.py` | Merge sources, compute deal scores, write to DB |
+
+### Identity Cache
+
+Wine→URL mappings are permanent. The **identity cache** (`data/identity_cache.json`) stores validated Vivino and Wine-Searcher URLs so resolvers skip Brave searches for known wines. Only new/flagged wines trigger API calls, reducing Brave usage by ~84%.
 
 ### Startup Import Logic
 
@@ -115,28 +122,25 @@ This ensures code pushes never overwrite fresh cron data.
 # Quick reimport from cached CSVs
 python scripts/refresh_pipeline.py
 
-# Full pipeline (scrape + resolve + enrich)
+# Daily (light — only new wines, 40 Brave calls max)
 python scripts/refresh_pipeline.py \
   --scrape-and-build \
   --resolve-vivino --resolver-provider brave \
-  --resolver-auto-apply --resolver-max-api-queries 40
+  --resolver-auto-apply --resolver-max-api-queries 40 \
+  --resolver-only-new-unresolved
 
-# With LLM resolver (Gemini + Brave, bypasses 30-day cache)
+# Weekly (full — all wines, LLM resolve for descriptions/prices)
 python scripts/refresh_pipeline.py \
   --scrape-and-build \
   --resolve-vivino --resolver-provider brave --resolver-auto-apply \
-  --llm-resolve --llm-resolve-all --llm-resolve-force
+  --resolver-max-api-queries 50 --no-resolver-only-new-unresolved \
+  --llm-resolve --llm-resolve-all
 
-# Run LLM resolver locally (Vivino blocks Railway IPs)
-railway run python scripts/llm_vivino_resolver.py \
-  --force --all --auto-apply --sleep 3
-
-# Trigger on Railway
-curl -X POST https://wine.kooexperience.com/ops/refresh/trigger \
-  -H "X-Ops-Key: $OPS_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"mode": "weekly"}'
+# Seed identity cache (one-time, after fresh resolve)
+python scripts/build_identity_cache.py
 ```
+
+Both daily and weekly modes run as Railway cron services. The identity cache ensures known wines skip Brave searches — only new wines use API calls.
 
 ## Environment Variables
 
@@ -187,8 +191,12 @@ scripts/
   build_comparison_summary.py
   resolve_vivino_matches.py
   llm_vivino_resolver.py
+  llm_market_resolver.py  Wine-Searcher price resolver (disabled — no reliable SGD source)
+  validate_market_prices.py  URL + price sanity validator
+  build_identity_cache.py  Seed identity cache from existing data
   enrich_vivino_results.py
   import_wine_data.py
+  llm_utils.py         Shared cache, identity cache, Gemini helpers
 web/
   index.html           Dashboard UI
   app.js               Client-side logic (~2000 lines)
