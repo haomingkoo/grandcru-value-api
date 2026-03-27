@@ -1223,6 +1223,12 @@ h2 {
   white-space: nowrap;
 }
 
+.per-unit {
+  font-size: 0.68rem;
+  color: var(--text-muted, #888);
+  opacity: 0.7;
+}
+
 .money {
   font-size: 0.95rem;
   font-weight: 800;
