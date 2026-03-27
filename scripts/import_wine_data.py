@@ -368,16 +368,29 @@ def _build_market_lookup(path: Path | None) -> dict[str, dict[str, str]]:
 
 
 def _resolve_market_price(
-    wine_name: str, quantity: int, lookup: dict[str, dict[str, str]],
+    wine_name: str,
+    quantity: int,
+    volume: str,
+    lookup: dict[str, dict[str, str]],
 ) -> float | None:
-    """Look up market price and scale to Platinum's quantity."""
+    """Look up market price and scale to Platinum's quantity + volume.
+
+    Wine-Searcher prices are per standard 750ml bottle (USD → SGD).
+    Scale for magnums (×2), double magnums (×4), then by bundle quantity.
+    """
     key = canonicalize_key(wine_name)
     if not key or key not in lookup:
         return None
     raw = parse_float(lookup[key].get("price_sgd"))
     if raw is None or raw <= 0:
         return None
-    # Market price is per-bottle; scale to Platinum's quantity
+    # Scale for non-standard volumes (WS is always per 750ml)
+    vol_lower = (volume or "").lower()
+    if vol_lower in ("1.5l", "1500ml", "magnum"):
+        raw = raw * 2
+    elif vol_lower in ("3l", "3000ml", "double magnum", "jeroboam"):
+        raw = raw * 4
+    # Scale to Platinum's bundle quantity
     return round(raw * max(quantity, 1), 2)
 
 
@@ -578,7 +591,7 @@ def import_data(
                 "vivino_description": vivino_desc,
                 "vivino_match_method": match_method,
                 "price_market": _resolve_market_price(
-                    wine_name, quantity, market_lookup,
+                    wine_name, quantity, volume, market_lookup,
                 ),
                 "market_retailer_name": _resolve_market_field(
                     wine_name, market_lookup, "retailer_name",
