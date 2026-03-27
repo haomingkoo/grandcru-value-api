@@ -286,19 +286,16 @@ def build_summary(matched_rows: list[dict[str, object]]) -> list[dict[str, objec
         price_plat_total = parse_price(row.get("price_plat"))
         price_main_total = parse_price(row.get("price_main"))
 
-        # Always normalize to per-bottle prices for consistent comparison.
-        # This ensures Vivino (always per-bottle) can be compared fairly
-        # and the UI shows per-bottle values regardless of bundle size.
-        price_plat_num = (
-            round(price_plat_total / max(quantity_plat, 1), 2)
-            if price_plat_total is not None
-            else None
-        )
-        price_main_num = (
-            round(price_main_total / max(quantity_main, 1), 2)
-            if price_main_total is not None
-            else None
-        )
+        # Show Platinum's listed price as-is (what the user pays).
+        # Scale Grand Cru to match Platinum's quantity for fair comparison.
+        # E.g., Plat bundle of 3 at $700 vs GC single at $240 → GC shown as $720 (3 × $240).
+        price_plat_num = price_plat_total
+
+        if price_main_total is not None:
+            per_bottle_main = price_main_total / max(quantity_main, 1)
+            price_main_num = round(per_bottle_main * max(quantity_plat, 1), 2)
+        else:
+            price_main_num = None
 
         price_diff = None
         if price_plat_num is not None and price_main_num is not None:

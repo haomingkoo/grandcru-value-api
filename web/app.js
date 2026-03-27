@@ -1215,9 +1215,9 @@ function renderTable(deals) {
       const styleLabel = deal.style_family || deal.wine_type || "Unclassified"
       const subtypeLabel = deal.wine_type && deal.wine_type !== styleLabel ? ` · ${deal.wine_type}` : ""
       const formattedNotes = formatVivinoNotes(deal.vivino_description)
-      const displayName = deal.label_name
-        ? `${deal.vintage || ""} ${deal.label_name}`.trim()
-        : deal.wine_name.replace(/ - (Red|White|Rose|Sparkling) - .+$/, "")
+      const displayName = deal.wine_name
+        ? deal.wine_name.replace(/ - (Red|White|Rose|Rosé|Sparkling) - .+$/, "")
+        : deal.label_name || "Unknown Wine"
       return `
         <tr class="deal-row">
           <td>

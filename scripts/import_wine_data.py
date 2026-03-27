@@ -467,9 +467,10 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
             )
 
             # --- Volume-aware Vivino price ---
-            # Vivino always prices per 750ml bottle. For magnums (1.5L)
-            # and other non-standard volumes, scale accordingly so the
-            # market discount comparison is apples-to-apples.
+            # Vivino always prices per 750ml bottle. Scale to match the
+            # Platinum listing: adjust for volume (magnums etc.) then
+            # multiply by quantity (bundles) so the market discount
+            # comparison is apples-to-apples with the total listing price.
             raw_vivino_price = parse_float(vivino.get("vivino_price"))
             vivino_price_adjusted = raw_vivino_price
             volume_lower = (volume or "").lower()
@@ -477,6 +478,10 @@ def import_data(comparison_path: Path, vivino_path: Path, vivino_overrides_path:
                 vivino_price_adjusted = round(raw_vivino_price * 2, 2)
             elif raw_vivino_price and volume_lower in ("3l", "3000ml", "double magnum", "jeroboam"):
                 vivino_price_adjusted = round(raw_vivino_price * 4, 2)
+            # Scale Vivino price by bundle quantity to match Platinum's
+            # total listing price (e.g., bundle of 3 → vivino × 3).
+            if vivino_price_adjusted and quantity and quantity > 1:
+                vivino_price_adjusted = round(vivino_price_adjusted * quantity, 2)
 
             # --- Gift set detection ---
             gc_url_lower = (grand_cru_url or "").lower()
