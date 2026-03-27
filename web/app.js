@@ -1215,9 +1215,9 @@ function renderTable(deals) {
       const styleLabel = deal.style_family || deal.wine_type || "Unclassified"
       const subtypeLabel = deal.wine_type && deal.wine_type !== styleLabel ? ` · ${deal.wine_type}` : ""
       const formattedNotes = formatVivinoNotes(deal.vivino_description)
-      const displayName = deal.label_name
-        ? `${deal.vintage || ""} ${deal.label_name}`.trim()
-        : deal.wine_name.replace(/ - (Red|White|Rose|Sparkling) - .+$/, "")
+      const displayName = deal.wine_name
+        ? deal.wine_name.replace(/ - (Red|White|Rose|Rosé|Sparkling) - .+$/, "")
+        : deal.label_name || "Unknown Wine"
       return `
         <tr class="deal-row">
           <td>
@@ -1227,6 +1227,7 @@ function renderTable(deals) {
               ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
               ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
               ${actionLink(deal.vivino_url, "See Vivino")}
+              ${actionLink(deal.market_retailer_url, deal.price_market ? "Wine-Searcher" : "")}
             </div>
           </td>
           <td>
@@ -1244,6 +1245,7 @@ function renderTable(deals) {
               <div class="price-line"><span class="price-label">Platinum</span><span class="money">${formatMoney(deal.price_platinum)}</span></div>
               <div class="price-line"><span class="price-label muted">Grand Cru</span><span class="muted">${formatMoney(deal.price_grand_cru)}</span></div>
               ${deal.vivino_price ? `<div class="price-line"><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span></div>` : ""}
+              ${deal.price_market ? `<div class="price-line"><span class="price-label muted">Global avg</span><span class="muted">${formatMoney(deal.price_market)}</span></div>` : ""}
             </div>
             <div class="trend-list">
               ${renderTrendChip("P 7d", deal.price_platinum_change_7d, deal.platinum_trend_7d)}

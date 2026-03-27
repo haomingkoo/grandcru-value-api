@@ -43,6 +43,9 @@ class DealOut(BaseModel):
     vivino_num_ratings: int | None = None
     vivino_price: float | None = None
     vivino_description: str | None = None
+    price_market: float | None = None
+    market_retailer_name: str | None = None
+    market_retailer_url: str | None = None
     vivino_match_method: str | None = Field(
         default=None,
         description="How Vivino metadata was attached: exact, canonical, fuzzy, platinum, or none.",
