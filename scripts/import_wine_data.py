@@ -510,19 +510,28 @@ def import_data(
 
             match_counts[match_method] = match_counts.get(match_method, 0) + 1
 
-            price_platinum = parse_float(row.get("price_plat"))
-            price_grand_cru = parse_float(row.get("price_main"))
-            price_diff = parse_float(row.get("price_diff"))
-            price_diff_pct = parse_float(row.get("price_diff_pct"))
-            grand_cru_url = normalize_url(row.get("url_main")) if price_grand_cru is not None else None
-
-            if price_diff is None and price_platinum is not None and price_grand_cru is not None:
-                price_diff = round(price_platinum - price_grand_cru, 2)
-            if price_diff_pct is None and price_diff is not None and price_grand_cru not in (None, 0):
-                price_diff_pct = round((price_diff / price_grand_cru) * 100.0, 2)
+            price_platinum_per = parse_float(row.get("price_plat"))
+            price_grand_cru_per = parse_float(row.get("price_main"))
+            grand_cru_url = normalize_url(row.get("url_main")) if price_grand_cru_per is not None else None
 
             quantity = parse_int(row.get("quantity_plat"))
             volume = (row.get("volume_plat") or "").strip() or None
+
+            # --- Scale Platinum & Grand Cru to total listing price ---
+            # The comparison CSV stores per-bottle prices. Scale by
+            # quantity so all prices (Platinum, Grand Cru, Vivino,
+            # market) represent the same bundle size.
+            qty = max(quantity or 1, 1)
+            price_platinum = round(price_platinum_per * qty, 2) if price_platinum_per is not None else None
+            price_grand_cru = round(price_grand_cru_per * qty, 2) if price_grand_cru_per is not None else None
+
+            if price_platinum is not None and price_grand_cru is not None:
+                price_diff = round(price_platinum - price_grand_cru, 2)
+                price_diff_pct = round((price_diff / price_grand_cru) * 100.0, 2) if price_grand_cru != 0 else None
+            else:
+                price_diff = None
+                price_diff_pct = None
+
             metadata = derive_wine_metadata(
                 wine_name=wine_name,
                 quantity=quantity,
