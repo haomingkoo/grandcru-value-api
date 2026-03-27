@@ -613,7 +613,7 @@ def main() -> None:
                 "--comparison", str(comparison_path),
                 "--output", str(market_output),
                 "--brave-api-key", brave_key,
-                "--force",
+                "--cache-ttl-days", "14",
             ]
             print("[refresh] Running market price resolver with validation")
             subprocess.run(market_cmd, cwd=ROOT, env=env, check=True)
