@@ -95,8 +95,6 @@ def build_refresh_command(
                 "--resolver-max-api-queries",
                 "50",
                 "--no-resolver-only-new-unresolved",
-                "--llm-resolve",
-                "--llm-resolve-all",
             ]
         )
     elif mode == "import_only":
@@ -251,4 +249,3 @@ def diagnostics_payload(*, refresh_runner: RefreshRunner, total_deals: int, tota
         "refresh_status": refresh_runner.get_status(),
         "files": file_metrics,
     }
-

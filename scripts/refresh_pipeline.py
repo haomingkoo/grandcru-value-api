@@ -576,30 +576,10 @@ def main() -> None:
             )
 
     if args.llm_resolve:
-        gemini_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
-        brave_key = os.getenv("BRAVE_API_KEY", "")
-        if not gemini_key:
-            print("[refresh] Skipping LLM resolver: no GEMINI_API_KEY set")
-        else:
-            llm_cmd = [
-                sys.executable,
-                str(ROOT / "scripts" / "llm_vivino_resolver.py"),
-                "--comparison", str(comparison_path),
-                "--vivino", str(vivino_path),
-                "--vivino-overrides", str(vivino_overrides_path),
-                "--auto-apply",
-                "--sleep", str(args.llm_resolve_sleep),
-            ]
-            if brave_key:
-                llm_cmd.extend(["--brave-api-key", brave_key])
-            if args.llm_resolve_force:
-                llm_cmd.append("--force")
-            if args.llm_resolve_all:
-                llm_cmd.append("--all")
-            if args.llm_resolve_limit > 0:
-                llm_cmd.extend(["--limit", str(args.llm_resolve_limit)])
-            print(f"[refresh] Running LLM Vivino resolver (limit={args.llm_resolve_limit or 'all'})")
-            subprocess.run(llm_cmd, cwd=ROOT, env=env, check=True)
+        print(
+            "[refresh] Skipping LLM Vivino resolver: retired from the production pipeline. "
+            "Use Brave URL resolution + direct Vivino/browser verification only."
+        )
 
     if args.resolve_market_prices:
         brave_key = os.getenv("BRAVE_API_KEY", "")

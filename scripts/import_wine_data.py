@@ -194,11 +194,11 @@ def build_vivino_lookup(rows: list[dict[str, str]]) -> VivinoLookup:
         for candidate_name in candidate_names:
             key = normalize_key(candidate_name)
             if key:
-                existing = exact.get(key)
-                if existing is None:
-                    exact[key] = row
-                else:
-                    exact[key] = _pick_better_vivino_row(existing, row)
+                # Later rows win for exact-name matches. This lets
+                # vivino_overrides.csv explicitly suppress or replace
+                # fields from vivino_results.csv, including blanking a
+                # bad price back to N/A.
+                exact[key] = row
 
             canonical_key = canonicalize_key(candidate_name)
             if canonical_key:
