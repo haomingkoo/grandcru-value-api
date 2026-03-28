@@ -580,40 +580,9 @@ def resolve_wine(
             except Exception as exc:
                 result["notes"] += f" taste_fetch_error={exc}"
 
-    # Step 5: Grounding fallback — if we got no rating from HTML scraping,
-    # use Gemini with Google Search to look up Vivino data. This works
-    # from datacenter IPs where Vivino blocks direct HTTP requests.
-    if not result.get("vivino_rating"):
-        logger.info(
-            "HTML scraping got no rating for '%s', trying Gemini grounding...",
-            wine_name,
-        )
-        grounding = resolve_vivino_via_grounding(
-            wine_name, api_key, vivino_url_hint=vivino_url or "",
-        )
-        if grounding.get("vivino_rating"):
-            result["vivino_rating"] = str(grounding["vivino_rating"])
-            result["vivino_num_ratings"] = str(
-                grounding.get("vivino_num_ratings", ""),
-            )
-            if grounding.get("vivino_url"):
-                result["vivino_url"] = grounding["vivino_url"]
-            if grounding.get("vivino_price_sgd"):
-                result["vivino_price"] = str(grounding["vivino_price_sgd"])
-            # Build description from grounding data.
-            g_parts: list[str] = []
-            if grounding.get("wine_style"):
-                g_parts.append(f"Regions · {grounding['wine_style']}")
-            if grounding.get("grapes"):
-                g_parts.append(grounding["grapes"])
-            if grounding.get("tasting_keywords"):
-                g_parts.append(grounding["tasting_keywords"])
-            if grounding.get("top_review"):
-                g_parts.append(grounding["top_review"])
-            if g_parts:
-                result["vivino_description"] = " · ".join(g_parts)[:500]
-            result["notes"] += " resolved_via=grounding"
-            return result
+    # Step 5: Grounding fallback DISABLED — Gemini grounding returns
+    # unreliable prices (wrong vintages, wrong currencies, hallucinated
+    # values).  Rely on Brave + HTML scraping only.
 
     # Step 6: Compose vivino_description from page facts + tasting notes.
     desc_parts: list[str] = []
