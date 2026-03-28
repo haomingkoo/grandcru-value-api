@@ -626,9 +626,13 @@ def upsert_overrides(
             continue
         prior = by_name.get(key, {}).copy()
         for field in _OVERRIDE_FIELDS:
-            incoming = (row.get(field) or "").strip()
+            raw_incoming = row.get(field)
+            incoming = (raw_incoming or "").strip()
             if incoming:
                 prior[field] = incoming
+            elif field == "vivino_price" and raw_incoming is not None:
+                # Missing price should clear any stale carried-forward price.
+                prior[field] = ""
         prior["match_name"] = key
         by_name[key] = prior
     return sorted(by_name.values(), key=lambda r: r.get("match_name", ""))
@@ -647,6 +651,11 @@ def main() -> None:
     parser.add_argument("--cache-file", type=Path, default=ROOT / "data" / "llm_vivino_cache.json")
     parser.add_argument("--output", type=Path, default=ROOT / "data" / "llm_resolved.csv")
     parser.add_argument("--auto-apply", action="store_true", help="Merge results into vivino_overrides.csv")
+    parser.add_argument(
+        "--allow-retired-resolver",
+        action="store_true",
+        help="Explicitly allow writes from this retired resolver for one-off debugging.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Show LLM queries without searching Vivino")
     parser.add_argument("--all", action="store_true", help="Resolve ALL wines, not just unmatched")
     parser.add_argument("--force", action="store_true", help="Ignore cache, re-resolve everything")
@@ -664,6 +673,14 @@ def main() -> None:
         help="Brave Search API key for finding Vivino URLs (or set BRAVE_API_KEY env var)",
     )
     args = parser.parse_args()
+
+    if not args.allow_retired_resolver and (args.auto_apply or not args.dry_run):
+        print(
+            "[llm_resolver] Refusing to write results: this resolver is retired for production use "
+            "because it previously produced false Vivino prices. Use --dry-run for inspection only, "
+            "or pass --allow-retired-resolver for an explicit one-off override."
+        )
+        sys.exit(2)
 
     if not args.gemini_api_key:
         print("Error: No API key found. Set GEMINI_API_KEY or GOOGLE_API_KEY in .env")
