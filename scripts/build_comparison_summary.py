@@ -286,9 +286,10 @@ def build_summary(matched_rows: list[dict[str, object]]) -> list[dict[str, objec
         price_plat_total = parse_price(row.get("price_plat"))
         price_main_total = parse_price(row.get("price_main"))
 
-        # Show Platinum's listed price as-is (what the user pays).
-        # Scale Grand Cru to match Platinum's quantity for fair comparison.
-        # E.g., Plat bundle of 3 at $700 vs GC single at $240 → GC shown as $720 (3 × $240).
+        # Platinum's listed price is the anchor — show as-is (the total
+        # the user pays, e.g. $600 for a bundle of 3).
+        # Scale Grand Cru to match Platinum's quantity for apples-to-apples:
+        # GC per-bottle × Platinum quantity (e.g. $210 × 3 = $630).
         price_plat_num = price_plat_total
 
         if price_main_total is not None:

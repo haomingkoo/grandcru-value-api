@@ -373,10 +373,11 @@ def _resolve_market_price(
     volume: str,
     lookup: dict[str, dict[str, str]],
 ) -> float | None:
-    """Look up market price and scale to Platinum's quantity + volume.
+    """Look up market price and scale to match Platinum's listing.
 
     Wine-Searcher prices are per standard 750ml bottle (USD → SGD).
-    Scale for magnums (×2), double magnums (×4), then by bundle quantity.
+    Scale for magnums (×2), double magnums (×4), then by bundle quantity
+    so comparison is apples-to-apples with Platinum's total listing price.
     """
     key = canonicalize_key(wine_name)
     if not key or key not in lookup:
@@ -511,7 +512,7 @@ def import_data(
             match_counts[match_method] = match_counts.get(match_method, 0) + 1
 
             # The comparison CSV stores total listing prices (post build_summary):
-            # - price_plat: Platinum's listing total (e.g. $800 for 6 bottles)
+            # - price_plat: Platinum's listing total (e.g. $600 for 3 bottles)
             # - price_main: Grand Cru scaled to match Platinum's quantity
             # Use as-is — no further scaling needed.
             price_platinum = parse_float(row.get("price_plat"))
