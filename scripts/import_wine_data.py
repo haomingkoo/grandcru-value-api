@@ -156,6 +156,15 @@ def read_optional_csv_rows(path: Path | None) -> list[dict[str, str]]:
     return read_csv_rows(path)
 
 
+def _annotate_vivino_rows(rows: list[dict[str, str]], source: str) -> list[dict[str, str]]:
+    annotated: list[dict[str, str]] = []
+    for row in rows:
+        tagged = dict(row)
+        tagged["__source"] = source
+        annotated.append(tagged)
+    return annotated
+
+
 @dataclass(frozen=True)
 class VivinoLookup:
     exact: dict[str, dict[str, str]]
@@ -405,6 +414,68 @@ def _resolve_market_field(
     return lookup[key].get(field) or None
 
 
+def _scale_vivino_price_to_listing(
+    raw_price: float | None,
+    quantity: int | None,
+    volume: str | None,
+) -> float | None:
+    if raw_price is None or raw_price <= 0:
+        return None
+
+    adjusted = raw_price
+    volume_lower = (volume or "").lower()
+    if volume_lower in ("1.5l", "1500ml", "magnum"):
+        adjusted *= 2
+    elif volume_lower in ("3l", "3000ml", "double magnum", "jeroboam"):
+        adjusted *= 4
+
+    if quantity and quantity > 1:
+        adjusted *= quantity
+
+    return round(adjusted, 2)
+
+
+def _price_anchor(price_platinum: float | None, price_grand_cru: float | None) -> float | None:
+    anchors = [price for price in (price_platinum, price_grand_cru) if price is not None and price > 0]
+    if not anchors:
+        return None
+    return sum(anchors) / len(anchors)
+
+
+def _is_override_price_outlier(price: float, anchor: float) -> bool:
+    if price <= 0 or anchor <= 0:
+        return False
+    ratio = price / anchor
+    return ratio < 0.40 or ratio > 2.0
+
+
+def _resolve_vivino_price_to_listing(
+    raw_price: float | None,
+    quantity: int | None,
+    volume: str | None,
+    *,
+    price_platinum: float | None,
+    price_grand_cru: float | None,
+    source: str,
+) -> float | None:
+    adjusted = _scale_vivino_price_to_listing(raw_price, quantity, volume)
+    if adjusted is None:
+        return None
+
+    if source != "override" or raw_price is None or round(raw_price, 2) == adjusted:
+        return adjusted
+
+    anchor = _price_anchor(price_platinum, price_grand_cru)
+    if anchor is None:
+        return adjusted
+
+    raw_candidate = round(raw_price, 2)
+    chosen = raw_candidate if abs(raw_candidate - anchor) <= abs(adjusted - anchor) else adjusted
+    if _is_override_price_outlier(chosen, anchor):
+        return None
+    return chosen
+
+
 def import_data(
     comparison_path: Path,
     vivino_path: Path,
@@ -432,8 +503,8 @@ def import_data(
     ensure_column("wine_deals", "market_retailer_url", "VARCHAR(512)")
 
     comparison_rows = read_csv_rows(comparison_path)
-    vivino_rows_base = read_csv_rows(vivino_path)
-    vivino_rows_override = read_optional_csv_rows(vivino_overrides_path)
+    vivino_rows_base = _annotate_vivino_rows(read_csv_rows(vivino_path), "base")
+    vivino_rows_override = _annotate_vivino_rows(read_optional_csv_rows(vivino_overrides_path), "override")
     vivino_rows = vivino_rows_base + vivino_rows_override
     vivino_lookup = build_vivino_lookup(vivino_rows)
     vivino_by_url = build_vivino_url_index(vivino_rows)
@@ -536,21 +607,20 @@ def import_data(
             )
 
             # --- Volume-aware Vivino price ---
-            # Vivino always prices per 750ml bottle. Scale to match the
-            # Platinum listing: adjust for volume (magnums etc.) then
-            # multiply by quantity (bundles) so the market discount
-            # comparison is apples-to-apples with the total listing price.
+            # Base Vivino results are raw bottle prices and must be scaled to
+            # match the Platinum listing. Override rows are trickier: some are
+            # stored as bottle prices, others already reflect the reviewed
+            # listing total. For overrides, keep the interpretation that stays
+            # closest to the retailer anchors instead of blindly multiplying.
             raw_vivino_price = parse_float(vivino.get("vivino_price"))
-            vivino_price_adjusted = raw_vivino_price
-            volume_lower = (volume or "").lower()
-            if raw_vivino_price and volume_lower in ("1.5l", "1500ml", "magnum"):
-                vivino_price_adjusted = round(raw_vivino_price * 2, 2)
-            elif raw_vivino_price and volume_lower in ("3l", "3000ml", "double magnum", "jeroboam"):
-                vivino_price_adjusted = round(raw_vivino_price * 4, 2)
-            # Scale Vivino price by bundle quantity to match Platinum's
-            # total listing price (e.g., bundle of 3 → vivino × 3).
-            if vivino_price_adjusted and quantity and quantity > 1:
-                vivino_price_adjusted = round(vivino_price_adjusted * quantity, 2)
+            vivino_price_adjusted = _resolve_vivino_price_to_listing(
+                raw_vivino_price,
+                quantity,
+                volume,
+                price_platinum=price_platinum,
+                price_grand_cru=price_grand_cru,
+                source=(vivino.get("__source") or "base").strip().lower(),
+            )
 
             # --- Gift set detection ---
             gc_url_lower = (grand_cru_url or "").lower()
