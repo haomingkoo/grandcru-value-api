@@ -73,6 +73,18 @@ class ImportWineDataTests(unittest.TestCase):
 
         self.assertIsNone(adjusted)
 
+    def test_override_price_drops_standard_bottle_outlier(self) -> None:
+        adjusted = _resolve_vivino_price_to_listing(
+            42.94,
+            1,
+            "750ml",
+            price_platinum=110.0,
+            price_grand_cru=113.0,
+            source="override",
+        )
+
+        self.assertIsNone(adjusted)
+
 
 if __name__ == "__main__":
     unittest.main()

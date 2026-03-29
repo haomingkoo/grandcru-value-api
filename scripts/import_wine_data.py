@@ -462,15 +462,17 @@ def _resolve_vivino_price_to_listing(
     if adjusted is None:
         return None
 
-    if source != "override" or raw_price is None or round(raw_price, 2) == adjusted:
+    if source != "override":
         return adjusted
 
     anchor = _price_anchor(price_platinum, price_grand_cru)
-    if anchor is None:
-        return adjusted
+    chosen = adjusted
+    if anchor is not None and raw_price is not None and round(raw_price, 2) != adjusted:
+        raw_candidate = round(raw_price, 2)
+        chosen = raw_candidate if abs(raw_candidate - anchor) <= abs(adjusted - anchor) else adjusted
 
-    raw_candidate = round(raw_price, 2)
-    chosen = raw_candidate if abs(raw_candidate - anchor) <= abs(adjusted - anchor) else adjusted
+    if anchor is None:
+        return chosen
     if _is_override_price_outlier(chosen, anchor):
         return None
     return chosen
