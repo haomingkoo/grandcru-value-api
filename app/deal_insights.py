@@ -61,6 +61,8 @@ def compute_deal_insights(deal: Any) -> DealInsights:
         verdict = ("Solid Value", "good", "Platinum currently beats Grand Cru on price.")
     elif getattr(deal, "cheaper_side", None) == "Same Price" and rating >= 4.1:
         verdict = ("Quality Buy", "calm", "Not cheaper, but still appealing if you want the bottle on Platinum.")
+    elif getattr(deal, "cheaper_side", None) == "Same Price":
+        verdict = ("Retail Match", "calm", "Platinum matches Grand Cru on price, so this is more about convenience than edge.")
     elif getattr(deal, "cheaper_side", None) == "Grand Cru Cheaper":
         verdict = ("Platinum Markup", "warn", "Grand Cru is the better pure price play right now.")
     elif getattr(deal, "cheaper_side", None) == "No Match":

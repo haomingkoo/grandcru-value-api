@@ -1615,6 +1615,13 @@ function resolveVerdict(deal) {
       detail: "Not cheaper, but still appealing if you want the bottle on Platinum.",
     }
   }
+  if (deal.cheaper_side === "Same Price") {
+    return {
+      label: "Retail Match",
+      tone: "calm",
+      detail: "Platinum matches Grand Cru on price, so this is more about convenience than edge.",
+    }
+  }
   if (deal.cheaper_side === "Grand Cru Cheaper") {
     return {
       label: "Platinum Markup",
@@ -1644,6 +1651,8 @@ function compactVerdictLabel(label) {
       return "Good Value"
     case "Quality Buy":
       return "Worth A Look"
+    case "Retail Match":
+      return "Match"
     case "Platinum Markup":
       return "Markup"
     case "Quality Only":

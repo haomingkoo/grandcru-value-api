@@ -1,5 +1,7 @@
+import csv
 from contextlib import asynccontextmanager
 import hmac
+from io import StringIO
 import logging
 from pathlib import Path
 import time
@@ -7,13 +9,13 @@ import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Base, engine, ensure_column, get_session
-from app.ops import RefreshRunner, diagnostics_payload
+from app.ops import RefreshRunner, diagnostics_payload, locked_vivino_override_names
 from app.schemas import (
     DealHistoryOut,
     DealFiltersOut,
@@ -38,6 +40,8 @@ from app.service import (
     get_deal_stats,
     get_latest_ingestion,
     is_ingestion_stale,
+    VIVINO_UNRESOLVED_EXPORT_FIELDS,
+    list_vivino_unresolved_export_rows,
     list_deals,
 )
 
@@ -458,6 +462,30 @@ def ops_refresh_log(
     _: None = Depends(require_ops_key),
 ) -> OpsRefreshLogOut:
     return OpsRefreshLogOut(**refresh_runner.tail_log(lines=lines))
+
+
+@app.get("/ops/vivino/unresolved.csv", response_class=PlainTextResponse)
+def ops_vivino_unresolved_csv(
+    limit: int = Query(default=500, ge=1, le=5000),
+    include_locked: bool = Query(default=False),
+    _: None = Depends(require_ops_key),
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    rows = list_vivino_unresolved_export_rows(
+        session,
+        limit=limit,
+        include_locked=include_locked,
+        locked_wine_names=locked_vivino_override_names(),
+    )
+    buf = StringIO()
+    writer = csv.DictWriter(buf, fieldnames=list(VIVINO_UNRESOLVED_EXPORT_FIELDS))
+    writer.writeheader()
+    writer.writerows(rows)
+    return PlainTextResponse(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="vivino_unresolved.csv"'},
+    )
 
 
 @app.post("/ops/refresh/trigger", response_model=OpsRefreshStatusOut, status_code=202)

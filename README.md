@@ -142,6 +142,20 @@ python scripts/build_identity_cache.py
 
 Both daily and weekly modes run as Railway cron services. The identity cache ensures known wines skip Brave searches — only new wines use API calls.
 
+### Autonomous Vivino Loop
+
+For autonomous Vivino fixing, use `scripts/local_vivino_refresh.sh` on a Mac or other residential-IP machine.
+
+- It fetches the current unresolved live rows from `GET /ops/vivino/unresolved.csv`
+- It resolves only those rows locally on your residential connection
+- It respects locked manual overrides in `seed/vivino_overrides.csv`
+- It pushes updated overrides, waits for deploy, then triggers `POST /ops/refresh/trigger` with `mode=daily`
+
+Manual or reviewed overrides should be locked by either:
+
+- Setting `locked=1` in `seed/vivino_overrides.csv`
+- Or using a `notes` value that starts with `manual`
+
 ## Environment Variables
 
 Copy `.env.example` to `.env`.

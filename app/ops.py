@@ -12,10 +12,12 @@ from pathlib import Path
 from typing import Any
 
 from app.config import settings
+from scripts.vivino_overrides import is_locked_override_row
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 STATE_PATH = DATA_DIR / "ops_refresh_state.json"
+VIVINO_OVERRIDES_PATH = ROOT / "seed" / "vivino_overrides.csv"
 
 
 def _utc_now_iso() -> str:
@@ -30,6 +32,25 @@ def _csv_row_count(path: Path) -> int | None:
             return sum(1 for _ in csv.DictReader(handle))
     except Exception:
         return None
+
+
+def _read_csv_rows(path: Path) -> list[dict[str, str]]:
+    if not path.exists() or not path.is_file():
+        return []
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            return list(csv.DictReader(handle))
+    except Exception:
+        return []
+
+
+def locked_vivino_override_names(path: Path = VIVINO_OVERRIDES_PATH) -> set[str]:
+    locked_names: set[str] = set()
+    for row in _read_csv_rows(path):
+        match_name = (row.get("match_name") or "").strip()
+        if match_name and is_locked_override_row(row):
+            locked_names.add(match_name)
+    return locked_names
 
 
 def _tail_lines(path: Path, lines: int) -> str:
@@ -251,4 +272,3 @@ def diagnostics_payload(*, refresh_runner: RefreshRunner, total_deals: int, tota
         "refresh_status": refresh_runner.get_status(),
         "files": file_metrics,
     }
-

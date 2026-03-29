@@ -25,16 +25,7 @@ from scripts.import_wine_data import (  # noqa: E402
     read_csv_rows,
     read_optional_csv_rows,
 )
-
-_OVERRIDE_FIELDS = [
-    "match_name",
-    "wine_name",
-    "vivino_rating",
-    "vivino_num_ratings",
-    "vivino_price",
-    "vivino_url",
-    "notes",
-]
+from scripts.vivino_overrides import OVERRIDE_FIELDS, upsert_overrides  # noqa: E402
 
 _REVIEW_FIELDS = [
     "wine_name",
@@ -134,35 +125,6 @@ def write_csv_rows(path: Path, rows: list[dict[str, str]], fieldnames: list[str]
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
-
-
-def upsert_overrides(existing: list[dict[str, str]], new_rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    by_name: dict[str, dict[str, str]] = {}
-    for row in existing:
-        key = (row.get("match_name") or "").strip()
-        if key:
-            by_name[key] = row.copy()
-
-    for row in new_rows:
-        key = (row.get("match_name") or "").strip()
-        if not key:
-            continue
-        prior = by_name.get(key)
-        if prior is None:
-            by_name[key] = row.copy()
-            continue
-
-        merged = prior.copy()
-        for field in _OVERRIDE_FIELDS:
-            incoming = (row.get(field) or "").strip()
-            if incoming:
-                merged[field] = incoming
-        merged["match_name"] = key
-        by_name[key] = merged
-
-    merged = list(by_name.values())
-    merged.sort(key=lambda r: (r.get("match_name") or ""))
-    return merged
 
 
 def _safe_slug_text(url: str) -> str:
@@ -925,12 +887,12 @@ def resolve_matches(args: argparse.Namespace) -> None:
 
     write_csv_rows(args.output_review, review_rows, _REVIEW_FIELDS)
     write_csv_rows(args.output_unmatched, unmatched_rows, _UNMATCHED_FIELDS)
-    write_csv_rows(args.output_suggestions, accepted_rows, _OVERRIDE_FIELDS)
+    write_csv_rows(args.output_suggestions, accepted_rows, OVERRIDE_FIELDS)
 
     applied_overrides_rows = len(override_rows)
     if args.auto_apply and accepted_rows:
         merged = upsert_overrides(override_rows, accepted_rows)
-        write_csv_rows(args.vivino_overrides, merged, _OVERRIDE_FIELDS)
+        write_csv_rows(args.vivino_overrides, merged, OVERRIDE_FIELDS)
         applied_overrides_rows = len(merged)
 
     save_query_cache(args.query_cache, query_cache)

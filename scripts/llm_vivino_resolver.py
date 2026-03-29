@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from difflib import SequenceMatcher
 import json
 import logging
 import os
@@ -47,6 +48,7 @@ from scripts.llm_utils import (  # noqa: E402
     load_cache,
     save_cache,
 )
+from scripts.vivino_overrides import OVERRIDE_FIELDS, upsert_overrides  # noqa: E402
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -55,17 +57,6 @@ logging.basicConfig(
 logger = logging.getLogger("grandcru.llm_resolver")
 
 CACHE_TTL_DAYS = 30
-
-_OVERRIDE_FIELDS = [
-    "match_name",
-    "wine_name",
-    "vivino_rating",
-    "vivino_num_ratings",
-    "vivino_price",
-    "vivino_description",
-    "vivino_url",
-    "notes",
-]
 
 _AGG_RATING_RE = re.compile(
     r'"aggregateRating"\s*:\s*\{[^}]*"ratingValue"\s*:\s*"?(?P<rating>[\d.]+)"?'
@@ -78,6 +69,24 @@ _REVIEW_COUNT_RE = re.compile(r'"reviewCount"\s*:\s*"?(?P<count>[\d,]+)"?')
 _VIVINO_WINE_URL_RE = re.compile(r'href="(/[a-z]{2}/en/[^"]+/w/\d+[^"]*)"')
 _VIVINO_WINE_URL_FULL_RE = re.compile(
     r"https?://(?:www\.)?vivino\.com/[^\s\"'<>]*?/w/\d+"
+)
+_SIGNATURE_MARKERS = (
+    "chardonnay",
+    "pinot noir",
+    "cabernet sauvignon",
+    "sauvignon blanc",
+    "pinot grigio",
+    "pinot gris",
+    "barolo",
+    "barbera",
+    "nebbiolo",
+    "shiraz",
+    "syrah",
+    "primitivo",
+    "pecorino",
+    "rose",
+    "brut",
+    "champagne",
 )
 
 
@@ -158,6 +167,53 @@ def resolve_vivino_via_grounding(
 
     logger.warning("All grounding attempts failed for '%s'", wine_name)
     return {}
+
+
+def _normalize_validation_name(value: str | None) -> str:
+    text = re.sub(r"^\s*(?:19|20)\d{2}\s+", "", value or "", flags=re.IGNORECASE)
+    text = re.sub(r"^\s*nv\s+", "", text, flags=re.IGNORECASE)
+    normalized = canonicalize_key(text)
+    return " ".join(token for token in normalized.split() if token not in {"base"})
+
+
+def _extract_signature_tokens(text: str | None) -> set[str]:
+    normalized = _normalize_validation_name(text)
+    signatures: set[str] = set()
+    for marker in _SIGNATURE_MARKERS:
+        marker_key = canonicalize_key(marker)
+        if marker_key and marker_key in normalized:
+            signatures.add(marker_key)
+    return signatures
+
+
+def is_confident_vivino_page_match(
+    *,
+    expected_name: str,
+    candidate_name: str,
+    candidate_context: str = "",
+) -> bool:
+    expected = _normalize_validation_name(expected_name)
+    candidate = _normalize_validation_name(candidate_name)
+    if not expected or not candidate:
+        return True
+
+    expected_tokens = set(expected.split())
+    candidate_tokens = set(candidate.split())
+    overlap = expected_tokens & candidate_tokens
+    if len(overlap) < 2:
+        return False
+
+    token_ratio = len(overlap) / max(len(expected_tokens), len(candidate_tokens))
+    seq_ratio = SequenceMatcher(None, expected, candidate).ratio()
+    if seq_ratio < 0.72 and token_ratio < 0.70:
+        return False
+
+    expected_signatures = _extract_signature_tokens(expected_name)
+    candidate_signatures = _extract_signature_tokens(" ".join(part for part in [candidate_name, candidate_context] if part))
+    if expected_signatures and candidate_signatures and not (expected_signatures & candidate_signatures):
+        return False
+
+    return True
 
 
 def extract_vivino_query(wine_name: str, api_key: str) -> dict:
@@ -500,7 +556,7 @@ def resolve_wine(
     Brave search and goes straight to fetching data from the known URL.
     Saves 1-2 Brave API calls per wine.
     """
-    result: dict[str, str] = {f: "" for f in _OVERRIDE_FIELDS}
+    result: dict[str, str] = {f: "" for f in OVERRIDE_FIELDS}
     result["match_name"] = wine_name
 
     vivino_url = ""
@@ -564,6 +620,30 @@ def resolve_wine(
             result["vivino_rating"] = rating
             result["vivino_num_ratings"] = count
             extras = parse_vivino_extras(page_html)
+            page_name = extras.get("vivino_wine_name", "")
+            page_context = " ".join(
+                part
+                for part in [
+                    page_name,
+                    extras.get("wine_style", ""),
+                    extras.get("grapes", ""),
+                    extras.get("region", ""),
+                ]
+                if part
+            )
+            expected_name = result.get("wine_name") or wine_name
+            if page_name and not is_confident_vivino_page_match(
+                expected_name=expected_name,
+                candidate_name=page_name,
+                candidate_context=page_context,
+            ):
+                result["notes"] += f" identity_mismatch={page_name[:120]}"
+                result["vivino_url"] = ""
+                result["vivino_rating"] = ""
+                result["vivino_num_ratings"] = ""
+                result["vivino_price"] = ""
+                extras = {}
+                return result
             if extras.get("price"):
                 result["vivino_price"] = extras["price"]
         except Exception as exc:
@@ -609,29 +689,6 @@ def write_csv(path: Path, rows: list[dict], fieldnames: list[str]) -> None:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
-
-
-def upsert_overrides(
-    existing: list[dict[str, str]],
-    new_rows: list[dict[str, str]],
-) -> list[dict[str, str]]:
-    by_name: dict[str, dict[str, str]] = {}
-    for row in existing:
-        key = (row.get("match_name") or "").strip()
-        if key:
-            by_name[key] = row.copy()
-    for row in new_rows:
-        key = (row.get("match_name") or "").strip()
-        if not key:
-            continue
-        prior = by_name.get(key, {}).copy()
-        for field in _OVERRIDE_FIELDS:
-            incoming = (row.get(field) or "").strip()
-            if incoming:
-                prior[field] = incoming
-        prior["match_name"] = key
-        by_name[key] = prior
-    return sorted(by_name.values(), key=lambda r: r.get("match_name", ""))
 
 
 # ── Main ───────────────────────────────────────────────────────────────
@@ -790,7 +847,7 @@ def main() -> None:
                 })
 
     # Save outputs.
-    write_csv(args.output, resolved, _OVERRIDE_FIELDS)
+    write_csv(args.output, resolved, OVERRIDE_FIELDS)
     if not args.dry_run:
         save_cache(args.cache_file, vivino_cache)
 
@@ -801,9 +858,13 @@ def main() -> None:
     print(f"[llm_resolver] Cache: {len(vivino_cache)} entries in {args.cache_file}")
 
     if args.auto_apply:
-        all_apply = resolved + cached_for_apply
+        all_apply = [
+            row
+            for row in (resolved + cached_for_apply)
+            if (row.get("vivino_rating") or "").strip() or (row.get("vivino_num_ratings") or "").strip()
+        ]
         merged = upsert_overrides(override_rows, all_apply)
-        write_csv(args.vivino_overrides, merged, _OVERRIDE_FIELDS)
+        write_csv(args.vivino_overrides, merged, OVERRIDE_FIELDS)
         print(f"[llm_resolver] Auto-applied: {len(merged)} total overrides in {args.vivino_overrides}")
 
 

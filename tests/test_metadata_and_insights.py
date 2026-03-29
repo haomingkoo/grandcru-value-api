@@ -67,6 +67,26 @@ class MetadataAndInsightsTests(unittest.TestCase):
         self.assertEqual(classify_price_trend(0.0), "flat")
         self.assertEqual(classify_price_trend(None), "unknown")
 
+    def test_compute_deal_insights_marks_same_price_unrated_as_retail_match(self) -> None:
+        deal = SimpleNamespace(
+            wine_name="2023 Terlano - Pinot Grigio - White - 750 ml - Standard Bottle",
+            quantity=1,
+            volume="750ml",
+            price_diff_pct=0.0,
+            cheaper_side="Same Price",
+            vivino_rating=None,
+            vivino_num_ratings=None,
+            price_platinum_change_7d=0.0,
+            price_grand_cru_change_7d=0.0,
+            price_platinum_change_30d=None,
+            price_grand_cru_change_30d=None,
+        )
+
+        insights = compute_deal_insights(deal)
+
+        self.assertEqual(insights.value_verdict, "Retail Match")
+        self.assertEqual(insights.value_verdict_tone, "calm")
+
 
 if __name__ == "__main__":
     unittest.main()

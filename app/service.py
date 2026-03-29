@@ -7,6 +7,24 @@ from app.config import settings
 from app.deal_insights import compute_deal_insights
 from app.models import IngestionRun, WineDeal, WineDealSnapshot
 
+VIVINO_UNRESOLVED_EXPORT_FIELDS = (
+    "name_plat",
+    "year_plat",
+    "quantity_plat",
+    "volume_plat",
+    "quantity_main",
+    "price_plat",
+    "price_main",
+    "price_diff",
+    "price_diff_pct",
+    "cheaper_side",
+    "url_plat",
+    "url_main",
+    "platinum_vivino_rating",
+    "platinum_vivino_num_ratings",
+    "platinum_vivino_url",
+)
+
 
 def _as_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
@@ -331,6 +349,52 @@ def list_deals(
     _apply_price_change_fields(session, deals)
     _apply_response_fields(deals)
     return deals
+
+
+def list_vivino_unresolved_export_rows(
+    session: Session,
+    *,
+    limit: int = 500,
+    include_locked: bool = False,
+    locked_wine_names: set[str] | None = None,
+) -> list[dict[str, str]]:
+    stmt = (
+        select(WineDeal)
+        .where(
+            WineDeal.vivino_rating.is_(None),
+            WineDeal.vivino_num_ratings.is_(None),
+        )
+        .order_by(WineDeal.deal_score.desc().nullslast(), WineDeal.wine_name.asc(), WineDeal.id.asc())
+        .limit(limit)
+    )
+
+    locked_names = {name for name in (locked_wine_names or set()) if name}
+    if locked_names and not include_locked:
+        stmt = stmt.where(WineDeal.wine_name.not_in(sorted(locked_names)))
+
+    deals = list(session.scalars(stmt).all())
+    rows: list[dict[str, str]] = []
+    for deal in deals:
+        rows.append(
+            {
+                "name_plat": deal.wine_name or "",
+                "year_plat": str(deal.vintage or ""),
+                "quantity_plat": str(deal.quantity or ""),
+                "volume_plat": deal.volume or "",
+                "quantity_main": str(deal.quantity or ""),
+                "price_plat": f"{deal.price_platinum:.2f}" if deal.price_platinum is not None else "",
+                "price_main": f"{deal.price_grand_cru:.2f}" if deal.price_grand_cru is not None else "",
+                "price_diff": f"{deal.price_diff:.2f}" if deal.price_diff is not None else "",
+                "price_diff_pct": f"{deal.price_diff_pct:.2f}" if deal.price_diff_pct is not None else "",
+                "cheaper_side": deal.cheaper_side or "",
+                "url_plat": deal.platinum_url or "",
+                "url_main": deal.grand_cru_url or "",
+                "platinum_vivino_rating": "",
+                "platinum_vivino_num_ratings": "",
+                "platinum_vivino_url": "",
+            }
+        )
+    return rows
 
 
 def get_deal_by_id(session: Session, deal_id: int) -> WineDeal | None:
