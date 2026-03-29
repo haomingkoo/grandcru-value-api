@@ -893,7 +893,7 @@ function renderTopPicks(deals) {
           <div class="price-stack">
             <div class="price-line"><span class="price-label">Platinum</span><strong class="pick-price">${formatMoney(deal.price_platinum)}</strong></div>
             ${deal.price_grand_cru ? `<div class="price-line"><span class="price-label muted">Grand Cru</span><span class="muted">${formatMoney(deal.price_grand_cru)}</span></div>` : ""}
-            ${deal.vivino_price ? `<div class="price-line"><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span></div>` : ""}
+            ${deal.vivino_price ? `<div class="price-line" title="Vivino price scaled to the same magnum/bundle total as the Platinum listing (magnum ×2, bundles ×quantity)."><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span></div>` : ""}
             ${deal.price_market ? `<div class="price-line" title="Wine-Searcher global average price per 750ml, scaled to match this listing's quantity/volume. Updated weekly."><span class="price-label muted">Global avg</span><span class="muted">${formatMoney(deal.price_market)}</span></div>` : ""}
           </div>
           <div class="pick-meta">
@@ -1245,7 +1245,7 @@ function renderTable(deals) {
             <div class="price-stack">
               <div class="price-line"><span class="price-label">Platinum</span><span class="money">${formatMoney(deal.price_platinum)}</span></div>
               <div class="price-line"><span class="price-label muted">Grand Cru</span><span class="muted">${formatMoney(deal.price_grand_cru)}</span></div>
-              ${deal.vivino_price ? `<div class="price-line"><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span></div>` : ""}
+              ${deal.vivino_price ? `<div class="price-line" title="Vivino price scaled to the same magnum/bundle total as the Platinum listing (magnum ×2, bundles ×quantity)."><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span></div>` : ""}
               ${deal.price_market ? `<div class="price-line" title="Wine-Searcher global average price per 750ml, scaled to match this listing's quantity/volume. Updated weekly."><span class="price-label muted">Global avg</span><span class="muted">${formatMoney(deal.price_market)}</span></div>` : ""}
             </div>
             <div class="trend-list">
