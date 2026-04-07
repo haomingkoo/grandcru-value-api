@@ -77,6 +77,26 @@ class DealQueryTests(unittest.TestCase):
                     volume="750ml",
                     quantity=1,
                 ),
+                WineDeal(
+                    wine_name="No Vivino Discount Wine",
+                    platinum_url="https://example.com/no-vivino",
+                    price_platinum=80.0,
+                    price_grand_cru=100.0,
+                    price_diff=-20.0,
+                    price_diff_pct=-20.0,
+                    cheaper_side="Platinum Cheaper",
+                    vivino_rating=None,
+                    vivino_num_ratings=None,
+                    deal_score=20.0,
+                    country="France",
+                    region="Burgundy",
+                    wine_type="White",
+                    style_family="White",
+                    offering_type="Single Bottle",
+                    producer="Unknown Estate",
+                    volume="750ml",
+                    quantity=1,
+                ),
             ]
         )
         self.session.commit()
@@ -97,6 +117,19 @@ class DealQueryTests(unittest.TestCase):
         self.assertEqual(deals[1].wine_name, "Value Pick One")
         self.assertEqual(deals[0].value_verdict, "Platinum Markup")
         self.assertEqual(deals[1].value_verdict, "Strong Credit Spend")
+
+    def test_comparable_only_excludes_wines_without_vivino_rating(self) -> None:
+        deals = list_deals(self.session, comparable_only=True, sort_by="wine_name", sort_order="asc")
+
+        names = [deal.wine_name for deal in deals]
+        self.assertNotIn("No Vivino Discount Wine", names)
+        self.assertEqual(len(names), 2)
+
+    def test_comparable_off_includes_wines_without_vivino_rating(self) -> None:
+        deals = list_deals(self.session, comparable_only=False, sort_by="wine_name", sort_order="asc")
+
+        names = [deal.wine_name for deal in deals]
+        self.assertIn("No Vivino Discount Wine", names)
 
     def test_style_family_filter_targets_browse_category(self) -> None:
         deals = list_deals(self.session, style_family="Champagne", sort_by="wine_name", sort_order="asc")
