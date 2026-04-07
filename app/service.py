@@ -272,6 +272,7 @@ def _build_deals_stmt(
         stmt = stmt.where(WineDeal.cheaper_side == effective_cheaper_side)
     if comparable_only:
         stmt = stmt.where(WineDeal.price_diff_pct.is_not(None))
+        stmt = stmt.where(WineDeal.vivino_rating.is_not(None))
 
     if search:
         escaped = search.strip().replace("%", r"\%").replace("_", r"\_")

@@ -457,7 +457,10 @@ def _resolve_vivino_price_to_listing(
     price_platinum: float | None,
     price_grand_cru: float | None,
     source: str,
+    vivino_url: str | None = None,
 ) -> float | None:
+    if not vivino_url:
+        return None
     adjusted = _scale_vivino_price_to_listing(raw_price, quantity, volume)
     if adjusted is None:
         return None
@@ -622,6 +625,7 @@ def import_data(
                 price_platinum=price_platinum,
                 price_grand_cru=price_grand_cru,
                 source=(vivino.get("__source") or "base").strip().lower(),
+                vivino_url=vivino_url,
             )
 
             # --- Gift set detection ---

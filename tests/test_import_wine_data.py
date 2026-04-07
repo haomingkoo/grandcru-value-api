@@ -21,6 +21,7 @@ class ImportWineDataTests(unittest.TestCase):
             price_platinum=630.0,
             price_grand_cru=660.0,
             source="override",
+            vivino_url="https://www.vivino.com/w/1",
         )
 
         self.assertEqual(adjusted, 527.67)
@@ -33,6 +34,7 @@ class ImportWineDataTests(unittest.TestCase):
             price_platinum=600.0,
             price_grand_cru=630.0,
             source="override",
+            vivino_url="https://www.vivino.com/w/1",
         )
 
         self.assertEqual(adjusted, 630.0)
@@ -45,6 +47,7 @@ class ImportWineDataTests(unittest.TestCase):
             price_platinum=600.0,
             price_grand_cru=630.0,
             source="base",
+            vivino_url="https://www.vivino.com/w/1",
         )
 
         self.assertEqual(adjusted, 630.0)
@@ -57,6 +60,7 @@ class ImportWineDataTests(unittest.TestCase):
             price_platinum=600.0,
             price_grand_cru=555.0,
             source="override",
+            vivino_url="https://www.vivino.com/w/1",
         )
 
         self.assertIsNone(adjusted)
@@ -69,6 +73,7 @@ class ImportWineDataTests(unittest.TestCase):
             price_platinum=380.0,
             price_grand_cru=445.0,
             source="override",
+            vivino_url="https://www.vivino.com/w/1",
         )
 
         self.assertIsNone(adjusted)
@@ -81,9 +86,36 @@ class ImportWineDataTests(unittest.TestCase):
             price_platinum=110.0,
             price_grand_cru=113.0,
             source="override",
+            vivino_url="https://www.vivino.com/w/1",
         )
 
         self.assertIsNone(adjusted)
+
+    def test_price_cleared_when_no_vivino_link(self) -> None:
+        adjusted = _resolve_vivino_price_to_listing(
+            100.0,
+            1,
+            "750ml",
+            price_platinum=100.0,
+            price_grand_cru=100.0,
+            source="override",
+            vivino_url=None,
+        )
+
+        self.assertIsNone(adjusted)
+
+    def test_price_kept_when_vivino_link_present(self) -> None:
+        adjusted = _resolve_vivino_price_to_listing(
+            100.0,
+            1,
+            "750ml",
+            price_platinum=100.0,
+            price_grand_cru=100.0,
+            source="override",
+            vivino_url="https://www.vivino.com/w/12345",
+        )
+
+        self.assertEqual(adjusted, 100.0)
 
 
 if __name__ == "__main__":
