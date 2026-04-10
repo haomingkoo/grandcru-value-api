@@ -344,8 +344,8 @@ def _description_lookup_key(wine_name: str | None) -> str:
 
 
 def _load_existing_vivino_descriptions(session) -> tuple[dict[str, str], dict[str, str]]:
-    by_name: dict[str, str] = {}
-    by_vivino_url: dict[str, str] = {}
+    name_candidates: dict[str, set[str]] = {}
+    url_candidates: dict[str, set[str]] = {}
 
     for wine_name, vivino_url, vivino_description in session.execute(
         select(WineDeal.wine_name, WineDeal.vivino_url, WineDeal.vivino_description)
@@ -355,12 +355,23 @@ def _load_existing_vivino_descriptions(session) -> tuple[dict[str, str], dict[st
             continue
 
         name_key = _description_lookup_key(wine_name)
-        if name_key and name_key not in by_name:
-            by_name[name_key] = description
+        if name_key:
+            name_candidates.setdefault(name_key, set()).add(description)
 
         normalized_vivino_url = normalize_vivino_url(vivino_url)
-        if normalized_vivino_url and normalized_vivino_url not in by_vivino_url:
-            by_vivino_url[normalized_vivino_url] = description
+        if normalized_vivino_url:
+            url_candidates.setdefault(normalized_vivino_url, set()).add(description)
+
+    by_name = {
+        key: next(iter(descriptions))
+        for key, descriptions in name_candidates.items()
+        if len(descriptions) == 1
+    }
+    by_vivino_url = {
+        key: next(iter(descriptions))
+        for key, descriptions in url_candidates.items()
+        if len(descriptions) == 1
+    }
 
     return by_name, by_vivino_url
 

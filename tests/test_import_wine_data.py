@@ -160,6 +160,12 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
             writer.writerows(rows)
 
     def _write_seed_files(self, override_description: str | None) -> None:
+        self._write_seed_files_for_name(
+            "2020 Test Producer - Test Cuvee - Red - 750 ml - Standard Bottle",
+            override_description,
+        )
+
+    def _write_seed_files_for_name(self, wine_name: str, override_description: str | None) -> None:
         self._write_csv(
             self.comparison_path,
             [
@@ -177,7 +183,7 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
             ],
             [
                 {
-                    "name_plat": "2020 Test Producer - Test Cuvee - Red - 750 ml - Standard Bottle",
+                    "name_plat": wine_name,
                     "year_plat": "2020",
                     "quantity_plat": "1",
                     "volume_plat": "750ml",
@@ -202,7 +208,7 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
             ],
             [
                 {
-                    "wine_name": "2020 Test Producer - Test Cuvee - Red - 750 ml - Standard Bottle",
+                    "wine_name": wine_name,
                     "vivino_rating": "4.2",
                     "vivino_num_ratings": "150",
                     "vivino_price": "135.00",
@@ -214,8 +220,8 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         if override_description is not None:
             override_rows.append(
                 {
-                    "match_name": "2020 Test Producer - Test Cuvee - Red - 750 ml - Standard Bottle",
-                    "wine_name": "2020 Test Producer - Test Cuvee - Red - 750 ml - Standard Bottle",
+                    "match_name": wine_name,
+                    "wine_name": wine_name,
                     "vivino_rating": "4.2",
                     "vivino_num_ratings": "150",
                     "vivino_price": "135.00",
@@ -276,6 +282,19 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self._run_import()
 
         self.assertEqual(self._current_description(), "Fresh override note.")
+
+    def test_import_preserves_description_by_vivino_url_when_name_changes(self) -> None:
+        self._write_seed_files("Mineral citrus, chalk, saline finish.")
+        self._run_import()
+        self.assertEqual(self._current_description(), "Mineral citrus, chalk, saline finish.")
+
+        self._write_seed_files_for_name(
+            "2020 Test Producer Test Cuvee Rouge 750ml",
+            None,
+        )
+        self._run_import()
+
+        self.assertEqual(self._current_description(), "Mineral citrus, chalk, saline finish.")
 
 
 if __name__ == "__main__":
