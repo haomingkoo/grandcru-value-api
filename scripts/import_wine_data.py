@@ -339,6 +339,56 @@ def normalize_vivino_url(url: str | None) -> str | None:
     return urlunparse((parsed.scheme or "https", parsed.netloc, normalized_path, "", "", ""))
 
 
+def _description_lookup_key(wine_name: str | None) -> str:
+    return canonicalize_key(wine_name) or normalize_key(wine_name)
+
+
+def _load_existing_vivino_descriptions(session) -> tuple[dict[str, str], dict[str, str]]:
+    by_name: dict[str, str] = {}
+    by_vivino_url: dict[str, str] = {}
+
+    for wine_name, vivino_url, vivino_description in session.execute(
+        select(WineDeal.wine_name, WineDeal.vivino_url, WineDeal.vivino_description)
+    ):
+        description = (vivino_description or "").strip()
+        if not description:
+            continue
+
+        name_key = _description_lookup_key(wine_name)
+        if name_key and name_key not in by_name:
+            by_name[name_key] = description
+
+        normalized_vivino_url = normalize_vivino_url(vivino_url)
+        if normalized_vivino_url and normalized_vivino_url not in by_vivino_url:
+            by_vivino_url[normalized_vivino_url] = description
+
+    return by_name, by_vivino_url
+
+
+def _resolve_vivino_description(
+    vivino_row: dict[str, str],
+    *,
+    wine_name: str,
+    vivino_url: str | None,
+    existing_descriptions_by_name: dict[str, str],
+    existing_descriptions_by_vivino_url: dict[str, str],
+) -> str | None:
+    vivino_desc = (vivino_row.get("vivino_description") or "").strip()
+    if vivino_desc:
+        return vivino_desc
+
+    normalized_vivino_url = normalize_vivino_url(vivino_url)
+    if normalized_vivino_url:
+        preserved_by_url = existing_descriptions_by_vivino_url.get(normalized_vivino_url)
+        if preserved_by_url:
+            return preserved_by_url
+
+    name_key = _description_lookup_key(wine_name)
+    if not name_key:
+        return None
+    return existing_descriptions_by_name.get(name_key)
+
+
 def build_vivino_url_index(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
     index: dict[str, dict[str, str]] = {}
     for row in rows:
@@ -532,6 +582,7 @@ def import_data(
         merged_records: list[WineDeal] = []
         snapshot_records: list[WineDealSnapshot] = []
         snapshot_time = datetime.now(UTC)
+        existing_descriptions_by_name, existing_descriptions_by_vivino_url = _load_existing_vivino_descriptions(session)
 
         match_counts: dict[str, int] = {
             "exact": 0, "canonical": 0, "fuzzy": 0, "platinum": 0, "none": 0,
@@ -655,7 +706,13 @@ def import_data(
                 from dataclasses import replace as _dc_replace
                 metadata = _dc_replace(metadata, **gap_fill)
 
-            vivino_desc = (vivino.get("vivino_description") or "").strip() or None
+            vivino_desc = _resolve_vivino_description(
+                vivino,
+                wine_name=wine_name,
+                vivino_url=vivino_url,
+                existing_descriptions_by_name=existing_descriptions_by_name,
+                existing_descriptions_by_vivino_url=existing_descriptions_by_vivino_url,
+            )
 
             deal_payload = {
                 "wine_name": wine_name,
