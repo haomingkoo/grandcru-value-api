@@ -106,9 +106,15 @@ class DealQueryTests(unittest.TestCase):
         self.engine.dispose()
 
     def test_comparable_only_filter_excludes_no_match_rows(self) -> None:
+        # comparable_only gates on price_diff_pct IS NOT NULL only (PR #54).
+        # Wines with price comparison data but no Vivino rating are still included.
         deals = list_deals(self.session, comparable_only=True, sort_by="wine_name", sort_order="asc")
 
-        self.assertEqual([deal.wine_name for deal in deals], ["Champagne Markup Bottle", "Value Pick One"])
+        names = [deal.wine_name for deal in deals]
+        self.assertIn("Champagne Markup Bottle", names)
+        self.assertIn("Value Pick One", names)
+        self.assertIn("No Vivino Discount Wine", names)
+        self.assertNotIn("No Match Discovery", names)
 
     def test_absolute_gap_sort_orders_by_largest_gap(self) -> None:
         deals = list_deals(self.session, comparable_only=True, sort_by="price_diff_pct_abs", sort_order="desc")
@@ -118,12 +124,13 @@ class DealQueryTests(unittest.TestCase):
         self.assertEqual(deals[0].value_verdict, "Platinum Markup")
         self.assertEqual(deals[1].value_verdict, "Strong Credit Spend")
 
-    def test_comparable_only_excludes_wines_without_vivino_rating(self) -> None:
+    def test_comparable_only_includes_unrated_wines_with_price_data(self) -> None:
+        # Wines without a Vivino rating but with a price comparison appear in
+        # comparable_only view — the filter is price match, not rating presence.
         deals = list_deals(self.session, comparable_only=True, sort_by="wine_name", sort_order="asc")
 
         names = [deal.wine_name for deal in deals]
-        self.assertNotIn("No Vivino Discount Wine", names)
-        self.assertEqual(len(names), 2)
+        self.assertIn("No Vivino Discount Wine", names)
 
     def test_comparable_off_includes_wines_without_vivino_rating(self) -> None:
         deals = list_deals(self.session, comparable_only=False, sort_by="wine_name", sort_order="asc")

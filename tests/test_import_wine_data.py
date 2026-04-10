@@ -1,8 +1,20 @@
+import csv
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
+
+import app.database as database_module
+import scripts.import_wine_data as import_wine_data_module
+from app.database import Base
+from app.models import WineDeal
 from scripts.import_wine_data import (
     _resolve_vivino_price_to_listing,
     _scale_vivino_price_to_listing,
+    import_data,
 )
 
 
@@ -116,6 +128,173 @@ class ImportWineDataTests(unittest.TestCase):
         )
 
         self.assertEqual(adjusted, 100.0)
+
+
+class ImportWineDataPersistenceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmpdir.name)
+        self.engine = create_engine(
+            f"sqlite:///{self.root / 'wines.sqlite'}",
+            connect_args={"check_same_thread": False},
+        )
+        self.Session = sessionmaker(
+            bind=self.engine,
+            autoflush=False,
+            autocommit=False,
+            expire_on_commit=False,
+        )
+
+        self.comparison_path = self.root / "comparison_summary.csv"
+        self.vivino_path = self.root / "vivino_results.csv"
+        self.overrides_path = self.root / "vivino_overrides.csv"
+
+    def tearDown(self) -> None:
+        self.engine.dispose()
+        self.tmpdir.cleanup()
+
+    def _write_csv(self, path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def _write_seed_files(self, override_description: str | None) -> None:
+        self._write_seed_files_for_name(
+            "2020 Test Producer - Test Cuvee - Red - 750 ml - Standard Bottle",
+            override_description,
+        )
+
+    def _write_seed_files_for_name(self, wine_name: str, override_description: str | None) -> None:
+        self._write_csv(
+            self.comparison_path,
+            [
+                "name_plat",
+                "year_plat",
+                "quantity_plat",
+                "volume_plat",
+                "price_plat",
+                "price_main",
+                "price_diff",
+                "price_diff_pct",
+                "cheaper_side",
+                "url_plat",
+                "url_main",
+            ],
+            [
+                {
+                    "name_plat": wine_name,
+                    "year_plat": "2020",
+                    "quantity_plat": "1",
+                    "volume_plat": "750ml",
+                    "price_plat": "120.00",
+                    "price_main": "110.00",
+                    "price_diff": "10.00",
+                    "price_diff_pct": "9.09",
+                    "cheaper_side": "Grand Cru Cheaper",
+                    "url_plat": "https://example.com/platinum/test-cuvee",
+                    "url_main": "https://example.com/grandcru/test-cuvee",
+                }
+            ],
+        )
+        self._write_csv(
+            self.vivino_path,
+            [
+                "wine_name",
+                "vivino_rating",
+                "vivino_num_ratings",
+                "vivino_price",
+                "vivino_url",
+            ],
+            [
+                {
+                    "wine_name": wine_name,
+                    "vivino_rating": "4.2",
+                    "vivino_num_ratings": "150",
+                    "vivino_price": "135.00",
+                    "vivino_url": "https://www.vivino.com/w/12345",
+                }
+            ],
+        )
+        override_rows: list[dict[str, str]] = []
+        if override_description is not None:
+            override_rows.append(
+                {
+                    "match_name": wine_name,
+                    "wine_name": wine_name,
+                    "vivino_rating": "4.2",
+                    "vivino_num_ratings": "150",
+                    "vivino_price": "135.00",
+                    "vivino_description": override_description,
+                    "vivino_url": "https://www.vivino.com/w/12345",
+                    "notes": "test fixture",
+                }
+            )
+        self._write_csv(
+            self.overrides_path,
+            [
+                "match_name",
+                "wine_name",
+                "vivino_rating",
+                "vivino_num_ratings",
+                "vivino_price",
+                "vivino_description",
+                "vivino_url",
+                "notes",
+            ],
+            override_rows,
+        )
+
+    def _run_import(self) -> None:
+        with (
+            patch.object(import_wine_data_module, "engine", self.engine),
+            patch.object(import_wine_data_module, "SessionLocal", self.Session),
+            patch.object(database_module, "engine", self.engine),
+        ):
+            import_data(
+                self.comparison_path,
+                self.vivino_path,
+                self.overrides_path,
+            )
+
+    def _current_description(self) -> str | None:
+        with self.Session() as session:
+            deal = session.scalar(select(WineDeal))
+            self.assertIsNotNone(deal)
+            return deal.vivino_description
+
+    def test_import_preserves_existing_description_when_csv_loses_it(self) -> None:
+        self._write_seed_files("Bright cherry, cedar, graphite.")
+        self._run_import()
+        self.assertEqual(self._current_description(), "Bright cherry, cedar, graphite.")
+
+        self._write_seed_files(None)
+        self._run_import()
+
+        self.assertEqual(self._current_description(), "Bright cherry, cedar, graphite.")
+
+    def test_csv_description_overrides_preserved_database_value(self) -> None:
+        self._write_seed_files("Older cellar note.")
+        self._run_import()
+        self.assertEqual(self._current_description(), "Older cellar note.")
+
+        self._write_seed_files("Fresh override note.")
+        self._run_import()
+
+        self.assertEqual(self._current_description(), "Fresh override note.")
+
+    def test_import_preserves_description_by_vivino_url_when_name_changes(self) -> None:
+        self._write_seed_files("Mineral citrus, chalk, saline finish.")
+        self._run_import()
+        self.assertEqual(self._current_description(), "Mineral citrus, chalk, saline finish.")
+
+        self._write_seed_files_for_name(
+            "2020 Test Producer Test Cuvee Rouge 750ml",
+            None,
+        )
+        self._run_import()
+
+        self.assertEqual(self._current_description(), "Mineral citrus, chalk, saline finish.")
 
 
 if __name__ == "__main__":
