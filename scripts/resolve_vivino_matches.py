@@ -799,7 +799,7 @@ def resolve_matches(args: argparse.Namespace) -> None:
                 or (existing_match_row.get("vivino_raters") or "").strip()
             )
             if (
-                not args.allow_missing_vivino_metrics
+                args.require_vivino_metrics
                 and not existing_rating_for_accept
                 and not existing_count_for_accept
             ):
@@ -976,9 +976,15 @@ def main() -> None:
         help="Auto-accept the best candidate even if below confidence thresholds.",
     )
     parser.add_argument(
+        "--require-vivino-metrics",
+        action="store_true",
+        help="Block auto-apply when vivino rating/count are absent from the cache (opt-in strictness).",
+    )
+    # Deprecated alias — kept so old ad-hoc invocations surface a clear error.
+    parser.add_argument(
         "--allow-missing-vivino-metrics",
         action="store_true",
-        help="Allow auto-apply even if vivino rating/count are missing.",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument("--limit", type=int, default=0, help="Optional max unresolved wines to process (0 means all).")
     parser.add_argument("--auto-apply", action="store_true", help="Append auto-accepted rows into --vivino-overrides")
@@ -986,6 +992,14 @@ def main() -> None:
     parser.add_argument("--output-unmatched", type=Path, default=Path("data/vivino_unmatched.csv"))
     parser.add_argument("--output-suggestions", type=Path, default=Path("data/vivino_auto_overrides.csv"))
     args = parser.parse_args()
+
+    if getattr(args, "allow_missing_vivino_metrics", False):
+        print(
+            "[resolve] WARNING: --allow-missing-vivino-metrics is deprecated and has no effect. "
+            "High-confidence cache-miss matches now auto-accept by default. "
+            "Use --require-vivino-metrics to restore the old blocking behaviour.",
+            file=sys.stderr,
+        )
 
     args.query_cache = args.query_cache.resolve()
     args.state_file = args.state_file.resolve()
