@@ -613,6 +613,18 @@ def import_data(
             )
             vivino_url = normalize_vivino_url(vivino.get("vivino_url"))
 
+            # Guard: an override/result row with no URL and no rating is a
+            # no-data placeholder. Downgrade it to "none" so the platinum
+            # fallback can fire instead of silently swallowing the match.
+            if match_method != "none" and vivino_rating is None and vivino_url is None:
+                logger.debug(
+                    "empty_match_downgraded wine=%s match_method=%s",
+                    wine_name,
+                    match_method,
+                )
+                match_method = "none"
+                vivino = {}
+
             # If a matched row has URL but blank metrics, hydrate from URL index.
             if vivino_url and vivino_rating is None and vivino_num_ratings is None:
                 url_row = vivino_by_url.get(vivino_url)
