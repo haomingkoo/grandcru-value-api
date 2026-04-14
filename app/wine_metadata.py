@@ -68,6 +68,9 @@ _ORIGIN_RULES: tuple[OriginRule, ...] = (
             "coutier",
             "william saintot",
             "louise brison",
+            "adrien renoir",
+            "dhondt",
+            "domaine mumm",
         ),
         "France",
         "Champagne",
@@ -182,7 +185,12 @@ _GRAPE_RULES: tuple[GrapeRule, ...] = (
     GrapeRule(("prosecco",), "Glera", source="regional_inference", confidence="medium"),
     GrapeRule(("raboso",), "Raboso"),
     GrapeRule(("brunello di montalcino",), "Sangiovese", source="regional_inference", confidence="medium"),
+    GrapeRule(("barolo",), "Nebbiolo", source="regional_inference", confidence="high"),
     GrapeRule(("gattinara",), "Nebbiolo", source="regional_inference", confidence="medium"),
+    GrapeRule(("solea",), "Nascetta", source="winery_cuvee_inference", confidence="high"),
+    GrapeRule(("derthona",), "Timorasso", source="winery_cuvee_inference", confidence="high"),
+    GrapeRule(("giramonte",), "Sangiovese, Merlot", source="winery_cuvee_inference", confidence="high"),
+    GrapeRule(("tenuta perano", "perano rialzi"), "Sangiovese", source="winery_cuvee_inference", confidence="high"),
     GrapeRule(("guidalberto",), "Cabernet Sauvignon, Merlot", source="winery_cuvee_inference", confidence="medium"),
     GrapeRule(("le difese",), "Cabernet Sauvignon, Sangiovese", source="winery_cuvee_inference", confidence="medium"),
     GrapeRule(("terlaner classico",), "Pinot Bianco, Chardonnay, Sauvignon Blanc", source="regional_inference", confidence="medium"),
@@ -351,6 +359,16 @@ def derive_wine_metadata(
     wine_type = _detect_wine_type(combined_text, color)
     style_family = _detect_style_family(combined_text, wine_type, origin)
     grapes, grape_source, grape_confidence = _detect_grapes(combined_text, wine_type)
+
+    # Champagne catch-all: if style is Champagne and no grape rule fired,
+    # fall back to the typical assemblage blend. Blanc de Blancs / Blanc de
+    # Noirs are already caught above, so this only reaches generic Brut NV
+    # wines where the producer name alone drove the Champagne style.
+    if grapes is None and style_family == "Champagne":
+        grapes = "Pinot Noir, Chardonnay, Pinot Meunier"
+        grape_source = "style_inference"
+        grape_confidence = "low"
+
     offering_type = _detect_offering_type(quantity, volume, packaging, wine_name)
 
     country = origin.country if origin is not None else None
