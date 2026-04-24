@@ -34,6 +34,52 @@ class MetadataAndInsightsTests(unittest.TestCase):
         self.assertEqual(metadata.style_family, "Sweet / Dessert")
         self.assertEqual(metadata.grapes, "Moscato Bianco")
 
+    def test_derive_wine_metadata_covers_fresh_scrape_regressions(self) -> None:
+        examples = [
+            (
+                "NV Castell de Sant Pau - Brut Rose - Rose - 750 ml - Standard Bottle",
+                "Spain",
+                "Sparkling Rose Blend",
+            ),
+            (
+                "2023 Vina Valdivieso - Caballo Loco Grand Cru Limari - Red - 750 ml - Standard Bottle",
+                "Chile",
+                "Syrah",
+            ),
+            (
+                "2022 The Hilt - Bentrock Chardonnay - White - 750 ml - Standard Bottle",
+                "United States",
+                "Chardonnay",
+            ),
+            (
+                "2023 Henri et Gilles Buisson - Saint-Romain La Perriere - White - 750 ml - Standard Bottle",
+                "France",
+                "Chardonnay",
+            ),
+            (
+                "2024 Villa Degli Olmi - Quattro Passi Primitivo - Red - 750 ml - Standard Bottle",
+                "Italy",
+                "Primitivo",
+            ),
+            (
+                "2022 Blue Rock - Baby Blue - Red - 750 ml - Standard Bottle",
+                "United States",
+                "Cabernet Sauvignon",
+            ),
+            (
+                "2023 Vina Valdivieso - Caballo Loco Grand Cru Sagrada Familia - Red - 750 ml - Standard Bottle",
+                "Chile",
+                "Merlot, Petit Verdot, Cabernet Sauvignon, Cabernet Franc, Malbec",
+            ),
+        ]
+
+        for wine_name, country, grapes in examples:
+            with self.subTest(wine_name=wine_name):
+                metadata = derive_wine_metadata(wine_name=wine_name, quantity=1, volume="750ml")
+
+                self.assertEqual(metadata.country, country)
+                self.assertEqual(metadata.grapes, grapes)
+
     def test_compute_deal_insights_marks_strong_credit_spend(self) -> None:
         deal = SimpleNamespace(
             wine_name="2022 Domaine Claude Dugat - Gevrey Chambertin - Red - 750 ml - Standard Bottle (Bundle of 3)",
