@@ -14,11 +14,20 @@ from app.models import WineDeal
 from scripts.import_wine_data import (
     _resolve_vivino_price_to_listing,
     _scale_vivino_price_to_listing,
+    default_skip_if_fresh_hours,
     import_data,
 )
 
 
 class ImportWineDataTests(unittest.TestCase):
+    def test_default_skip_if_fresh_protects_railway_web_startup(self) -> None:
+        with patch.dict("os.environ", {"RAILWAY_SERVICE_NAME": "web"}, clear=False):
+            self.assertEqual(default_skip_if_fresh_hours(), 20.0)
+
+    def test_default_skip_if_fresh_keeps_manual_imports_immediate(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(default_skip_if_fresh_hours(), 0.0)
+
     def test_scale_vivino_price_to_listing_scales_bundle(self) -> None:
         self.assertEqual(_scale_vivino_price_to_listing(210.0, 3, "750ml"), 630.0)
 

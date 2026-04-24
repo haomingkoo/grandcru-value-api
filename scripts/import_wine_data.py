@@ -30,6 +30,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger("grandcru.import")
 
+
+def default_skip_if_fresh_hours() -> float:
+    """Protect Railway web deploys from overwriting fresh cron data.
+
+    Local/manual imports still default to importing immediately. The Railway web
+    service has historically overridden the Docker CMD and omitted
+    --skip-if-fresh, so this keeps deploy-time startup imports conservative.
+    """
+    if os.getenv("RAILWAY_SERVICE_NAME") == "web":
+        return 20.0
+    return 0.0
+
 DEAL_EXTRA_COLUMNS = (
     ("producer", "VARCHAR(255)"),
     ("label_name", "VARCHAR(255)"),
@@ -894,9 +906,12 @@ def main() -> None:
     parser.add_argument(
         "--skip-if-fresh",
         type=float,
-        default=0,
+        default=default_skip_if_fresh_hours(),
         metavar="HOURS",
-        help="Skip import if DB has data newer than HOURS (0 = always import).",
+        help=(
+            "Skip import if DB has data newer than HOURS "
+            "(default: 20 on Railway web service, otherwise 0)."
+        ),
     )
     args = parser.parse_args()
     if args.skip_if_fresh > 0 and _db_has_fresh_data(args.skip_if_fresh):
