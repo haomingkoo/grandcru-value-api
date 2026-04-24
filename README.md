@@ -93,7 +93,7 @@ Seven stages, orchestrated by `scripts/refresh_pipeline.py`:
 | 4. LLM Resolve | `llm_vivino_resolver.py` | Gemini Flash extracts wine identity, fetches Vivino prices/ratings (uses cached URLs when available) |
 | 5. Market Validate | `validate_market_prices.py` | Checks URL matches against wine identity (producer, label, classification) and price sanity |
 | 6. Import | `import_wine_data.py` | Merge sources, compute deal scores, write to DB |
-| 7. Completeness Validate | `validate_wine_completeness.py` | Fails unexpected missing Vivino URL/rating/count gaps after import |
+| 7. Completeness Validate | `validate_wine_completeness.py` | Fails unexpected missing Vivino, country, grape, and price gaps after import |
 
 ### Identity Cache
 
@@ -101,11 +101,11 @@ Wine→URL mappings are permanent. The **identity cache** (`data/identity_cache.
 
 ### Startup Import Logic
 
-On deploy, the web service runs `import_wine_data.py --skip-if-fresh 20`:
+On deploy, the web service may run `import_wine_data.py` before starting Uvicorn. In Railway `web`, the importer defaults to `--skip-if-fresh 20` even if the service start command omits the flag:
 - If the daily cron imported data in the last 20 hours, the CSV import is **skipped** (trusts the DB)
 - If no recent ingestion exists (first deploy or cron failure), it imports from the committed seed CSVs as a safety net
 
-This ensures code pushes never overwrite fresh cron data.
+This ensures code pushes never overwrite fresh cron data with older committed fallback CSVs.
 
 ### Deal Score (0-100)
 
@@ -145,7 +145,17 @@ python scripts/build_identity_cache.py
 
 Both daily and weekly modes run as Railway cron services. The identity cache ensures known wines skip Brave searches — only new wines use API calls.
 
-Post-import completeness validation runs by default. New wines without a Vivino URL or rating/count fail the refresh unless the gap is explicitly documented in `scripts/data_quality_rules.py`. Resolver auto-apply also requires Vivino rating/count metrics by default, so URL-only search hits stay in review instead of becoming blank-rating matches.
+### Vivino Completeness Guardrails
+
+The Vivino pipeline intentionally prefers an obvious missing value over a wrong match.
+
+- Resolver auto-apply requires Vivino rating/count metrics by default. URL-only search hits stay in review unless `--no-require-vivino-metrics` is used deliberately.
+- Import labels URL-only rows as `vivino_match_method=url_only`, not `exact`, so diagnostics do not count them as complete matches.
+- The default public comparable view requires a retailer price comparison and a real Vivino rating/count.
+- Post-import completeness validation runs by default. New wines without a Vivino URL, rating/count, country, grapes, or a non-allowlisted Vivino price fail the refresh.
+- Known accepted gaps live in `scripts/data_quality_rules.py`; adding an entry there must document why the gap exists and how to close it.
+
+Last production verification: 2026-04-24 refresh completed with 83 deals, 82/83 Vivino-rated, 0 `url_only` rows, 0 missing countries, and 0 missing grapes. The one remaining unrated wine is the documented La Croix de Brully Puligny-Montrachet Les Enseignères gap.
 
 ### Residential Vivino Review Loop
 
@@ -193,8 +203,17 @@ Copy `.env.example` to `.env`.
 - HMAC-authenticated ops endpoints (`hmac.compare_digest`)
 - Per-IP rate limiting with `429 Retry-After` responses
 - HTML escaping on all rendered values
-- Security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
+- Security headers: `Content-Security-Policy`, `Permissions-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
+- HTTPS/HSTS is enforced at the edge for `wine.kooexperience.com`
 - CORS restricted to explicit origins (no wildcard in production)
+
+## SEO
+
+- Canonical root URL: `https://wine.kooexperience.com`
+- Indexable landing app with title, meta description, Open Graph, Twitter card, and JSON-LD `WebApplication` metadata
+- `GET /robots.txt` allows the public site, blocks ops/docs endpoints, and advertises the sitemap
+- `GET /sitemap.xml` lists the canonical app and legal notice pages
+- Wine rows are rendered client-side; add server-rendered wine detail pages if individual bottles need search-indexable pages
 
 ## Project Structure
 
@@ -214,6 +233,7 @@ scripts/
   resolve_vivino_matches.py
   llm_vivino_resolver.py
   llm_market_resolver.py  Wine-Searcher price resolver (disabled — no reliable SGD source)
+  data_quality_rules.py  Documented allowlists for accepted data gaps
   validate_market_prices.py  URL + price sanity validator
   build_identity_cache.py  Seed identity cache from existing data
   enrich_vivino_results.py

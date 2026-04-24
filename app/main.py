@@ -9,7 +9,7 @@ import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
@@ -62,6 +62,20 @@ FRONTEND_ASSET_PATHS = (
     WEB_DIR / "index.html",
     WEB_DIR / "styles.css",
     WEB_DIR / "app.js",
+)
+CANONICAL_BASE_URL = "https://wine.kooexperience.com"
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "object-src 'none'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self'; "
+    "img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "connect-src 'self'; "
+    "upgrade-insecure-requests"
 )
 
 DEAL_EXTRA_COLUMNS = (
@@ -224,6 +238,10 @@ async def security_headers_middleware(request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+    response.headers["Permissions-Policy"] = (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+    )
     return response
 
 
@@ -310,6 +328,51 @@ def frontend() -> HTMLResponse:
     )
     html = (WEB_DIR / "index.html").read_text(encoding="utf-8").replace("__ASSET_VERSION__", asset_version)
     return HTMLResponse(html, headers={"Cache-Control": "no-store, max-age=0"})
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse, include_in_schema=False)
+def robots_txt() -> PlainTextResponse:
+    return PlainTextResponse(
+        "\n".join(
+            [
+                "User-agent: *",
+                "Allow: /",
+                "Disallow: /ops/",
+                "Disallow: /docs",
+                "Disallow: /redoc",
+                "Disallow: /openapi.json",
+                f"Sitemap: {CANONICAL_BASE_URL}/sitemap.xml",
+                "",
+            ]
+        ),
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap_xml() -> Response:
+    lastmod = time.strftime("%Y-%m-%d", time.gmtime())
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>{CANONICAL_BASE_URL}/</loc>
+    <lastmod>{lastmod}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>{CANONICAL_BASE_URL}/legal</loc>
+    <lastmod>{lastmod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>
+"""
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @app.get("/api")
