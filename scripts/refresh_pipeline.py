@@ -50,6 +50,7 @@ def run_vivino_resolver(
     output_review: Path,
     output_unmatched: Path,
     output_suggestions: Path,
+    require_vivino_metrics: bool,
     env: dict[str, str],
 ) -> None:
     resolver_cmd = [
@@ -97,6 +98,8 @@ def run_vivino_resolver(
 
     if auto_apply:
         resolver_cmd.append("--auto-apply")
+    if require_vivino_metrics:
+        resolver_cmd.append("--require-vivino-metrics")
 
     print(f"[refresh] Running vivino resolver ({provider})")
     subprocess.run(resolver_cmd, cwd=ROOT, env=env, check=True)
@@ -133,6 +136,14 @@ def run_import(comparison_path: Path, vivino_path: Path, vivino_overrides_path: 
         f" overrides={vivino_overrides_path.name}"
     )
     subprocess.run(import_cmd, cwd=ROOT, env=env, check=True)
+
+
+def run_completeness_validation(*, strict: bool, env: dict[str, str]) -> None:
+    validation_cmd = [sys.executable, str(ROOT / "scripts" / "validate_wine_completeness.py")]
+    if strict:
+        validation_cmd.append("--strict")
+    print("[refresh] Validating wine completeness")
+    subprocess.run(validation_cmd, cwd=ROOT, env=env, check=True)
 
 
 def run_scrape_and_build(
@@ -309,6 +320,16 @@ def main() -> None:
         action="store_true",
         help="Auto-append high-confidence matches into --vivino-overrides.",
     )
+    parser.add_argument(
+        "--resolver-require-vivino-metrics",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Only auto-apply Vivino matches that already carry a rating/count. "
+            "Use this in hosted refreshes so URL-only search hits do not become "
+            "terminal exact matches with blank ratings (default: true)."
+        ),
+    )
     parser.add_argument("--resolver-max-results", type=int, default=8)
     parser.add_argument("--resolver-sleep-seconds", type=float, default=1.2)
     parser.add_argument("--resolver-min-confidence", type=float, default=0.82)
@@ -399,6 +420,18 @@ def main() -> None:
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Fail the run if unrated rows exceed --max-unrated.",
+    )
+    parser.add_argument(
+        "--validate-completeness",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Run post-import data completeness validation (default: true).",
+    )
+    parser.add_argument(
+        "--validate-completeness-strict",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Fail post-import validation on documented warnings as well as errors.",
     )
     parser.add_argument(
         "--enrich-platinum-vivino",
@@ -572,6 +605,7 @@ def main() -> None:
                 output_review=args.resolver_output_review.resolve(),
                 output_unmatched=args.resolver_output_unmatched.resolve(),
                 output_suggestions=args.resolver_output_suggestions.resolve(),
+                require_vivino_metrics=args.resolver_require_vivino_metrics,
                 env=env,
             )
 
@@ -647,6 +681,9 @@ def main() -> None:
         subprocess.run(enrich_cmd, cwd=ROOT, env=env, check=True)
 
     run_import(comparison_path, vivino_path, vivino_overrides_path, env)
+
+    if args.validate_completeness:
+        run_completeness_validation(strict=args.validate_completeness_strict, env=env)
 
     if args.health_url:
         health_ok = check_health(args.health_url)

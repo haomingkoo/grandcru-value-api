@@ -3,10 +3,10 @@
 import argparse
 import unittest
 
-from scripts.resolve_vivino_matches import Candidate
+from scripts.resolve_vivino_matches import Candidate, vivino_row_has_metrics
 
 
-def _make_args(*, require_vivino_metrics: bool = False, auto_accept_best: bool = False) -> argparse.Namespace:
+def _make_args(*, require_vivino_metrics: bool = True, auto_accept_best: bool = False) -> argparse.Namespace:
     return argparse.Namespace(
         min_confidence=0.82,
         min_margin=0.08,
@@ -72,17 +72,22 @@ _CACHED_METRICS: dict = {"vivino_rating": "4.2", "vivino_num_ratings": "1441"}
 
 
 class DefaultBehaviourTests(unittest.TestCase):
-    """By default, high-confidence cache-miss matches should auto-accept."""
+    """By default, URL-only cache-miss matches must stay in review."""
 
-    def test_high_confidence_cache_miss_auto_accepts_by_default(self) -> None:
-        """The vicious-trap regression: score=0.985 with no cached metrics must auto_accept."""
-        args = _make_args(require_vivino_metrics=False)
-        decision, _ = _decide(_HIGH_CONFIDENCE_CANDIDATE, 0.0, _NO_CACHED_METRICS, args)
-        self.assertEqual(decision, "auto_accept")
+    def test_high_confidence_cache_miss_needs_review_by_default(self) -> None:
+        args = _make_args()
+        decision, reason = _decide(_HIGH_CONFIDENCE_CANDIDATE, 0.0, _NO_CACHED_METRICS, args)
+        self.assertEqual(decision, "needs_review")
+        self.assertIn("missing vivino rating/count", reason)
 
     def test_high_confidence_with_cached_metrics_auto_accepts(self) -> None:
-        args = _make_args(require_vivino_metrics=False)
+        args = _make_args()
         decision, _ = _decide(_HIGH_CONFIDENCE_CANDIDATE, 0.0, _CACHED_METRICS, args)
+        self.assertEqual(decision, "auto_accept")
+
+    def test_explicit_no_require_metrics_allows_cache_miss_auto_accept(self) -> None:
+        args = _make_args(require_vivino_metrics=False)
+        decision, _ = _decide(_HIGH_CONFIDENCE_CANDIDATE, 0.0, _NO_CACHED_METRICS, args)
         self.assertEqual(decision, "auto_accept")
 
     def test_below_confidence_threshold_needs_review(self) -> None:
@@ -129,6 +134,24 @@ class ProducerOverlapTests(unittest.TestCase):
         args = _make_args(require_vivino_metrics=False)
         decision, _ = _decide(candidate, 0.0, _CACHED_METRICS, args)
         self.assertEqual(decision, "needs_review")
+
+
+class MetricsDetectionTests(unittest.TestCase):
+    def test_url_only_row_is_not_metric_complete(self) -> None:
+        self.assertFalse(
+            vivino_row_has_metrics(
+                {
+                    "vivino_url": "https://www.vivino.com/en/example/w/1",
+                    "vivino_rating": "",
+                    "vivino_num_ratings": "",
+                }
+            )
+        )
+
+    def test_rating_or_count_marks_row_metric_complete(self) -> None:
+        self.assertTrue(vivino_row_has_metrics({"vivino_rating": "4.1"}))
+        self.assertTrue(vivino_row_has_metrics({"vivino_num_ratings": "120"}))
+        self.assertTrue(vivino_row_has_metrics({"vivino_raters": "120 ratings"}))
 
 
 if __name__ == "__main__":

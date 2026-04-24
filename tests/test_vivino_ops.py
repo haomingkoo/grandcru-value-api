@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import WineDeal
+from app.ops import build_refresh_command
 from app.service import list_vivino_unresolved_export_rows
 from scripts.vivino_overrides import is_locked_override_row, upsert_overrides
 
@@ -82,6 +83,20 @@ class VivinoOverrideTests(unittest.TestCase):
         self.assertEqual(merged[0]["vivino_rating"], "4.1")
         self.assertEqual(merged[0]["vivino_url"], "https://example.com/good")
         self.assertEqual(merged[0]["locked"], "")
+
+
+class RefreshCommandTests(unittest.TestCase):
+    def test_hosted_refresh_requires_metrics_before_auto_apply(self) -> None:
+        command = build_refresh_command(mode="daily", health_url=None, strict_health=False)
+
+        self.assertIn("--resolver-auto-apply", command)
+        self.assertIn("--resolver-require-vivino-metrics", command)
+
+    def test_import_only_does_not_run_resolver(self) -> None:
+        command = build_refresh_command(mode="import_only", health_url=None, strict_health=False)
+
+        self.assertNotIn("--resolve-vivino", command)
+        self.assertNotIn("--resolver-require-vivino-metrics", command)
 
 
 class VivinoUnresolvedExportTests(unittest.TestCase):

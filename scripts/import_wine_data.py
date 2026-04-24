@@ -616,7 +616,7 @@ def import_data(
             # Guard: an override/result row with no URL and no rating is a
             # no-data placeholder. Downgrade it to "none" so the platinum
             # fallback can fire instead of silently swallowing the match.
-            if match_method != "none" and vivino_rating is None and vivino_url is None:
+            if match_method != "none" and vivino_rating is None and vivino_num_ratings is None and vivino_url is None:
                 logger.debug(
                     "empty_match_downgraded wine=%s match_method=%s",
                     wine_name,
@@ -638,6 +638,18 @@ def import_data(
                     )
                     if url_num_ratings is not None:
                         vivino_num_ratings = url_num_ratings
+
+            # URL-only rows are useful click-through identities, but they are
+            # not completed Vivino metadata and should not be counted as exact
+            # matches in diagnostics.
+            if match_method != "none" and vivino_url and vivino_rating is None and vivino_num_ratings is None:
+                logger.debug(
+                    "url_only_match wine=%s match_method=%s vivino_url=%s",
+                    wine_name,
+                    match_method,
+                    vivino_url,
+                )
+                match_method = "url_only"
 
             # --- Source 2: Platinum-embedded Vivino data (explicit, named) ---
             # Only used when CSV matching found nothing. Not a hidden fallback —

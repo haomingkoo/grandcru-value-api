@@ -83,7 +83,7 @@ Open [localhost:8000](http://localhost:8000).
 
 ## Data Pipeline
 
-Six stages, orchestrated by `scripts/refresh_pipeline.py`:
+Seven stages, orchestrated by `scripts/refresh_pipeline.py`:
 
 | Stage | Script | What it does |
 |-------|--------|-------------|
@@ -91,8 +91,9 @@ Six stages, orchestrated by `scripts/refresh_pipeline.py`:
 | 2. Match | `build_comparison_summary.py` | Fuzzy name matching, bundle detection, total listing prices |
 | 3. Resolve | `resolve_vivino_matches.py` | Brave Search for Vivino URLs (skips wines in identity cache) |
 | 4. LLM Resolve | `llm_vivino_resolver.py` | Gemini Flash extracts wine identity, fetches Vivino prices/ratings (uses cached URLs when available) |
-| 5. Validate | `validate_market_prices.py` | Checks URL matches against wine identity (producer, label, classification) and price sanity |
+| 5. Market Validate | `validate_market_prices.py` | Checks URL matches against wine identity (producer, label, classification) and price sanity |
 | 6. Import | `import_wine_data.py` | Merge sources, compute deal scores, write to DB |
+| 7. Completeness Validate | `validate_wine_completeness.py` | Fails unexpected missing Vivino URL/rating/count gaps after import |
 
 ### Identity Cache
 
@@ -126,13 +127,15 @@ python scripts/refresh_pipeline.py
 python scripts/refresh_pipeline.py \
   --scrape-and-build \
   --resolve-vivino --resolver-provider brave \
-  --resolver-auto-apply --resolver-max-api-queries 40 \
+  --resolver-auto-apply --resolver-require-vivino-metrics \
+  --resolver-max-api-queries 40 \
   --resolver-only-new-unresolved
 
 # Weekly (full — all wines, LLM resolve for descriptions/prices)
 python scripts/refresh_pipeline.py \
   --scrape-and-build \
   --resolve-vivino --resolver-provider brave --resolver-auto-apply \
+  --resolver-require-vivino-metrics \
   --resolver-max-api-queries 50 --no-resolver-only-new-unresolved \
   --llm-resolve --llm-resolve-all
 
@@ -141,6 +144,8 @@ python scripts/build_identity_cache.py
 ```
 
 Both daily and weekly modes run as Railway cron services. The identity cache ensures known wines skip Brave searches — only new wines use API calls.
+
+Post-import completeness validation runs by default. New wines without a Vivino URL or rating/count fail the refresh unless the gap is explicitly documented in `scripts/data_quality_rules.py`. Resolver auto-apply also requires Vivino rating/count metrics by default, so URL-only search hits stay in review instead of becoming blank-rating matches.
 
 ### Residential Vivino Review Loop
 
