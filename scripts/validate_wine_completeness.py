@@ -24,6 +24,10 @@ if str(ROOT) not in sys.path:
 
 from app.database import SessionLocal  # noqa: E402
 from app.models import WineDeal  # noqa: E402
+from scripts.data_quality_rules import (  # noqa: E402
+    WINES_MISSING_VIVINO_PRICE,
+    WINES_MISSING_VIVINO_URL,
+)
 from sqlalchemy import select  # noqa: E402
 
 logging.basicConfig(
@@ -31,32 +35,6 @@ logging.basicConfig(
     format="%(levelname)s %(message)s",
 )
 logger = logging.getLogger("grandcru.validate")
-
-# ── Known gaps (mirrors tests/test_data_completeness.py) ─────────────────────
-# These are documented limitations — not silently ignored.
-WINES_MISSING_VIVINO_URL: set[str] = {
-    "2022 La Croix de Brully - Puligny-Montrachet Les Enseignères - White - 750 ml - Standard Bottle",
-}
-
-WINES_MISSING_VIVINO_PRICE: set[str] = {
-    "2014 Rhys - Chardonnay Bearwallow Vineyard - White - 1.5 L - Magnum",
-    "2017 Paul Hobbs - Chardonnay Dinner Vineyard Cuvee Agustina Sonoma Mountain - White - 750 ml - Standard Bottle",
-    "2017 Rhys - Chardonnay Bearwallow Vineyard - White - 1.5 L - Magnum",
-    "2017 Rhys - Chardonnay Mt. Pajaro Vineyard - White - 1.5 L - Magnum",
-    "2021 Chateau Tahbilk - Shiraz Tower Release - Red - 750 ml - Standard Bottle",
-    "2021 Hudelot - Baillet - Bonnes Mares - Red - 750 ml - Standard Bottle (Bundle of 3)",
-    "2021 Pierre Boisson - Auxey Duresses - White - 750 ml - Standard Bottle (Bundle of 6)",
-    "2022 00 Wines - Freya Hermann Cuvee Chardonnay - White - 750 ml - Standard Bottle",
-    "2022 Domaine Claude Dugat - La Gibryotte Charmes Chambertin Grand Cru - Red - 750 ml - Standard Bottle (Bundle of 3)",
-    "2022 La Croix de Brully - Puligny-Montrachet Les Enseignères - White - 750 ml - Standard Bottle",
-    "2023 Hudelot - Baillet - Chambolle Musigny Charmes - Red - 750 ml - Standard Bottle (Bundle of 3)",
-    "NV Adrien Renoir - Grand Cru Le Terroir - White - 750 ml - Standard Bottle",
-    "NV Botter - Brilla Asolo Prosecco Superiore DOCG - White - 750 ml - Standard Bottle",
-    "NV Charles Heidsieck - Brut Reserve - White - 750 ml - Standard Bottle",
-    "NV Coutier - Tradition Brut - White - 750 ml - Standard Bottle",
-    "NV Dhondt-Grellet - Extra Brut Blanc de Blancs Premier Cru Les Terres Fines (Base 2022) - White - 750 ml - Standard Bottle",
-    "NV Miraval - Fleur De Miraval Exclusivement Rose 3 - Rose - 750 ml - Standard Bottle",
-}
 
 
 def _pct(count: int, total: int) -> str:

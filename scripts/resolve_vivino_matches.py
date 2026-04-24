@@ -91,6 +91,16 @@ class Candidate:
     year_match: bool
 
 
+def vivino_row_has_metrics(row: dict[str, str] | None) -> bool:
+    if not row:
+        return False
+    return bool(
+        (row.get("vivino_rating") or "").strip()
+        or (row.get("vivino_num_ratings") or "").strip()
+        or (row.get("vivino_raters") or "").strip()
+    )
+
+
 def load_state(path: Path) -> dict[str, object]:
     if not path.exists():
         return {"seen_unresolved": {}}
@@ -634,6 +644,7 @@ def resolve_matches(args: argparse.Namespace) -> None:
     unresolved_rows: list[dict[str, str]] = []
     unresolved_none_count = 0
     missing_url_enrichment_count = 0
+    missing_metrics_enrichment_count = 0
     for row in comparison_rows:
         wine_name = (row.get("name_plat") or "").strip()
         if not wine_name:
@@ -654,6 +665,11 @@ def resolve_matches(args: argparse.Namespace) -> None:
         if not matched_url:
             unresolved_rows.append(row)
             missing_url_enrichment_count += 1
+            continue
+
+        if not vivino_row_has_metrics(matched_row):
+            unresolved_rows.append(row)
+            missing_metrics_enrichment_count += 1
 
     total_unresolved_before_filter = len(unresolved_rows)
     skipped_seen = 0
@@ -679,6 +695,7 @@ def resolve_matches(args: argparse.Namespace) -> None:
         f"unresolved_before_filter={total_unresolved_before_filter}",
         f"unresolved_none={unresolved_none_count}",
         f"missing_url_enrichment={missing_url_enrichment_count}",
+        f"missing_metrics_enrichment={missing_metrics_enrichment_count}",
         f"skipped_seen={skipped_seen}",
         f"unresolved={len(unresolved_rows)}",
     )
@@ -977,8 +994,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--require-vivino-metrics",
-        action="store_true",
-        help="Block auto-apply when vivino rating/count are absent from the cache (opt-in strictness).",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Block auto-apply when vivino rating/count are absent from the cache (default: true).",
     )
     # Deprecated alias — kept so old ad-hoc invocations surface a clear error.
     parser.add_argument(
@@ -996,8 +1014,8 @@ def main() -> None:
     if getattr(args, "allow_missing_vivino_metrics", False):
         print(
             "[resolve] WARNING: --allow-missing-vivino-metrics is deprecated and has no effect. "
-            "High-confidence cache-miss matches now auto-accept by default. "
-            "Use --require-vivino-metrics to restore the old blocking behaviour.",
+            "Vivino rating/count metrics are now required for auto-apply by default. "
+            "Use --no-require-vivino-metrics only for an intentional one-off review run.",
             file=sys.stderr,
         )
 

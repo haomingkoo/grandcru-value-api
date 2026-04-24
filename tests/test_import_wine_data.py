@@ -263,6 +263,13 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
             self.assertIsNotNone(deal)
             return deal.vivino_description
 
+    def _current_deal(self) -> WineDeal:
+        with self.Session() as session:
+            deal = session.scalar(select(WineDeal))
+            self.assertIsNotNone(deal)
+            session.expunge(deal)
+            return deal
+
     def test_import_preserves_existing_description_when_csv_loses_it(self) -> None:
         self._write_seed_files("Bright cherry, cedar, graphite.")
         self._run_import()
@@ -295,6 +302,37 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self._run_import()
 
         self.assertEqual(self._current_description(), "Mineral citrus, chalk, saline finish.")
+
+    def test_url_only_match_is_tracked_separately_from_exact_match(self) -> None:
+        wine_name = "2020 Test Producer - Url Only Cuvee - Red - 750 ml - Standard Bottle"
+        self._write_seed_files_for_name(wine_name, None)
+        self._write_csv(
+            self.vivino_path,
+            [
+                "wine_name",
+                "vivino_rating",
+                "vivino_num_ratings",
+                "vivino_price",
+                "vivino_url",
+            ],
+            [
+                {
+                    "wine_name": wine_name,
+                    "vivino_rating": "",
+                    "vivino_num_ratings": "",
+                    "vivino_price": "",
+                    "vivino_url": "https://www.vivino.com/en/example/w/12345",
+                }
+            ],
+        )
+
+        self._run_import()
+
+        deal = self._current_deal()
+        self.assertEqual(deal.vivino_match_method, "url_only")
+        self.assertEqual(deal.vivino_url, "https://www.vivino.com/en/example/w/12345")
+        self.assertIsNone(deal.vivino_rating)
+        self.assertIsNone(deal.vivino_num_ratings)
 
 
 if __name__ == "__main__":

@@ -48,7 +48,7 @@ class DealOut(BaseModel):
     market_retailer_url: str | None = None
     vivino_match_method: str | None = Field(
         default=None,
-        description="How Vivino metadata was attached: exact, canonical, fuzzy, platinum, or none.",
+        description="How Vivino metadata was attached: exact, canonical, fuzzy, platinum, url_only, or none.",
     )
     deal_score: float = Field(
         description="0-100 ranking score. Retailer discount (vs Grand Cru) up to 30 pts, market discount (vs Vivino) up to 30 pts, rating quality up to 25 pts, confidence up to 10 pts, bonus for beating both up to 5 pts.",
@@ -131,7 +131,7 @@ class DealHistoryOut(BaseModel):
     vivino_num_ratings: int | None = None
     vivino_match_method: str | None = Field(
         default=None,
-        description="How Vivino metadata was attached: exact, canonical, fuzzy, platinum, or none.",
+        description="How Vivino metadata was attached: exact, canonical, fuzzy, platinum, url_only, or none.",
     )
 
     model_config = ConfigDict(from_attributes=True)
