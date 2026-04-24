@@ -130,6 +130,8 @@ def run_import(comparison_path: Path, vivino_path: Path, vivino_overrides_path: 
         str(vivino_path),
         "--vivino-overrides",
         str(vivino_overrides_path),
+        "--skip-if-fresh",
+        "0",
     ]
     print(
         f"[refresh] Running import with {comparison_path.name}, {vivino_path.name},"

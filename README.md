@@ -101,11 +101,11 @@ Wine→URL mappings are permanent. The **identity cache** (`data/identity_cache.
 
 ### Startup Import Logic
 
-On deploy, the web service may run `import_wine_data.py` before starting Uvicorn. In Railway `web`, the importer defaults to `--skip-if-fresh 20` even if the service start command omits the flag:
+On deploy, the web service may run `import_wine_data.py` before starting Uvicorn. Direct importer runs default to `--skip-if-fresh 20` unless `IMPORT_SKIP_IF_FRESH_HOURS` or an explicit CLI flag overrides it:
 - If the daily cron imported data in the last 20 hours, the CSV import is **skipped** (trusts the DB)
 - If no recent ingestion exists (first deploy or cron failure), it imports from the committed seed CSVs as a safety net
 
-This ensures code pushes never overwrite fresh cron data with older committed fallback CSVs.
+This ensures code pushes never overwrite fresh cron data with older committed fallback CSVs. Real refreshes go through `refresh_pipeline.py`, which passes `--skip-if-fresh 0` explicitly so the freshly scraped CSVs are imported.
 
 ### Deal Score (0-100)
 
