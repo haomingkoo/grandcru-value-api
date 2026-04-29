@@ -13,7 +13,11 @@ def test_frontend_sets_security_headers() -> None:
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
-    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    csp = response.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in csp
+    assert "https://unpkg.com" in csp
+    assert "https://*.basemaps.cartocdn.com" in csp
+    assert "https://static.cloudflareinsights.com" in csp
     assert "camera=()" in response.headers["permissions-policy"]
 
 

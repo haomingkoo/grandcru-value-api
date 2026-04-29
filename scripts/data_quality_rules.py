@@ -51,7 +51,13 @@ WINES_MISSING_VIVINO_PRICE: set[str] = {
     "NV Charles Heidsieck - Brut Reserve - White - 750 ml - Standard Bottle",
     "NV Coutier - Tradition Brut - White - 750 ml - Standard Bottle",
     "NV Dhondt-Grellet - Extra Brut Blanc de Blancs Premier Cru Les Terres Fines (Base 2022) - White - 750 ml - Standard Bottle",
+    # SG Vivino page is resolved, but hosted refreshes cannot read a reliable
+    # SGD price yet. Replace with a manual override when verified.
+    "NV Felix Solis - 'Kingpin' Tinto - Red - 750 ml - Standard Bottle",
     "NV Felix Solis - Mucho Mas Gold - Red - 750 ml - Standard Bottle",
     "NV Miraval - Fleur De Miraval Exclusivement Rose 3 - Rose - 750 ml - Standard Bottle",
     "NV Miraval - Petite Fleur (Base 2020) - Rose - 750 ml - Standard Bottle",
+    # Same as above: URL/rating are known, price remains unavailable from
+    # hosted scraping until a manual SGD Vivino price is entered.
+    "NV Villa Degli Olmi - Corte Dei Rovi Raboso Rosé Brut N.V. - Rose - 750 ml - Standard Bottle",
 }

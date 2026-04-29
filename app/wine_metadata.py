@@ -188,6 +188,7 @@ _GRAPE_RULES: tuple[GrapeRule, ...] = (
     GrapeRule(("pinot grigio",), "Pinot Grigio"),
     GrapeRule(("viognier",), "Viognier"),
     GrapeRule(("shiraz",), "Shiraz"),
+    GrapeRule(("kingpin tinto",), "Tempranillo, Shiraz, Cabernet Sauvignon", source="vivino", confidence="medium"),
     GrapeRule(("montepulciano",), "Montepulciano"),
     GrapeRule(("primitivo", "quattro passi"), "Primitivo"),
     GrapeRule(("freisa",), "Freisa"),

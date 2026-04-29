@@ -7,6 +7,7 @@ from app.database import Base
 from app.models import WineDeal
 from app.ops import build_refresh_command
 from app.service import list_vivino_unresolved_export_rows
+from scripts.enrich_vivino_results import needs_vivino_enrichment
 from scripts.vivino_overrides import is_locked_override_row, upsert_overrides
 
 
@@ -97,6 +98,36 @@ class RefreshCommandTests(unittest.TestCase):
 
         self.assertNotIn("--resolve-vivino", command)
         self.assertNotIn("--resolver-require-vivino-metrics", command)
+
+
+class VivinoEnrichmentTests(unittest.TestCase):
+    def test_existing_rating_only_row_still_needs_enrichment(self) -> None:
+        self.assertTrue(
+            needs_vivino_enrichment(
+                {
+                    "vivino_rating": "4.0",
+                    "vivino_num_ratings": "619",
+                    "vivino_price": "",
+                    "vivino_description": "",
+                    "vivino_grapes": "",
+                    "vivino_region": "",
+                }
+            )
+        )
+
+    def test_complete_row_does_not_need_enrichment(self) -> None:
+        self.assertFalse(
+            needs_vivino_enrichment(
+                {
+                    "vivino_rating": "4.0",
+                    "vivino_num_ratings": "619",
+                    "vivino_price": "38.00",
+                    "vivino_description": "Raboso · Italian Sparkling",
+                    "vivino_grapes": "Raboso",
+                    "vivino_region": "Italy / Veneto",
+                }
+            )
+        )
 
 
 class VivinoUnresolvedExportTests(unittest.TestCase):

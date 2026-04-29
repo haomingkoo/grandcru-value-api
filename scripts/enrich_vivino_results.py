@@ -263,6 +263,23 @@ def normalize_vivino_url(url: str) -> str:
     return urlunparse((parsed.scheme or "https", parsed.netloc, normalized_path, "", "", ""))
 
 
+def needs_vivino_enrichment(row: dict[str, str] | None) -> bool:
+    """Return true when a cached Vivino row is missing import-relevant data."""
+    if not row:
+        return True
+
+    has_rating_data = bool(
+        (row.get("vivino_rating") or "").strip()
+        or (row.get("vivino_num_ratings") or "").strip()
+    )
+    has_price = bool((row.get("vivino_price") or "").strip())
+    has_description = bool((row.get("vivino_description") or "").strip())
+    has_grapes = bool((row.get("vivino_grapes") or "").strip())
+    has_region = bool((row.get("vivino_region") or "").strip())
+
+    return not (has_rating_data and has_price and has_description and has_grapes and has_region)
+
+
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         return []
@@ -364,7 +381,7 @@ def main() -> None:
         if not url:
             continue
         existing = vivino_by_url.get(url)
-        if existing and (existing.get("vivino_rating") or existing.get("vivino_num_ratings")):
+        if not needs_vivino_enrichment(existing):
             continue
         targets.append(row)
 

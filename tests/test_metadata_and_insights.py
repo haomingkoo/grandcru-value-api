@@ -71,6 +71,11 @@ class MetadataAndInsightsTests(unittest.TestCase):
                 "Chile",
                 "Merlot, Petit Verdot, Cabernet Sauvignon, Cabernet Franc, Malbec",
             ),
+            (
+                "NV Felix Solis - 'Kingpin' Tinto - Red - 750 ml - Standard Bottle",
+                "Spain",
+                "Tempranillo, Shiraz, Cabernet Sauvignon",
+            ),
         ]
 
         for wine_name, country, grapes in examples:
