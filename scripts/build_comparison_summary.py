@@ -4,7 +4,6 @@ import argparse
 import csv
 import re
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
 
 
 def parse_price(value: str | None) -> float | None:
@@ -83,6 +82,24 @@ def parse_quantity_volume_year(url: str | None, name: str | None = None) -> tupl
     return quantity, volume, year
 
 
+def package_type(value: str | None) -> str:
+    lower = (value or "").lower()
+    gift_markers = (
+        "gift-box",
+        "gift box",
+        "wooden-box",
+        "wooden box",
+        "2-glasses",
+        "2 glasses",
+        "w-gift-box",
+        "w/ gift box",
+        "with gift box",
+    )
+    if any(marker in lower for marker in gift_markers):
+        return "gift_set"
+    return "standard"
+
+
 def normalize_name(name: str | None) -> str:
     if not name:
         return ""
@@ -95,29 +112,42 @@ def normalize_name(name: str | None) -> str:
     return text.strip()
 
 
+def label_name(name: str | None) -> str:
+    parts = [part.strip() for part in (name or "").split(" - ") if part.strip()]
+    if not parts:
+        return ""
+
+    color_index = None
+    for idx, part in enumerate(parts):
+        if part.strip().lower() in {"red", "white", "rose", "rosé"}:
+            color_index = idx
+            break
+
+    body_parts = parts[:color_index] if color_index is not None else parts
+    if body_parts:
+        body_parts = list(body_parts)
+        body_parts[0] = re.sub(r"^(?:19|20)\d{2}\s+|^nv\s+", "", body_parts[0], flags=re.IGNORECASE).strip()
+
+    if len(body_parts) >= 2:
+        return normalize_name(body_parts[-1])
+    return normalize_name(name)
+
+
+def match_similarity(left: dict[str, object], right: dict[str, object]) -> float:
+    full_score = jaccard_similarity(str(left["name_clean"]), str(right["name_clean"]))
+    left_label = str(left.get("label_clean") or "")
+    right_label = str(right.get("label_clean") or "")
+    if left_label and right_label:
+        label_score = jaccard_similarity(left_label, right_label)
+        return min(full_score, label_score)
+    return full_score
+
+
 def is_truthy_stock(value: str | None) -> bool:
     text = (value or "").strip().lower()
     if not text:
         return True
     return text in {"true", "1", "yes", "y", "in_stock", "in stock", "available"}
-
-
-def fallback_grandcru_url_from_platinum(url: str | None) -> str | None:
-    if not url:
-        return None
-    parts = urlsplit(url)
-    slug = unquote(parts.path.strip("/").split("/")[-1]).lower()
-    slug = slug.replace("’", "-").replace("'", "-")
-    slug = re.sub(r"[^a-z0-9-]+", "-", slug)
-    slug = re.sub(r"-+", "-", slug).strip("-")
-    slug = re.sub(r"-(red|white|rose)-\d+(?:-\d+)?-(ml|l)-.*$", "", slug)
-    slug = re.sub(r"-(red|white|rose)-.*$", "", slug)
-    slug = re.sub(r"-\d+(?:-\d+)?-(ml|l)-.*$", "", slug)
-    slug = re.sub(r"-bundle-of-\d+$", "", slug)
-    slug = re.sub(r"-+", "-", slug).strip("-")
-    if not slug:
-        return None
-    return f"https://grandcruwines.com/products/{slug}"
 
 
 def jaccard_similarity(a: str, b: str) -> float:
@@ -139,7 +169,7 @@ def read_rows(path: Path) -> list[dict[str, str]]:
 def write_rows(path: Path, fieldnames: list[str], rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
@@ -165,7 +195,9 @@ def prepare_rows(rows: list[dict[str, str]], *, enforce_in_stock: bool = False) 
                 "quantity": quantity,
                 "volume": volume,
                 "year": year,
+                "package_type": package_type(" ".join([name, url])),
                 "name_clean": normalize_name(name),
+                "label_clean": label_name(name),
                 "platinum_vivino_rating": (row.get("platinum_vivino_rating") or "").strip(),
                 "platinum_vivino_num_ratings": (row.get("platinum_vivino_num_ratings") or "").strip(),
                 "platinum_vivino_url": (row.get("platinum_vivino_url") or "").strip(),
@@ -181,7 +213,6 @@ def build_matches(
     threshold: float,
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    grandcru_by_url = {str(row["url"]): row for row in grandcru if row.get("url")}
     for plat in platinum:
         best_same_pack = None
         best_same_pack_score = 0.0
@@ -193,8 +224,10 @@ def build_matches(
                 continue
             if plat["volume"] != main["volume"]:
                 continue
+            if plat["package_type"] != main["package_type"]:
+                continue
 
-            score = jaccard_similarity(str(plat["name_clean"]), str(main["name_clean"]))
+            score = match_similarity(plat, main)
             if plat["quantity"] == main["quantity"]:
                 if score > best_same_pack_score:
                     best_same_pack = main
@@ -249,8 +282,6 @@ def build_matches(
                 }
             )
         else:
-            fallback_url = fallback_grandcru_url_from_platinum(str(plat.get("url") or ""))
-            fallback_main = grandcru_by_url.get(fallback_url or "")
             best_score = max(best_same_pack_score, best_cross_pack_score)
             rows.append(
                 {
@@ -263,14 +294,13 @@ def build_matches(
                     "platinum_vivino_rating": plat.get("platinum_vivino_rating") or "",
                     "platinum_vivino_num_ratings": plat.get("platinum_vivino_num_ratings") or "",
                     "platinum_vivino_url": plat.get("platinum_vivino_url") or "",
-                    "name_main": fallback_main["name"] if fallback_main is not None else None,
-                    "year_main": fallback_main["year"] if fallback_main is not None else None,
-                    "quantity_main": fallback_main["quantity"] if fallback_main is not None else None,
-                    "volume_main": fallback_main["volume"] if fallback_main is not None else None,
-                    "price_main": fallback_main["price"] if fallback_main is not None else None,
-                    # Do not expose predicted-only Grand Cru URLs when no catalog hit exists.
-                    "url_main": fallback_main["url"] if fallback_main is not None else "",
-                    "match_method": "url_fallback" if fallback_main is not None else "url_predicted",
+                    "name_main": None,
+                    "year_main": None,
+                    "quantity_main": None,
+                    "volume_main": None,
+                    "price_main": None,
+                    "url_main": "",
+                    "match_method": "no_match",
                     "match_score": round(best_score, 4),
                 }
             )
@@ -363,7 +393,7 @@ def main() -> None:
     parser.add_argument("--match-threshold", type=float, default=0.6)
     args = parser.parse_args()
 
-    grandcru_rows = prepare_rows(read_rows(args.grandcru_csv))
+    grandcru_rows = prepare_rows(read_rows(args.grandcru_csv), enforce_in_stock=True)
     platinum_rows = prepare_rows(read_rows(args.platinum_csv), enforce_in_stock=True)
     matched = build_matches(grandcru_rows, platinum_rows, threshold=args.match_threshold)
     summary = build_summary(matched)
