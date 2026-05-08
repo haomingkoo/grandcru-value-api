@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 import app.database as database_module
 import scripts.import_wine_data as import_wine_data_module
+import scripts.validate_wine_completeness as validate_module
 from app.database import Base
 from app.models import WineDeal
 from scripts.import_wine_data import (
@@ -157,6 +158,7 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self.comparison_path = self.root / "comparison_summary.csv"
         self.vivino_path = self.root / "vivino_results.csv"
         self.overrides_path = self.root / "vivino_overrides.csv"
+        self.quarantine_path = self.root / "quarantine.csv"
 
     def tearDown(self) -> None:
         self.engine.dispose()
@@ -254,7 +256,7 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
             override_rows,
         )
 
-    def _run_import(self) -> None:
+    def _run_import(self, *, quarantine_path: Path | None = None) -> None:
         with (
             patch.object(import_wine_data_module, "engine", self.engine),
             patch.object(import_wine_data_module, "SessionLocal", self.Session),
@@ -264,6 +266,7 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
                 self.comparison_path,
                 self.vivino_path,
                 self.overrides_path,
+                quarantine_path=quarantine_path,
             )
 
     def _current_description(self) -> str | None:
@@ -342,6 +345,120 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self.assertEqual(deal.vivino_url, "https://www.vivino.com/en/example/w/12345")
         self.assertIsNone(deal.vivino_rating)
         self.assertIsNone(deal.vivino_num_ratings)
+
+    def test_vivino_description_fills_missing_country_and_grapes(self) -> None:
+        wine_name = "2020 Unknown Estate - Mystery Blend - Red - 750 ml - Standard Bottle"
+        self._write_seed_files_for_name(
+            wine_name,
+            "Regions · Portuguese Red · Touriga Nacional, Baga",
+        )
+
+        self._run_import(quarantine_path=self.quarantine_path)
+
+        deal = self._current_deal()
+        self.assertEqual(deal.country, "Portugal")
+        self.assertEqual(deal.grapes, "Touriga Nacional, Baga")
+
+        quarantine_rows = list(csv.DictReader(self.quarantine_path.open(encoding="utf-8")))
+        self.assertEqual(quarantine_rows, [])
+
+    def test_quarantine_skips_rows_that_would_fail_completeness(self) -> None:
+        good_name = "2022 Lapis Luna - Cabernet Sauvignon - Red - 750 ml - Standard Bottle"
+        bad_name = "2020 Unknown Estate - Missing Metadata - Red - 750 ml - Standard Bottle"
+        comparison_fields = [
+            "name_plat",
+            "year_plat",
+            "quantity_plat",
+            "volume_plat",
+            "price_plat",
+            "price_main",
+            "price_diff",
+            "price_diff_pct",
+            "cheaper_side",
+            "url_plat",
+            "url_main",
+        ]
+        self._write_csv(
+            self.comparison_path,
+            comparison_fields,
+            [
+                {
+                    "name_plat": good_name,
+                    "year_plat": "2022",
+                    "quantity_plat": "1",
+                    "volume_plat": "750ml",
+                    "price_plat": "120.00",
+                    "price_main": "110.00",
+                    "price_diff": "10.00",
+                    "price_diff_pct": "9.09",
+                    "cheaper_side": "Grand Cru Cheaper",
+                    "url_plat": "https://example.com/platinum/good",
+                    "url_main": "https://example.com/grandcru/good",
+                },
+                {
+                    "name_plat": bad_name,
+                    "year_plat": "2020",
+                    "quantity_plat": "1",
+                    "volume_plat": "750ml",
+                    "price_plat": "90.00",
+                    "price_main": "95.00",
+                    "price_diff": "-5.00",
+                    "price_diff_pct": "-5.26",
+                    "cheaper_side": "Platinum Cheaper",
+                    "url_plat": "https://example.com/platinum/bad",
+                    "url_main": "https://example.com/grandcru/bad",
+                },
+            ],
+        )
+        self._write_csv(
+            self.vivino_path,
+            [
+                "wine_name",
+                "vivino_rating",
+                "vivino_num_ratings",
+                "vivino_price",
+                "vivino_url",
+            ],
+            [
+                {
+                    "wine_name": good_name,
+                    "vivino_rating": "4.0",
+                    "vivino_num_ratings": "7963",
+                    "vivino_price": "50.00",
+                    "vivino_url": "https://www.vivino.com/SG/en/lapis-luna-cabernet-sauvignon-lodi/w/6612844",
+                }
+            ],
+        )
+        self._write_csv(
+            self.overrides_path,
+            [
+                "match_name",
+                "wine_name",
+                "vivino_rating",
+                "vivino_num_ratings",
+                "vivino_price",
+                "vivino_description",
+                "vivino_url",
+                "notes",
+            ],
+            [],
+        )
+
+        self._run_import(quarantine_path=self.quarantine_path)
+
+        with self.Session() as session:
+            deals = session.scalars(select(WineDeal)).all()
+        self.assertEqual([deal.wine_name for deal in deals], [good_name])
+
+        quarantine_rows = list(csv.DictReader(self.quarantine_path.open(encoding="utf-8")))
+        self.assertEqual(len(quarantine_rows), 1)
+        self.assertEqual(quarantine_rows[0]["wine_name"], bad_name)
+        self.assertIn("missing_country", quarantine_rows[0]["reasons"])
+        self.assertIn("missing_vivino_url_unexpected", quarantine_rows[0]["reasons"])
+
+        with patch.object(validate_module, "SessionLocal", self.Session):
+            report = validate_module.run_validation()
+        self.assertEqual(report["errors"], [])
 
 
 if __name__ == "__main__":

@@ -76,6 +76,41 @@ class MetadataAndInsightsTests(unittest.TestCase):
                 "Spain",
                 "Tempranillo, Shiraz, Cabernet Sauvignon",
             ),
+            (
+                "NV Felix Solis - Mucho Mas Gold - Red - 750 ml - Standard Bottle",
+                "Spain",
+                "Tempranillo",
+            ),
+            (
+                "NV Villa Degli Olmi - Corte dei Rovi Moscato Spumante - White - 750 ml - Standard Bottle",
+                "Italy",
+                "Moscato Bianco",
+            ),
+            (
+                "NV Astrale - Rosso Vino D'italia BC - Red - 750 ml - Standard Bottle",
+                "Italy",
+                "Primitivo, Sangiovese, Montepulciano, Nero d'Avola",
+            ),
+            (
+                "NV Villa Degli Olmi - Corte dei Rovi Pinot Grigio Extra Dry N.V. - White - 750 ml - Standard Bottle",
+                "Italy",
+                "Pinot Grigio",
+            ),
+            (
+                "2023 Silk & Spice - Red Blend - Red - 750 ml - Standard Bottle",
+                "Portugal",
+                "Baga, Alicante Bouschet, Touriga Nacional",
+            ),
+            (
+                "2024 Tombacco - Pecorino Terre d'Abruzzo - White - 750 ml - Standard Bottle",
+                "Italy",
+                "Pecorino",
+            ),
+            (
+                "2022 Lapis Luna - Cabernet Sauvignon - Red - 750 ml - Standard Bottle",
+                "United States",
+                "Cabernet Sauvignon",
+            ),
         ]
 
         for wine_name, country, grapes in examples:

@@ -44,7 +44,11 @@ WINES_MISSING_VIVINO_PRICE: set[str] = {
     "2022 Domaine Claude Dugat - La Gibryotte Charmes Chambertin Grand Cru - Red - 750 ml - Standard Bottle (Bundle of 3)",
     "2022 La Croix de Brully - Puligny-Montrachet Les Enseignères - White - 750 ml - Standard Bottle",
     "2022 The Hilt - Chardonnay Estate Santa Rita Hills - White - 750 ml - Standard Bottle",
+    # Vivino identity/rating are known, but no reliable SG price was available
+    # from hosted refreshes. Add manual SGD prices when verified locally.
+    "2023 Silk & Spice - Red Blend - Red - 750 ml - Standard Bottle",
     "2023 Hudelot - Baillet - Chambolle Musigny Charmes - Red - 750 ml - Standard Bottle (Bundle of 3)",
+    "NV Astrale - Rosso Vino D'italia BC - Red - 750 ml - Standard Bottle",
     "NV Adrien Renoir - Grand Cru Le Terroir - White - 750 ml - Standard Bottle",
     "NV Botter - Brilla Asolo Prosecco Superiore DOCG - White - 750 ml - Standard Bottle",
     "NV Castell de Sant Pau - Brut Rose - Rose - 750 ml - Standard Bottle",
@@ -59,5 +63,7 @@ WINES_MISSING_VIVINO_PRICE: set[str] = {
     "NV Miraval - Petite Fleur (Base 2020) - Rose - 750 ml - Standard Bottle",
     # Same as above: URL/rating are known, price remains unavailable from
     # hosted scraping until a manual SGD Vivino price is entered.
+    "NV Villa Degli Olmi - Corte dei Rovi Moscato Spumante - White - 750 ml - Standard Bottle",
+    "NV Villa Degli Olmi - Corte dei Rovi Pinot Grigio Extra Dry N.V. - White - 750 ml - Standard Bottle",
     "NV Villa Degli Olmi - Corte Dei Rovi Raboso Rosé Brut N.V. - Rose - 750 ml - Standard Bottle",
 }

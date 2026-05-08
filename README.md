@@ -152,8 +152,15 @@ The Vivino pipeline intentionally prefers an obvious missing value over a wrong 
 - Resolver auto-apply requires Vivino rating/count metrics by default. URL-only search hits stay in review unless `--no-require-vivino-metrics` is used deliberately.
 - Import labels URL-only rows as `vivino_match_method=url_only`, not `exact`, so diagnostics do not count them as complete matches.
 - The default public comparable view requires a retailer price comparison and a real Vivino rating/count.
-- Post-import completeness validation runs by default. New wines without a Vivino URL, rating/count, country, grapes, or a non-allowlisted Vivino price fail the refresh.
+- Import writes incomplete new rows to `data/wine_import_quarantine.csv` before publishing. Completeness validation then runs against the published rows, so one new incomplete wine does not break the whole refresh.
 - Known accepted gaps live in `scripts/data_quality_rules.py`; adding an entry there must document why the gap exists and how to close it.
+
+Monitoring loop for the quarantine:
+
+- A healthy refresh should leave `data/wine_import_quarantine.csv` with only the header row.
+- Any data row is a review item: inspect `reasons`, add a correct override or metadata rule, then trigger another refresh.
+- `/health.latest_ingestion.details` includes the quarantined row count for remote checks.
+- If quarantine count spikes or all rows quarantine, treat it as a pipeline regression. The importer refuses to replace current deals with an empty dataset when every comparison row is quarantined.
 
 Last production verification: 2026-04-24 refresh completed with 83 deals, 82/83 Vivino-rated, 0 `url_only` rows, 0 missing countries, and 0 missing grapes. The one remaining unrated wine is the documented La Croix de Brully Puligny-Montrachet Les Enseignères gap.
 

@@ -5,7 +5,7 @@ import os
 import re
 import sys
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -22,6 +22,10 @@ from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models import IngestionRun, WineDeal, WineDealSnapshot  # noqa: E402
 from app.scoring import compute_deal_score, parse_float, parse_int  # noqa: E402
 from app.wine_metadata import derive_wine_metadata  # noqa: E402
+from scripts.data_quality_rules import (  # noqa: E402
+    WINES_MISSING_VIVINO_PRICE,
+    WINES_MISSING_VIVINO_URL,
+)
 
 
 logging.basicConfig(
@@ -78,6 +82,26 @@ SNAPSHOT_FIELDS = {
     "deal_score",
 }
 
+QUARANTINE_FIELDS = (
+    "wine_name",
+    "reasons",
+    "missing_fields",
+    "year_plat",
+    "price_plat",
+    "price_main",
+    "vivino_match_method",
+    "vivino_url",
+    "vivino_rating",
+    "vivino_num_ratings",
+    "vivino_price",
+    "country",
+    "region",
+    "grapes",
+    "wine_type",
+    "url_plat",
+    "url_main",
+)
+
 PLATINUM_LEGACY_HOSTS = (
     "https://platinum.grandcruwines.com",
     "http://platinum.grandcruwines.com",
@@ -116,6 +140,74 @@ _DROP_TOKENS = {
     "aop",
     "vdt",
 }
+
+
+@dataclass(frozen=True)
+class VivinoRegionRule:
+    patterns: tuple[str, ...]
+    country: str
+    region: str | None = None
+
+
+_VIVINO_REGION_RULES: tuple[VivinoRegionRule, ...] = (
+    VivinoRegionRule(("champagne",), "France", "Champagne"),
+    VivinoRegionRule(("burgundy", "cote de nuits", "cote de beaune"), "France", "Burgundy"),
+    VivinoRegionRule(("provence",), "France", "Provence"),
+    VivinoRegionRule(("rhone",), "France", "Rhone Valley"),
+    VivinoRegionRule(("jura",), "France", "Jura"),
+    VivinoRegionRule(("french",), "France"),
+    VivinoRegionRule(("tuscan", "toscana", "tuscany"), "Italy", "Tuscany"),
+    VivinoRegionRule(("piedmont", "piemonte"), "Italy", "Piedmont"),
+    VivinoRegionRule(("veneto", "prosecco"), "Italy", "Veneto"),
+    VivinoRegionRule(("abruzzo",), "Italy", "Abruzzo"),
+    VivinoRegionRule(("central italy",), "Italy", "Central Italy"),
+    VivinoRegionRule(("northern italy",), "Italy", "Northern Italy"),
+    VivinoRegionRule(("southern italy",), "Italy", "Southern Italy"),
+    VivinoRegionRule(("italian",), "Italy"),
+    VivinoRegionRule(("californian", "lodi", "sonoma", "santa barbara", "paso robles"), "United States", "California"),
+    VivinoRegionRule(("willamette", "oregon"), "United States", "Willamette Valley"),
+    VivinoRegionRule(("american", "united states"), "United States"),
+    VivinoRegionRule(("portuguese", "portugal"), "Portugal"),
+    VivinoRegionRule(("spanish", "spain", "cava"), "Spain"),
+    VivinoRegionRule(("australian", "victoria"), "Australia", "Victoria"),
+    VivinoRegionRule(("new zealand", "marlborough"), "New Zealand", "Marlborough"),
+    VivinoRegionRule(("chilean", "chile"), "Chile"),
+    VivinoRegionRule(("german", "spatburgunder", "mosel"), "Germany", "Mosel"),
+)
+
+_VIVINO_GRAPE_MARKERS: tuple[tuple[str, str], ...] = (
+    ("alicante bouschet", "Alicante Bouschet"),
+    ("touriga nacional", "Touriga Nacional"),
+    ("cabernet sauvignon", "Cabernet Sauvignon"),
+    ("sauvignon blanc", "Sauvignon Blanc"),
+    ("pinot grigio", "Pinot Grigio"),
+    ("pinot gris", "Pinot Gris"),
+    ("pinot noir", "Pinot Noir"),
+    ("pinot meunier", "Pinot Meunier"),
+    ("moscato bianco", "Moscato Bianco"),
+    ("moscato", "Moscato Bianco"),
+    ("chardonnay", "Chardonnay"),
+    ("tempranillo", "Tempranillo"),
+    ("montepulciano", "Montepulciano"),
+    ("nero d avola", "Nero d'Avola"),
+    ("sangiovese", "Sangiovese"),
+    ("primitivo", "Primitivo"),
+    ("pecorino", "Pecorino"),
+    ("viognier", "Viognier"),
+    ("mourvedre", "Mourvedre"),
+    ("grenache", "Grenache"),
+    ("shiraz", "Shiraz"),
+    ("syrah", "Syrah"),
+    ("merlot", "Merlot"),
+    ("nebbiolo", "Nebbiolo"),
+    ("barbera", "Barbera"),
+    ("dolcetto", "Dolcetto"),
+    ("freisa", "Freisa"),
+    ("glera", "Glera"),
+    ("prosecco", "Glera"),
+    ("raboso", "Raboso"),
+    ("baga", "Baga"),
+)
 
 
 def normalize_key(value: str | None) -> str:
@@ -168,6 +260,14 @@ def read_optional_csv_rows(path: Path | None) -> list[dict[str, str]]:
     if path is None or not path.exists():
         return []
     return read_csv_rows(path)
+
+
+def write_csv_rows(path: Path, rows: list[dict[str, str]], fieldnames: tuple[str, ...]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def _annotate_vivino_rows(rows: list[dict[str, str]], source: str) -> list[dict[str, str]]:
@@ -351,6 +451,67 @@ def normalize_vivino_url(url: str | None) -> str | None:
         return cleaned
     normalized_path = (parsed.path or "").rstrip("/")
     return urlunparse((parsed.scheme or "https", parsed.netloc, normalized_path, "", "", ""))
+
+
+def _split_vivino_description_parts(description: str | None) -> list[str]:
+    text = (description or "").strip()
+    if not text:
+        return []
+    text = re.sub(r"^regions?\s*[·:-]\s*", "", text, flags=re.IGNORECASE).strip()
+    return [
+        part.strip(" .")
+        for part in re.split(r"\s*·\s*|\s+-\s+", text)
+        if part.strip(" .")
+    ]
+
+
+def _parse_vivino_region(parts: list[str]) -> tuple[str | None, str | None]:
+    lookup_text = normalize_key(" ".join(parts[:2]))
+    if not lookup_text:
+        return None, None
+
+    for rule in _VIVINO_REGION_RULES:
+        if any(pattern in lookup_text for pattern in rule.patterns):
+            return rule.country, rule.region
+    return None, None
+
+
+def _parse_vivino_grapes(parts: list[str]) -> str | None:
+    lookup_text = normalize_key(" ".join(parts[:3]))
+    if not lookup_text:
+        return None
+
+    matches: list[tuple[int, str]] = []
+    seen: set[str] = set()
+    for pattern, grape in _VIVINO_GRAPE_MARKERS:
+        index = lookup_text.find(pattern)
+        if index < 0 or grape in seen:
+            continue
+        matches.append((index, grape))
+        seen.add(grape)
+
+    if not matches:
+        return None
+
+    matches.sort(key=lambda item: item[0])
+    return ", ".join(grape for _, grape in matches)
+
+
+def _parse_vivino_description_metadata(description: str | None) -> dict[str, str]:
+    parts = _split_vivino_description_parts(description)
+    if not parts:
+        return {}
+
+    country, region = _parse_vivino_region(parts)
+    grapes = _parse_vivino_grapes(parts)
+    parsed: dict[str, str] = {}
+    if country:
+        parsed["country"] = country
+    if region:
+        parsed["region"] = region
+    if grapes:
+        parsed["grapes"] = grapes
+    return parsed
 
 
 def _description_lookup_key(wine_name: str | None) -> str:
@@ -556,12 +717,68 @@ def _resolve_vivino_price_to_listing(
     return chosen
 
 
+def _quarantine_reasons(payload: dict[str, object]) -> list[str]:
+    wine_name = str(payload.get("wine_name") or "")
+    reasons: list[str] = []
+
+    required_fields = (
+        "price_platinum",
+        "wine_type",
+        "country",
+        "grapes",
+        "vivino_match_method",
+    )
+    for field in required_fields:
+        if payload.get(field) in (None, ""):
+            reasons.append(f"missing_{field}")
+
+    if not payload.get("vivino_url") and wine_name not in WINES_MISSING_VIVINO_URL:
+        reasons.append("missing_vivino_url_unexpected")
+    if payload.get("vivino_rating") is None and wine_name not in WINES_MISSING_VIVINO_URL:
+        reasons.append("missing_vivino_rating_unexpected")
+    if payload.get("vivino_price") is None and wine_name not in WINES_MISSING_VIVINO_PRICE:
+        reasons.append("missing_vivino_price_unexpected")
+
+    return reasons
+
+
+def _build_quarantine_row(
+    source_row: dict[str, str],
+    payload: dict[str, object],
+    reasons: list[str],
+) -> dict[str, str]:
+    missing_fields = [
+        reason.removeprefix("missing_").removesuffix("_unexpected")
+        for reason in reasons
+    ]
+    return {
+        "wine_name": str(payload.get("wine_name") or ""),
+        "reasons": ";".join(reasons),
+        "missing_fields": ";".join(missing_fields),
+        "year_plat": (source_row.get("year_plat") or "").strip(),
+        "price_plat": (source_row.get("price_plat") or "").strip(),
+        "price_main": (source_row.get("price_main") or "").strip(),
+        "vivino_match_method": str(payload.get("vivino_match_method") or ""),
+        "vivino_url": str(payload.get("vivino_url") or ""),
+        "vivino_rating": "" if payload.get("vivino_rating") is None else str(payload.get("vivino_rating")),
+        "vivino_num_ratings": "" if payload.get("vivino_num_ratings") is None else str(payload.get("vivino_num_ratings")),
+        "vivino_price": "" if payload.get("vivino_price") is None else str(payload.get("vivino_price")),
+        "country": str(payload.get("country") or ""),
+        "region": str(payload.get("region") or ""),
+        "grapes": str(payload.get("grapes") or ""),
+        "wine_type": str(payload.get("wine_type") or ""),
+        "url_plat": (source_row.get("url_plat") or "").strip(),
+        "url_main": (source_row.get("url_main") or "").strip(),
+    }
+
+
 def import_data(
     comparison_path: Path,
     vivino_path: Path,
     vivino_overrides_path: Path | None = None,
     *,
     market_prices_path: Path | None = None,
+    quarantine_path: Path | None = None,
 ) -> None:
     if not comparison_path.exists():
         raise FileNotFoundError(f"comparison_summary missing: {comparison_path}")
@@ -606,6 +823,7 @@ def import_data(
     try:
         merged_records: list[WineDeal] = []
         snapshot_records: list[WineDealSnapshot] = []
+        quarantine_records: list[dict[str, str]] = []
         snapshot_time = datetime.now(UTC)
         existing_descriptions_by_name, existing_descriptions_by_vivino_url = _load_existing_vivino_descriptions(session)
 
@@ -736,25 +954,6 @@ def import_data(
             if is_gift_set:
                 logger.info("gift_set_detected wine=%s gc_url=%s", wine_name, grand_cru_url)
 
-            # --- Vivino metadata for gap-fill (Phase 5) ---
-            # Fill metadata gaps with Vivino-extracted data (grapes, region).
-            vivino_grapes = (vivino.get("vivino_grapes") or "").strip()
-            vivino_region_raw = (vivino.get("vivino_region") or "").strip()
-
-            gap_fill: dict[str, str] = {}
-            if not metadata.grapes and vivino_grapes:
-                gap_fill["grapes"] = vivino_grapes
-                gap_fill["grape_source"] = "vivino"
-            if vivino_region_raw and "/" in vivino_region_raw:
-                parts = [p.strip() for p in vivino_region_raw.split("/")]
-                if not metadata.country and len(parts) >= 1:
-                    gap_fill["country"] = parts[0]
-                if not metadata.region and len(parts) >= 2:
-                    gap_fill["region"] = parts[1]
-            if gap_fill:
-                from dataclasses import replace as _dc_replace
-                metadata = _dc_replace(metadata, **gap_fill)
-
             vivino_desc = _resolve_vivino_description(
                 vivino,
                 wine_name=wine_name,
@@ -762,6 +961,44 @@ def import_data(
                 existing_descriptions_by_name=existing_descriptions_by_name,
                 existing_descriptions_by_vivino_url=existing_descriptions_by_vivino_url,
             )
+
+            # --- Vivino metadata for gap-fill (Phase 5) ---
+            # Fill metadata gaps with Vivino-extracted data (grapes, region).
+            vivino_grapes = (vivino.get("vivino_grapes") or "").strip()
+            vivino_region_raw = (vivino.get("vivino_region") or "").strip()
+            vivino_description_metadata = _parse_vivino_description_metadata(vivino_desc)
+
+            gap_fill: dict[str, str] = {}
+            if not metadata.grapes and vivino_grapes:
+                gap_fill["grapes"] = vivino_grapes
+                gap_fill["grape_source"] = "vivino"
+            elif not metadata.grapes and vivino_description_metadata.get("grapes"):
+                gap_fill["grapes"] = vivino_description_metadata["grapes"]
+                gap_fill["grape_source"] = "vivino_description"
+                gap_fill["grape_confidence"] = "medium"
+            if vivino_region_raw and "/" in vivino_region_raw:
+                parts = [p.strip() for p in vivino_region_raw.split("/")]
+                if not metadata.country and len(parts) >= 1:
+                    gap_fill["country"] = parts[0]
+                if not metadata.region and len(parts) >= 2:
+                    gap_fill["region"] = parts[1]
+            elif vivino_description_metadata:
+                if not metadata.country and vivino_description_metadata.get("country"):
+                    gap_fill["country"] = vivino_description_metadata["country"]
+                if not metadata.region and vivino_description_metadata.get("region"):
+                    gap_fill["region"] = vivino_description_metadata["region"]
+
+            gap_country = gap_fill.get("country") or metadata.country
+            gap_region = gap_fill.get("region") or metadata.region
+            if (gap_country or gap_region) and (not metadata.origin_label or "country" in gap_fill or "region" in gap_fill):
+                gap_fill["origin_label"] = (
+                    f"{gap_region}, {gap_country}" if gap_region and gap_country else gap_country or gap_region
+                )
+            if ("country" in gap_fill or "region" in gap_fill) and metadata.origin_source is None:
+                gap_fill["origin_source"] = "vivino_description"
+                gap_fill["origin_confidence"] = "medium"
+            if gap_fill:
+                metadata = replace(metadata, **gap_fill)
 
             deal_payload = {
                 "wine_name": wine_name,
@@ -810,6 +1047,17 @@ def import_data(
                     vivino_price=vivino_price_adjusted,
                 ),
             }
+
+            quarantine_reasons = _quarantine_reasons(deal_payload) if quarantine_path is not None else []
+            if quarantine_path is not None and quarantine_reasons:
+                quarantine_records.append(_build_quarantine_row(row, deal_payload, quarantine_reasons))
+                logger.warning(
+                    "wine_quarantined wine=%s reasons=%s",
+                    wine_name,
+                    ",".join(quarantine_reasons),
+                )
+                continue
+
             merged_records.append(WineDeal(**deal_payload))
             snapshot_payload = {key: value for key, value in deal_payload.items() if key in SNAPSHOT_FIELDS}
             snapshot_records.append(
@@ -818,6 +1066,19 @@ def import_data(
                     captured_at=snapshot_time,
                     **snapshot_payload,
                 )
+            )
+
+        if quarantine_path is not None:
+            write_csv_rows(quarantine_path, quarantine_records, QUARANTINE_FIELDS)
+            logger.info(
+                "quarantine_written rows=%d path=%s",
+                len(quarantine_records),
+                quarantine_path,
+            )
+
+        if comparison_rows and not merged_records and quarantine_records:
+            raise RuntimeError(
+                "All comparison rows were quarantined; refusing to replace current deals with an empty dataset."
             )
 
         session.execute(delete(WineDeal))
@@ -836,6 +1097,7 @@ def import_data(
             f"Loaded {len(comparison_rows)} comparison rows and {len(vivino_rows_base)} vivino rows "
             f"(+{len(vivino_rows_override)} overrides) into {len(merged_records)} current deals and "
             f"{len(snapshot_records)} snapshots (vivino: {match_summary}); "
+            f"quarantined {len(quarantine_records)} incomplete rows; "
             f"pruned {deleted_snapshots} snapshots older than {settings.history_retention_days} days."
         )
         session.commit()
@@ -906,6 +1168,12 @@ def main() -> None:
         help="Path to market_prices.csv from llm_market_resolver.",
     )
     parser.add_argument(
+        "--quarantine-output",
+        type=Path,
+        default=Path("data/wine_import_quarantine.csv"),
+        help="CSV path for rows skipped because they would fail completeness validation.",
+    )
+    parser.add_argument(
         "--skip-if-fresh",
         type=float,
         default=default_skip_if_fresh_hours(),
@@ -921,6 +1189,7 @@ def main() -> None:
     import_data(
         args.comparison, args.vivino, args.vivino_overrides,
         market_prices_path=args.market_prices,
+        quarantine_path=args.quarantine_output,
     )
 
 
