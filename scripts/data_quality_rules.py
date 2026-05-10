@@ -21,8 +21,6 @@ WINES_MISSING_VIVINO_URL: set[str] = {
 SUPPRESSION_OVERRIDES: dict[str, str] = {
     "2022 La Croix de Brully - Puligny-Montrachet Les Enseignères - White - 750 ml - Standard Bottle":
         "Blocks wrong fuzzy match to Philippe Girard; add correct URL when found",
-    "2023 Hudelot - Baillet - Bourgogne Hautes Cotes de Nuits Rouge - Red - 750 ml - Standard Bottle":
-        "Pre-emptive suppressor: not currently in comparison, prevents wrong Blanc fuzzy match",
 }
 
 # Vivino prices are fetched from the SG page, which can be blocked from hosted
@@ -44,6 +42,8 @@ WINES_MISSING_VIVINO_PRICE: set[str] = {
     "2022 Domaine Claude Dugat - La Gibryotte Charmes Chambertin Grand Cru - Red - 750 ml - Standard Bottle (Bundle of 3)",
     "2022 La Croix de Brully - Puligny-Montrachet Les Enseignères - White - 750 ml - Standard Bottle",
     "2022 The Hilt - Chardonnay Estate Santa Rita Hills - White - 750 ml - Standard Bottle",
+    "2020 Dog Point - Sauvignon Blanc Section 94 Marlborough - White - 750 ml - Standard Bottle",
+    "2021 Astrale - Rosso Vino D'italia BC - Red - 750 ml - Standard Bottle",
     # Vivino identity/rating are known, but no reliable SG price was available
     # from hosted refreshes. Add manual SGD prices when verified locally.
     "2023 Silk & Spice - Red Blend - Red - 750 ml - Standard Bottle",
@@ -55,6 +55,10 @@ WINES_MISSING_VIVINO_PRICE: set[str] = {
     "NV Charles Heidsieck - Brut Reserve - White - 750 ml - Standard Bottle",
     "NV Coutier - Tradition Brut - White - 750 ml - Standard Bottle",
     "NV Dhondt-Grellet - Extra Brut Blanc de Blancs Premier Cru Les Terres Fines (Base 2022) - White - 750 ml - Standard Bottle",
+    "NV Francoise Bedel - Brut Entre Ciel et Terre - White - 750 ml - Standard Bottle",
+    "NV La Rogerie - 'Le Bourg Sud' Grand Cru Reserve Perpetuelle Extra-Brut - White - 750 ml - Standard Bottle",
+    "NV The Big Red Monster - Cabernet Sauvignon - Red - 750 ml - Standard Bottle",
+    "NV Vergnon - Eloquence Extra Brut Blanc de Blancs Grand Cru - White - 750 ml - Standard Bottle",
     # SG Vivino page is resolved, but hosted refreshes cannot read a reliable
     # SGD price yet. Replace with a manual override when verified.
     "NV Felix Solis - 'Kingpin' Tinto - Red - 750 ml - Standard Bottle",
