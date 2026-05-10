@@ -7,6 +7,7 @@ from app.database import Base
 from app.models import WineDeal
 from app.ops import build_refresh_command
 from app.service import list_vivino_unresolved_export_rows
+from scripts.refresh_pipeline import provider_has_credentials
 from scripts.enrich_vivino_results import needs_vivino_enrichment
 from scripts.vivino_overrides import is_locked_override_row, upsert_overrides
 
@@ -93,11 +94,32 @@ class RefreshCommandTests(unittest.TestCase):
         self.assertIn("--resolver-auto-apply", command)
         self.assertIn("--resolver-require-vivino-metrics", command)
 
+    def test_hosted_refresh_uses_auto_provider_fallback(self) -> None:
+        command = build_refresh_command(mode="daily", health_url=None, strict_health=False)
+
+        provider_index = command.index("--resolver-provider")
+        self.assertEqual(command[provider_index + 1], "auto")
+
     def test_import_only_does_not_run_resolver(self) -> None:
         command = build_refresh_command(mode="import_only", health_url=None, strict_health=False)
 
         self.assertNotIn("--resolve-vivino", command)
         self.assertNotIn("--resolver-require-vivino-metrics", command)
+
+
+class RefreshPipelineCredentialTests(unittest.TestCase):
+    def test_brave_provider_requires_key(self) -> None:
+        self.assertFalse(provider_has_credentials("brave", {}))
+        self.assertTrue(provider_has_credentials("brave", {"BRAVE_API_KEY": "key"}))
+
+    def test_google_cse_requires_key_and_cse_id(self) -> None:
+        self.assertFalse(provider_has_credentials("google_cse", {"GOOGLE_API_KEY": "key"}))
+        self.assertTrue(
+            provider_has_credentials(
+                "google_cse",
+                {"GOOGLE_API_KEY": "key", "GOOGLE_CSE_ID": "cx"},
+            )
+        )
 
 
 class VivinoEnrichmentTests(unittest.TestCase):

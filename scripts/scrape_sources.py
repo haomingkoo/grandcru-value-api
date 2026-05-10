@@ -10,6 +10,7 @@ import csv
 import json
 import os
 import re
+import sys
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -67,6 +68,14 @@ _VIVINO_COUNT_RE = [
     re.compile(r"([\d,]+(?:\.\d+)?\s*[kKmM]?)\s*(?:ratings?|reviews?)", re.IGNORECASE),
 ]
 _PLATINUM_DETAIL_RATING_RE = re.compile(r"([0-5](?:\.\d+)?)\s*/\s*5\s*Stars\s*-\s*Vivino", re.IGNORECASE)
+
+
+def configure_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(line_buffering=True)
+        except AttributeError:
+            pass
 
 
 @dataclass
@@ -514,6 +523,7 @@ def scrape_platinum(
 
 
 def main() -> None:
+    configure_stdio()
     parser = argparse.ArgumentParser(description="Scrape Grand Cru and Platinum wine catalogs")
     parser.add_argument("--grandcru-base-url", default="https://grandcruwines.com")
     parser.add_argument("--platinum-base-url", default="https://platinum.grandcruwines.com")

@@ -123,10 +123,10 @@ This ensures code pushes never overwrite fresh cron data with older committed fa
 # Quick reimport from cached CSVs
 python scripts/refresh_pipeline.py
 
-# Daily (light — only new wines, 40 Brave calls max)
+# Daily (light — only new wines, 40 search calls max)
 python scripts/refresh_pipeline.py \
   --scrape-and-build \
-  --resolve-vivino --resolver-provider brave \
+  --resolve-vivino --resolver-provider auto \
   --resolver-auto-apply --resolver-require-vivino-metrics \
   --resolver-max-api-queries 40 \
   --resolver-only-new-unresolved
@@ -134,7 +134,7 @@ python scripts/refresh_pipeline.py \
 # Weekly (full — all wines, LLM resolve for descriptions/prices)
 python scripts/refresh_pipeline.py \
   --scrape-and-build \
-  --resolve-vivino --resolver-provider brave --resolver-auto-apply \
+  --resolve-vivino --resolver-provider auto --resolver-auto-apply \
   --resolver-require-vivino-metrics \
   --resolver-max-api-queries 50 --no-resolver-only-new-unresolved \
   --llm-resolve --llm-resolve-all

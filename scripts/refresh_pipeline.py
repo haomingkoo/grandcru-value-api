@@ -16,17 +16,62 @@ from sqlalchemy import create_engine, text
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def configure_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(line_buffering=True)
+        except AttributeError:
+            pass
+
+
 def count_rows(path: Path) -> int:
     with path.open("r", encoding="utf-8", newline="") as handle:
         return sum(1 for _ in csv.DictReader(handle))
+
+
+def run_step(label: str, args: list[str], env: dict[str, str]) -> None:
+    started = time.monotonic()
+    print(f"[refresh] START {label}: {' '.join(args)}", flush=True)
+    try:
+        subprocess.run(args, cwd=ROOT, env=env, check=True)
+    except subprocess.CalledProcessError as exc:
+        elapsed = time.monotonic() - started
+        print(
+            f"[refresh] FAILED {label}: exit_code={exc.returncode} elapsed={elapsed:.1f}s",
+            flush=True,
+        )
+        raise
+    elapsed = time.monotonic() - started
+    print(f"[refresh] DONE {label}: elapsed={elapsed:.1f}s", flush=True)
 
 
 def run_command(command: str, env: dict[str, str]) -> None:
     args = shlex.split(command)
     if not args:
         raise ValueError(f"Invalid empty command: {command!r}")
-    print(f"[refresh] Running: {' '.join(args)}")
-    subprocess.run(args, cwd=ROOT, env=env, check=True)
+    run_step("pre-command", args, env)
+
+
+def provider_has_credentials(provider: str, env: dict[str, str]) -> bool:
+    if provider == "none":
+        return True
+    if provider == "brave":
+        return bool(env.get("BRAVE_API_KEY"))
+    if provider == "serper":
+        return bool(env.get("SERPER_API_KEY"))
+    if provider == "google_cse":
+        return bool(env.get("GOOGLE_API_KEY") and env.get("GOOGLE_CSE_ID"))
+    return False
+
+
+def provider_credentials_hint(provider: str) -> str:
+    if provider == "brave":
+        return "BRAVE_API_KEY"
+    if provider == "serper":
+        return "SERPER_API_KEY"
+    if provider == "google_cse":
+        return "GOOGLE_API_KEY and GOOGLE_CSE_ID"
+    return "provider credentials"
 
 
 def run_vivino_resolver(
@@ -101,8 +146,16 @@ def run_vivino_resolver(
     if require_vivino_metrics:
         resolver_cmd.append("--require-vivino-metrics")
 
-    print(f"[refresh] Running vivino resolver ({provider})")
-    subprocess.run(resolver_cmd, cwd=ROOT, env=env, check=True)
+    if provider != "auto" and not provider_has_credentials(provider, env):
+        print(
+            f"[refresh] Skipping vivino resolver: --resolver-provider {provider} "
+            f"requires {provider_credentials_hint(provider)}.",
+            flush=True,
+        )
+        return
+
+    print(f"[refresh] Running vivino resolver ({provider})", flush=True)
+    run_step("vivino resolver", resolver_cmd, env)
 
 
 def resolver_recent(state_file: Path, min_interval_hours: float) -> bool:
@@ -135,17 +188,18 @@ def run_import(comparison_path: Path, vivino_path: Path, vivino_overrides_path: 
     ]
     print(
         f"[refresh] Running import with {comparison_path.name}, {vivino_path.name},"
-        f" overrides={vivino_overrides_path.name}"
+        f" overrides={vivino_overrides_path.name}",
+        flush=True,
     )
-    subprocess.run(import_cmd, cwd=ROOT, env=env, check=True)
+    run_step("import", import_cmd, env)
 
 
 def run_completeness_validation(*, strict: bool, env: dict[str, str]) -> None:
     validation_cmd = [sys.executable, str(ROOT / "scripts" / "validate_wine_completeness.py")]
     if strict:
         validation_cmd.append("--strict")
-    print("[refresh] Validating wine completeness")
-    subprocess.run(validation_cmd, cwd=ROOT, env=env, check=True)
+    print("[refresh] Validating wine completeness", flush=True)
+    run_step("completeness validation", validation_cmd, env)
 
 
 def run_scrape_and_build(
@@ -182,8 +236,8 @@ def run_scrape_and_build(
         scrape_cmd.extend(["--platinum-detail-sleep-seconds", str(platinum_detail_sleep_seconds)])
     if headed:
         scrape_cmd.append("--headed")
-    print(f"[refresh] Running scrape into {output_dir}")
-    subprocess.run(scrape_cmd, cwd=ROOT, env=env, check=True)
+    print(f"[refresh] Running scrape into {output_dir}", flush=True)
+    run_step("scrape sources", scrape_cmd, env)
 
     build_cmd = [
         sys.executable,
@@ -197,8 +251,8 @@ def run_scrape_and_build(
         "--match-threshold",
         str(match_threshold),
     ]
-    print(f"[refresh] Building comparison summary into {comparison_path}")
-    subprocess.run(build_cmd, cwd=ROOT, env=env, check=True)
+    print(f"[refresh] Building comparison summary into {comparison_path}", flush=True)
+    run_step("build comparison", build_cmd, env)
 
 
 def run_build_comparison_only(
@@ -226,23 +280,24 @@ def run_build_comparison_only(
         f"platinum={platinum_csv}",
         f"grandcru={grandcru_csv}",
         f"output={comparison_path}",
+        flush=True,
     )
-    subprocess.run(build_cmd, cwd=ROOT, env=env, check=True)
+    run_step("build comparison", build_cmd, env)
 
 
 def check_health(health_url: str) -> bool:
-    print(f"[refresh] Checking health: {health_url}")
+    print(f"[refresh] Checking health: {health_url}", flush=True)
     try:
         with urlopen(health_url, timeout=20) as response:
             payload = response.read().decode("utf-8")
     except URLError as exc:
-        print(f"[refresh] Health check failed: {exc}")
+        print(f"[refresh] Health check failed: {exc}", flush=True)
         return False
 
     try:
         body = json.loads(payload)
     except json.JSONDecodeError:
-        print(f"[refresh] Health response (raw): {payload[:400]}")
+        print(f"[refresh] Health response (raw): {payload[:400]}", flush=True)
         return True
 
     latest = body.get("latest_ingestion") or {}
@@ -251,6 +306,7 @@ def check_health(health_url: str) -> bool:
         f"total_deals={body.get('total_deals')}",
         f"ingestion_stale={body.get('ingestion_stale')}",
         f"latest_status={latest.get('status')}",
+        flush=True,
     )
     return True
 
@@ -285,6 +341,7 @@ def compute_rating_coverage(database_url: str) -> tuple[int, int, int, int, floa
 
 
 def main() -> None:
+    configure_stdio()
     parser = argparse.ArgumentParser(
         description="Run wine data refresh steps and import into the configured database."
     )
@@ -532,13 +589,15 @@ def main() -> None:
         raise FileNotFoundError(f"Missing vivino CSV: {vivino_path}")
 
     env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
     if args.database_url:
         env["DATABASE_URL"] = args.database_url
 
     if args.enrich_platinum_vivino:
         print(
             "[refresh] --enrich-platinum-vivino enabled; note: this repo already captures "
-            "Platinum Vivino metadata during --scrape-and-build."
+            "Platinum Vivino metadata during --scrape-and-build.",
+            flush=True,
         )
 
     for command in args.pre_command:
@@ -578,13 +637,15 @@ def main() -> None:
         f"comparison={count_rows(comparison_path)}",
         f"vivino={count_rows(vivino_path)}",
         f"overrides={count_rows(vivino_overrides_path) if vivino_overrides_path.exists() else 0}",
+        flush=True,
     )
 
     if args.resolve_vivino:
         state_path = args.resolver_state_file.resolve()
         if resolver_recent(state_path, args.resolver_min_interval_hours):
             print(
-                f"[refresh] Skipping resolver; last run within {args.resolver_min_interval_hours}h."
+                f"[refresh] Skipping resolver; last run within {args.resolver_min_interval_hours}h.",
+                flush=True,
             )
         else:
             run_vivino_resolver(
@@ -615,7 +676,7 @@ def main() -> None:
         gemini_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
         brave_key = os.getenv("BRAVE_API_KEY", "")
         if not gemini_key:
-            print("[refresh] Skipping LLM resolver: no GEMINI_API_KEY set")
+            print("[refresh] Skipping LLM resolver: no GEMINI_API_KEY set", flush=True)
         else:
             llm_cmd = [
                 sys.executable,
@@ -634,13 +695,13 @@ def main() -> None:
                 llm_cmd.append("--all")
             if args.llm_resolve_limit > 0:
                 llm_cmd.extend(["--limit", str(args.llm_resolve_limit)])
-            print(f"[refresh] Running LLM Vivino resolver (limit={args.llm_resolve_limit or 'all'})")
-            subprocess.run(llm_cmd, cwd=ROOT, env=env, check=True)
+            print(f"[refresh] Running LLM Vivino resolver (limit={args.llm_resolve_limit or 'all'})", flush=True)
+            run_step("llm vivino resolver", llm_cmd, env)
 
     if args.resolve_market_prices:
         brave_key = os.getenv("BRAVE_API_KEY", "")
         if not brave_key:
-            print("[refresh] Skipping market resolver: no BRAVE_API_KEY set")
+            print("[refresh] Skipping market resolver: no BRAVE_API_KEY set", flush=True)
         else:
             market_output = ROOT / "seed" / "market_prices.csv"
             market_cmd = [
@@ -651,8 +712,8 @@ def main() -> None:
                 "--brave-api-key", brave_key,
                 "--cache-ttl-days", "14",
             ]
-            print("[refresh] Running market price resolver with validation")
-            subprocess.run(market_cmd, cwd=ROOT, env=env, check=True)
+            print("[refresh] Running market price resolver with validation", flush=True)
+            run_step("market price resolver", market_cmd, env)
             # Validate and strip bad matches
             validate_cmd = [
                 sys.executable,
@@ -661,8 +722,8 @@ def main() -> None:
                 "--comparison", str(comparison_path),
                 "--fix",
             ]
-            print("[refresh] Validating market prices")
-            subprocess.run(validate_cmd, cwd=ROOT, env=env, check=True)
+            print("[refresh] Validating market prices", flush=True)
+            run_step("market price validation", validate_cmd, env)
 
     if args.enrich_vivino_results:
         enrich_cmd = [
@@ -679,8 +740,8 @@ def main() -> None:
         ]
         if args.enrich_vivino_limit:
             enrich_cmd.extend(["--limit", str(args.enrich_vivino_limit)])
-        print("[refresh] Enriching vivino_results.csv from override URLs")
-        subprocess.run(enrich_cmd, cwd=ROOT, env=env, check=True)
+        print("[refresh] Enriching vivino_results.csv from override URLs", flush=True)
+        run_step("vivino enrichment", enrich_cmd, env)
 
     run_import(comparison_path, vivino_path, vivino_overrides_path, env)
 
@@ -699,7 +760,7 @@ def main() -> None:
         except Exception as exc:
             if args.ratings_coverage_strict or args.max_unrated_strict:
                 raise RuntimeError(f"Ratings coverage check failed: {exc}") from exc
-            print(f"[refresh] Ratings coverage check failed: {exc}")
+            print(f"[refresh] Ratings coverage check failed: {exc}", flush=True)
         else:
             unrated = total - rated
             print(
@@ -710,6 +771,7 @@ def main() -> None:
                 f"unrated_with_url={unrated_with_url}",
                 f"unrated_without_url={unrated_without_url}",
                 f"coverage={coverage:.3f}",
+                flush=True,
             )
             if args.ratings_coverage_min > 0 and coverage < args.ratings_coverage_min:
                 message = (
@@ -718,14 +780,14 @@ def main() -> None:
                 )
                 if args.ratings_coverage_strict:
                     raise RuntimeError(message)
-                print(f"[refresh] WARNING: {message}")
+                print(f"[refresh] WARNING: {message}", flush=True)
             if args.max_unrated >= 0 and unrated > args.max_unrated:
                 message = f"Unrated rows {unrated} exceed max {args.max_unrated}"
                 if args.max_unrated_strict:
                     raise RuntimeError(message)
-                print(f"[refresh] WARNING: {message}")
+                print(f"[refresh] WARNING: {message}", flush=True)
 
-    print("[refresh] Done.")
+    print("[refresh] Done.", flush=True)
 
 
 if __name__ == "__main__":

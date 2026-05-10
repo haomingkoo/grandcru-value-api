@@ -800,6 +800,11 @@ def import_data(
     ensure_column("wine_deals", "market_retailer_url", "VARCHAR(512)")
 
     comparison_rows = read_csv_rows(comparison_path)
+    if not comparison_rows:
+        raise RuntimeError(
+            f"comparison_summary has zero rows: {comparison_path}. "
+            "Refusing to replace current deals with an empty scrape."
+        )
     vivino_rows_base = _annotate_vivino_rows(read_csv_rows(vivino_path), "base")
     vivino_rows_override = _annotate_vivino_rows(read_optional_csv_rows(vivino_overrides_path), "override")
     vivino_rows = vivino_rows_base + vivino_rows_override

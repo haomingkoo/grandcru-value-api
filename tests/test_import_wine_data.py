@@ -302,6 +302,33 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
 
         self.assertEqual(self._current_description(), "Fresh override note.")
 
+    def test_empty_comparison_refuses_to_replace_existing_data(self) -> None:
+        self._write_seed_files("Keep this row.")
+        self._run_import()
+
+        self._write_csv(
+            self.comparison_path,
+            [
+                "name_plat",
+                "year_plat",
+                "quantity_plat",
+                "volume_plat",
+                "price_plat",
+                "price_main",
+                "price_diff",
+                "price_diff_pct",
+                "cheaper_side",
+                "url_plat",
+                "url_main",
+            ],
+            [],
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "zero rows"):
+            self._run_import()
+
+        self.assertEqual(self._current_description(), "Keep this row.")
+
     def test_import_preserves_description_by_vivino_url_when_name_changes(self) -> None:
         self._write_seed_files("Mineral citrus, chalk, saline finish.")
         self._run_import()

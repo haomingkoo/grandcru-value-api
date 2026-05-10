@@ -97,7 +97,7 @@ def build_refresh_command(
                 "0.8",
                 "--resolve-vivino",
                 "--resolver-provider",
-                "brave",
+                "auto",
                 "--resolver-auto-apply",
                 "--resolver-require-vivino-metrics",
             ]
