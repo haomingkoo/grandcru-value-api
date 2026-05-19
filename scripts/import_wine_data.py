@@ -1125,9 +1125,14 @@ def _db_has_fresh_data(max_age_hours: float = 2.0) -> bool:
     from datetime import datetime, timedelta, UTC
     try:
         Base.metadata.create_all(bind=engine)
-        with Session(engine) as session:
-            from app.service import get_latest_ingestion
-            latest = get_latest_ingestion(session)
+        with SessionLocal() as session:
+            latest = session.scalars(
+                select(IngestionRun)
+                .where(IngestionRun.status == "success")
+                .where(IngestionRun.finished_at.is_not(None))
+                .order_by(IngestionRun.finished_at.desc())
+                .limit(1)
+            ).first()
             if latest is None or latest.finished_at is None:
                 return False
             finished = latest.finished_at
@@ -1141,8 +1146,8 @@ def _db_has_fresh_data(max_age_hours: float = 2.0) -> bool:
                     finished.isoformat(),
                 )
                 return True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("fresh_data_check_failed error=%s", exc)
     return False
 
 

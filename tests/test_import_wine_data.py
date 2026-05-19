@@ -1,6 +1,7 @@
 import csv
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,8 +12,9 @@ import app.database as database_module
 import scripts.import_wine_data as import_wine_data_module
 import scripts.validate_wine_completeness as validate_module
 from app.database import Base
-from app.models import WineDeal
+from app.models import IngestionRun, WineDeal
 from scripts.import_wine_data import (
+    _db_has_fresh_data,
     _resolve_vivino_price_to_listing,
     _scale_vivino_price_to_listing,
     default_skip_if_fresh_hours,
@@ -28,6 +30,46 @@ class ImportWineDataTests(unittest.TestCase):
     def test_default_skip_if_fresh_can_be_overridden(self) -> None:
         with patch.dict("os.environ", {"IMPORT_SKIP_IF_FRESH_HOURS": "0"}, clear=True):
             self.assertEqual(default_skip_if_fresh_hours(), 0.0)
+
+    def test_fresh_data_check_uses_latest_successful_finished_ingestion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            engine = create_engine(
+                f"sqlite:///{Path(tmpdir) / 'freshness.sqlite'}",
+                connect_args={"check_same_thread": False},
+            )
+            Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+            now = datetime.now(UTC)
+
+            with (
+                patch.object(import_wine_data_module, "engine", engine),
+                patch.object(import_wine_data_module, "SessionLocal", Session),
+            ):
+                Base.metadata.create_all(bind=engine)
+                with Session() as session:
+                    session.add(
+                        IngestionRun(
+                            started_at=now - timedelta(hours=1),
+                            finished_at=now - timedelta(hours=1),
+                            status="success",
+                            comparison_rows=62,
+                            vivino_rows=368,
+                            merged_rows=62,
+                        )
+                    )
+                    session.add(
+                        IngestionRun(
+                            started_at=now,
+                            finished_at=None,
+                            status="started",
+                            comparison_rows=0,
+                            vivino_rows=0,
+                            merged_rows=0,
+                        )
+                    )
+                    session.commit()
+
+                self.assertTrue(_db_has_fresh_data(max_age_hours=20))
+            engine.dispose()
 
     def test_scale_vivino_price_to_listing_scales_bundle(self) -> None:
         self.assertEqual(_scale_vivino_price_to_listing(210.0, 3, "750ml"), 630.0)
