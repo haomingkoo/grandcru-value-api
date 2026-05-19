@@ -9,7 +9,7 @@ const defaultState = {
   grape: "",
   offeringType: "",
   producer: "",
-  comparableOnly: true,
+  comparableOnly: false,
   onlyPlatinumCheaper: false,
   minVivinoRating: "",
   minVivinoNumRatings: "",
@@ -98,7 +98,7 @@ async function loadDataFreshness() {
       const dt = new Date(ingestion.finished_at)
       const ago = formatTimeAgo(dt)
       const el = document.getElementById("dataFreshness")
-      if (el) el.textContent = `Data updated ${ago} \u00b7 ${ingestion.merged_rows} wines`
+      if (el) el.textContent = `Data updated ${ago} \u00b7 ${ingestion.merged_rows} live offers`
     }
   } catch (_) { /* silent */ }
 }
@@ -508,7 +508,7 @@ function hydrateStateFromUrl() {
   state.producer = params.get("producer") || defaultState.producer
   state.sortBy = params.get("sort_by") || defaultState.sortBy
   state.sortOrder = params.get("sort_order") || defaultState.sortOrder
-  state.comparableOnly = params.get("comparable_only") !== "false"
+  state.comparableOnly = params.get("comparable_only") === "true"
   state.onlyPlatinumCheaper = params.get("only_platinum_cheaper") === "true"
   state.minVivinoRating = params.get("min_vivino_rating") || defaultState.minVivinoRating
   state.minVivinoNumRatings = params.get("min_vivino_num_ratings") || defaultState.minVivinoNumRatings
@@ -605,8 +605,11 @@ function syncSortButtons() {
 
 function renderResultsMeta(deals) {
   const wineCount = groupDealsIntoFamilies(deals).length
-  const comparableCopy = state.comparableOnly ? "comparable" : "visible"
-  els.resultsMeta.textContent = `${wineCount} wines · ${deals.length} ${comparableCopy} offers - ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
+  const comparableCount = deals.filter((deal) => deal.price_diff_pct !== null).length
+  const matchCopy = state.comparableOnly
+    ? `${deals.length} Grand Cru-matched offers`
+    : `${deals.length} live offers · ${comparableCount} with Grand Cru match`
+  els.resultsMeta.textContent = `${wineCount} wines · ${matchCopy} - ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
 }
 
 function renderHeroStats(deals, mapPoints) {
@@ -1503,7 +1506,7 @@ function renderActiveFilters() {
   if (state.grape) chips.push({ label: `Grape: ${state.grape}`, reset: "grape" })
   if (state.offeringType) chips.push({ label: `Offering: ${state.offeringType}`, reset: "offeringType" })
   if (state.producer) chips.push({ label: `Producer: ${state.producer}`, reset: "producer" })
-  if (state.comparableOnly) chips.push({ label: "Comparable only", reset: "comparableOnly" })
+  if (state.comparableOnly) chips.push({ label: "Grand Cru matches only", reset: "comparableOnly" })
   if (state.onlyPlatinumCheaper) chips.push({ label: "Platinum cheaper only", reset: "onlyPlatinumCheaper" })
   if (state.minVivinoRating) chips.push({ label: `Rating ${state.minVivinoRating}+`, reset: "minVivinoRating" })
   if (state.minVivinoNumRatings) chips.push({ label: `${state.minVivinoNumRatings}+ ratings`, reset: "minVivinoNumRatings" })
