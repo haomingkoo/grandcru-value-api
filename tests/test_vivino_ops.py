@@ -100,6 +100,11 @@ class RefreshCommandTests(unittest.TestCase):
         provider_index = command.index("--resolver-provider")
         self.assertEqual(command[provider_index + 1], "auto")
 
+    def test_weekly_refresh_runs_grandcru_llm_resolver(self) -> None:
+        command = build_refresh_command(mode="weekly", health_url=None, strict_health=False)
+
+        self.assertIn("--llm-resolve-grandcru", command)
+
     def test_import_only_does_not_run_resolver(self) -> None:
         command = build_refresh_command(mode="import_only", health_url=None, strict_health=False)
 

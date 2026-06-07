@@ -285,6 +285,47 @@ def run_build_comparison_only(
     run_step("build comparison", build_cmd, env)
 
 
+def run_llm_grandcru_resolver(
+    *,
+    comparison_path: Path,
+    grandcru_csv: Path,
+    gemini_api_key: str,
+    cache_path: Path,
+    max_candidates: int,
+    min_confidence: float,
+    limit: int,
+    force: bool,
+    env: dict[str, str],
+) -> None:
+    llm_cmd = [
+        sys.executable,
+        str(ROOT / "scripts" / "llm_grandcru_resolver.py"),
+        "--comparison",
+        str(comparison_path),
+        "--grandcru",
+        str(grandcru_csv),
+        "--cache",
+        str(cache_path),
+        "--gemini-api-key",
+        gemini_api_key,
+        "--max-candidates",
+        str(max_candidates),
+        "--min-confidence",
+        str(min_confidence),
+    ]
+    if limit > 0:
+        llm_cmd.extend(["--limit", str(limit)])
+    if force:
+        llm_cmd.append("--force")
+    print(
+        "[refresh] Running LLM Grand Cru resolver",
+        f"limit={limit or 'all'}",
+        f"min_confidence={min_confidence}",
+        flush=True,
+    )
+    run_step("llm grand cru resolver", llm_cmd, env)
+
+
 def check_health(health_url: str) -> bool:
     print(f"[refresh] Checking health: {health_url}", flush=True)
     try:
@@ -560,6 +601,15 @@ def main() -> None:
     parser.add_argument("--llm-resolve-sleep", type=float, default=2.0)
     parser.add_argument("--llm-resolve-force", action="store_true", help="Bypass LLM resolver 30-day cache")
     parser.add_argument(
+        "--llm-resolve-grandcru",
+        action="store_true",
+        help="Run LLM-assisted Grand Cru matcher to resolve comparison rows with no Grand Cru pair.",
+    )
+    parser.add_argument("--llm-resolve-grandcru-limit", type=int, default=0, help="Max unmatched rows for Grand Cru resolver (0 = all)")
+    parser.add_argument("--llm-resolve-grandcru-min-confidence", type=float, default=0.75)
+    parser.add_argument("--llm-resolve-grandcru-max-candidates", type=int, default=8)
+    parser.add_argument("--llm-resolve-grandcru-force", action="store_true", help="Bypass Grand Cru resolver cache")
+    parser.add_argument(
         "--resolve-market-prices",
         action="store_true",
         help="Run market price resolver (Brave + Wine-Searcher) with validation.",
@@ -697,6 +747,30 @@ def main() -> None:
                 llm_cmd.extend(["--limit", str(args.llm_resolve_limit)])
             print(f"[refresh] Running LLM Vivino resolver (limit={args.llm_resolve_limit or 'all'})", flush=True)
             run_step("llm vivino resolver", llm_cmd, env)
+
+    if args.llm_resolve_grandcru:
+        gemini_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+        if not gemini_key:
+            print("[refresh] Skipping Grand Cru LLM resolver: no GEMINI_API_KEY set", flush=True)
+        else:
+            grandcru_csv = (
+                args.scrape_output_dir.resolve() / "grandcru_wines.csv"
+                if args.scrape_and_build
+                else args.grandcru.resolve()
+            )
+            if not grandcru_csv.exists():
+                raise FileNotFoundError(f"Missing grandcru CSV for LLM resolver: {grandcru_csv}")
+            run_llm_grandcru_resolver(
+                comparison_path=comparison_path,
+                grandcru_csv=grandcru_csv,
+                gemini_api_key=gemini_key,
+                cache_path=ROOT / "data" / "grandcru_llm_cache.json",
+                max_candidates=args.llm_resolve_grandcru_max_candidates,
+                min_confidence=args.llm_resolve_grandcru_min_confidence,
+                limit=args.llm_resolve_grandcru_limit,
+                force=args.llm_resolve_grandcru_force,
+                env=env,
+            )
 
     if args.resolve_market_prices:
         brave_key = os.getenv("BRAVE_API_KEY", "")

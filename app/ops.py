@@ -119,6 +119,7 @@ def build_refresh_command(
                 "--no-resolver-only-new-unresolved",
                 "--llm-resolve",
                 "--llm-resolve-all",
+                "--llm-resolve-grandcru",
             ]
         )
     elif mode == "import_only":
