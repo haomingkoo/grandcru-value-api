@@ -12,8 +12,8 @@ Wine price comparison engine for Singapore. Compares **Platinum Wine Club** and 
 Scrape             Match & Compare        Resolve Vivino        Enrich            Score & Serve
 ───────────────    ──────────────────     ────────────────     ───────────       ──────────────
 Platinum (DOM)  →  Fuzzy name matching →  Brave Search API  →  Ratings        →  Deal score 0-100
-Grand Cru (API)    Bundle detection       Gemini LLM fallback  Prices (SGD)      FastAPI + JS UI
-                   Total listing prices   Identity cache        Grapes, region    Filters, map, trends
+Grand Cru (API)    Bundle detection       Gemini fallbacks     Prices (SGD)      FastAPI + JS UI
+                   Grand Cru LLM repair   Identity cache        Grapes, region    Filters, map, trends
 ```
 
 Platinum Wine Club is scoped as the source of truth for inventory — only in-stock items are shown. Grand Cru products are included for price comparison even if sold out. Vivino provides independent market pricing (SGD) and community ratings.
@@ -39,7 +39,7 @@ Three Railway services under project **zonal-purpose**:
 |---------|------|----------|
 | **web** | FastAPI app + static frontend | Always on |
 | **daily-ingest** | Scrape Platinum/Grand Cru, Brave resolver, import | Daily cron |
-| **weekly-ingest** | Full pipeline + LLM resolver (Vivino prices/descriptions) | Mondays 02:00 UTC |
+| **weekly-ingest** | Full pipeline + Grand Cru LLM matcher + Vivino resolver | Mondays 02:00 UTC |
 
 Data flows into a shared PostgreSQL database. The web service reads from the DB — it does not re-import from CSVs if the daily cron has already refreshed the data within 20 hours.
 
@@ -90,7 +90,7 @@ Seven stages, orchestrated by `scripts/refresh_pipeline.py`:
 | 1. Scrape | `scrape_sources.py` | Selenium for Platinum portal; Shopify API for Grand Cru |
 | 2. Match | `build_comparison_summary.py` | Fuzzy name matching, bundle detection, total listing prices |
 | 3. Resolve | `resolve_vivino_matches.py` | Brave Search for Vivino URLs (skips wines in identity cache) |
-| 4. LLM Resolve | `llm_vivino_resolver.py` | Gemini Flash extracts wine identity, fetches Vivino prices/ratings (uses cached URLs when available) |
+| 4. LLM Resolve | `llm_grandcru_resolver.py`, `llm_vivino_resolver.py` | Gemini repairs unresolved Grand Cru matches and extracts Vivino identity/market data |
 | 5. Market Validate | `validate_market_prices.py` | Checks URL matches against wine identity (producer, label, classification) and price sanity |
 | 6. Import | `import_wine_data.py` | Merge sources, compute deal scores, write to DB |
 | 7. Completeness Validate | `validate_wine_completeness.py` | Fails unexpected missing Vivino, country, grape, and price gaps after import |
@@ -131,12 +131,13 @@ python scripts/refresh_pipeline.py \
   --resolver-max-api-queries 40 \
   --resolver-only-new-unresolved
 
-# Weekly (full — all wines, LLM resolve for descriptions/prices)
+# Weekly (full — all wines, Grand Cru LLM repair + Vivino descriptions/prices)
 python scripts/refresh_pipeline.py \
   --scrape-and-build \
   --resolve-vivino --resolver-provider auto --resolver-auto-apply \
   --resolver-require-vivino-metrics \
   --resolver-max-api-queries 50 --no-resolver-only-new-unresolved \
+  --llm-resolve-grandcru \
   --llm-resolve --llm-resolve-all
 
 # Seed identity cache (one-time, after fresh resolve)
@@ -144,6 +145,49 @@ python scripts/build_identity_cache.py
 ```
 
 Both daily and weekly modes run as Railway cron services. The identity cache ensures known wines skip Brave searches — only new wines use API calls.
+
+### Grand Cru Match Troubleshooting
+
+`No Match` means the Platinum row has no confirmed Grand Cru equivalent in `comparison_summary.csv`. That can be real: Grand Cru may not stock the same vintage, bottle size, bundle size, or product variant.
+
+Every scrape/build refresh now writes a no-cost diagnostic report:
+
+```bash
+python scripts/diagnose_grandcru_matches.py \
+  --comparison seed/comparison_summary.csv \
+  --grandcru seed/latest_refresh/grandcru_wines.csv \
+  --llm-cache data/grandcru_llm_cache.json \
+  --output data/grandcru_match_diagnostics.csv
+```
+
+Review `data/grandcru_match_diagnostics.csv` by `reason`:
+
+- `no_same_year_volume_candidate`: likely a real no-match unless the scraper missed Grand Cru rows.
+- `llm_not_run_or_cache_missing`: Gemini has not reviewed available candidates yet.
+- `llm_declined`: Gemini found candidates but rejected them as not equivalent.
+- `llm_low_confidence`: Gemini suggested a row below the acceptance threshold.
+- `llm_match_not_applied`: investigate immediately; a valid cached LLM match should have updated the comparison row.
+
+The Railway weekly command is checked in at `deploy/weekly-ingest-command.txt`. Keep the Railway UI command in sync with that file.
+
+### CI/CD Guardrails
+
+GitHub Actions runs on every push to `main` and every pull request:
+
+- `scripts/check_no_plaintext_secrets.py` blocks tracked `.env` files and obvious API keys without printing secret values.
+- `scripts/check_deploy_commands.py` validates checked-in Railway commands against `refresh_pipeline.py --help`.
+- `python -m py_compile` catches syntax/parser regressions in pipeline scripts.
+- `pytest` runs the test suite.
+
+Local pre-commit uses the same core checks:
+
+```bash
+python -m pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+Secrets must stay in Railway variables or GitHub secrets only, never in committed files or deploy command text.
 
 ### Vivino Completeness Guardrails
 

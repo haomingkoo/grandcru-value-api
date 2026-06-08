@@ -1,0 +1,16 @@
+python scripts/refresh_pipeline.py \
+  --scrape-and-build \
+  --scrape-output-dir seed/latest_refresh \
+  --scrape-max-pages 500 \
+  --scrape-sleep-seconds 0.8 \
+  --comparison seed/comparison_summary.csv \
+  --vivino seed/vivino_results.csv \
+  --vivino-overrides seed/vivino_overrides.csv \
+  --resolve-vivino \
+  --resolver-provider brave \
+  --resolver-auto-apply \
+  --resolver-max-api-queries 50 \
+  --no-resolver-only-new-unresolved \
+  --llm-resolve-grandcru \
+  --health-url https://web-production-f2effe.up.railway.app/health \
+  --no-health-strict

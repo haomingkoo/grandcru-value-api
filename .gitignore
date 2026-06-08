@@ -8,6 +8,7 @@ data/
 .env.*
 !.env.example
 .pytest_cache/
+.playwright-mcp/
 .mypy_cache/
 .ruff_cache/
 .coverage

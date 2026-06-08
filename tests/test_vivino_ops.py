@@ -7,7 +7,7 @@ from app.database import Base
 from app.models import WineDeal
 from app.ops import build_refresh_command
 from app.service import list_vivino_unresolved_export_rows
-from scripts.refresh_pipeline import provider_has_credentials
+from scripts.refresh_pipeline import provider_has_credentials, redact_args
 from scripts.enrich_vivino_results import needs_vivino_enrichment
 from scripts.vivino_overrides import is_locked_override_row, upsert_overrides
 
@@ -113,6 +113,21 @@ class RefreshCommandTests(unittest.TestCase):
 
 
 class RefreshPipelineCredentialTests(unittest.TestCase):
+    def test_sensitive_cli_args_are_redacted_before_logging(self) -> None:
+        command = [
+            "python",
+            "script.py",
+            "--gemini-api-key",
+            "real-secret",
+            "--brave-api-key=also-secret",
+        ]
+
+        redacted = " ".join(redact_args(command))
+
+        self.assertNotIn("real-secret", redacted)
+        self.assertNotIn("also-secret", redacted)
+        self.assertIn("[REDACTED]", redacted)
+
     def test_brave_provider_requires_key(self) -> None:
         self.assertFalse(provider_has_credentials("brave", {}))
         self.assertTrue(provider_has_credentials("brave", {"BRAVE_API_KEY": "key"}))

@@ -1,0 +1,20 @@
+repos:
+  - repo: local
+    hooks:
+      - id: no-plaintext-secrets
+        name: no plaintext secrets
+        entry: python3 scripts/check_no_plaintext_secrets.py
+        language: system
+        pass_filenames: false
+
+      - id: deploy-command-check
+        name: deploy command check
+        entry: python3 scripts/check_deploy_commands.py
+        language: system
+        pass_filenames: false
+
+      - id: pipeline-compile-check
+        name: pipeline compile check
+        entry: python3 -m py_compile scripts/refresh_pipeline.py scripts/llm_grandcru_resolver.py scripts/diagnose_grandcru_matches.py scripts/check_deploy_commands.py scripts/check_no_plaintext_secrets.py
+        language: system
+        pass_filenames: false

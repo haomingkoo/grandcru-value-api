@@ -14,6 +14,13 @@ from typing import Any
 from sqlalchemy import create_engine, text
 
 ROOT = Path(__file__).resolve().parents[1]
+SENSITIVE_ARG_NAMES = {
+    "--api-key",
+    "--brave-api-key",
+    "--gemini-api-key",
+    "--google-api-key",
+    "--serper-api-key",
+}
 
 
 def configure_stdio() -> None:
@@ -29,9 +36,27 @@ def count_rows(path: Path) -> int:
         return sum(1 for _ in csv.DictReader(handle))
 
 
+def redact_args(args: list[str]) -> list[str]:
+    redacted: list[str] = []
+    hide_next = False
+    for arg in args:
+        if hide_next:
+            redacted.append("[REDACTED]")
+            hide_next = False
+            continue
+        if any(arg.startswith(f"{name}=") for name in SENSITIVE_ARG_NAMES):
+            name, _, _value = arg.partition("=")
+            redacted.append(f"{name}=[REDACTED]")
+            continue
+        redacted.append(arg)
+        if arg in SENSITIVE_ARG_NAMES:
+            hide_next = True
+    return redacted
+
+
 def run_step(label: str, args: list[str], env: dict[str, str]) -> None:
     started = time.monotonic()
-    print(f"[refresh] START {label}: {' '.join(args)}", flush=True)
+    print(f"[refresh] START {label}: {' '.join(redact_args(args))}", flush=True)
     try:
         subprocess.run(args, cwd=ROOT, env=env, check=True)
     except subprocess.CalledProcessError as exc:
@@ -289,7 +314,6 @@ def run_llm_grandcru_resolver(
     *,
     comparison_path: Path,
     grandcru_csv: Path,
-    gemini_api_key: str,
     cache_path: Path,
     max_candidates: int,
     min_confidence: float,
@@ -306,8 +330,6 @@ def run_llm_grandcru_resolver(
         str(grandcru_csv),
         "--cache",
         str(cache_path),
-        "--gemini-api-key",
-        gemini_api_key,
         "--max-candidates",
         str(max_candidates),
         "--min-confidence",
@@ -324,6 +346,36 @@ def run_llm_grandcru_resolver(
         flush=True,
     )
     run_step("llm grand cru resolver", llm_cmd, env)
+
+
+def run_grandcru_diagnostics(
+    *,
+    comparison_path: Path,
+    grandcru_csv: Path,
+    cache_path: Path,
+    output_path: Path,
+    max_candidates: int,
+    min_confidence: float,
+    env: dict[str, str],
+) -> None:
+    diagnostic_cmd = [
+        sys.executable,
+        str(ROOT / "scripts" / "diagnose_grandcru_matches.py"),
+        "--comparison",
+        str(comparison_path),
+        "--grandcru",
+        str(grandcru_csv),
+        "--llm-cache",
+        str(cache_path),
+        "--output",
+        str(output_path),
+        "--max-candidates",
+        str(max_candidates),
+        "--min-confidence",
+        str(min_confidence),
+    ]
+    print("[refresh] Diagnosing Grand Cru no-match rows", flush=True)
+    run_step("grand cru match diagnostics", diagnostic_cmd, env)
 
 
 def check_health(health_url: str) -> bool:
@@ -610,6 +662,12 @@ def main() -> None:
     parser.add_argument("--llm-resolve-grandcru-max-candidates", type=int, default=8)
     parser.add_argument("--llm-resolve-grandcru-force", action="store_true", help="Bypass Grand Cru resolver cache")
     parser.add_argument(
+        "--diagnose-grandcru-matches",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write a no-cost diagnostic CSV explaining remaining Grand Cru no-match rows.",
+    )
+    parser.add_argument(
         "--resolve-market-prices",
         action="store_true",
         help="Run market price resolver (Brave + Wine-Searcher) with validation.",
@@ -667,6 +725,7 @@ def main() -> None:
             platinum_detail_sleep_seconds=args.platinum_detail_sleep_seconds,
             env=env,
         )
+        grandcru_csv_for_diagnostics = args.scrape_output_dir.resolve() / "grandcru_wines.csv"
     elif args.build_comparison:
         platinum_csv = args.platinum.resolve()
         grandcru_csv = args.grandcru.resolve()
@@ -681,6 +740,9 @@ def main() -> None:
             comparison_path=comparison_path,
             env=env,
         )
+        grandcru_csv_for_diagnostics = grandcru_csv
+    else:
+        grandcru_csv_for_diagnostics = None
 
     print(
         "[refresh] Input rows:",
@@ -738,7 +800,7 @@ def main() -> None:
                 "--sleep", str(args.llm_resolve_sleep),
             ]
             if brave_key:
-                llm_cmd.extend(["--brave-api-key", brave_key])
+                env["BRAVE_API_KEY"] = brave_key
             if args.llm_resolve_force:
                 llm_cmd.append("--force")
             if args.llm_resolve_all:
@@ -763,13 +825,29 @@ def main() -> None:
             run_llm_grandcru_resolver(
                 comparison_path=comparison_path,
                 grandcru_csv=grandcru_csv,
-                gemini_api_key=gemini_key,
                 cache_path=ROOT / "data" / "grandcru_llm_cache.json",
                 max_candidates=args.llm_resolve_grandcru_max_candidates,
                 min_confidence=args.llm_resolve_grandcru_min_confidence,
                 limit=args.llm_resolve_grandcru_limit,
                 force=args.llm_resolve_grandcru_force,
                 env=env,
+            )
+
+    if args.diagnose_grandcru_matches and grandcru_csv_for_diagnostics is not None:
+        if grandcru_csv_for_diagnostics.exists():
+            run_grandcru_diagnostics(
+                comparison_path=comparison_path,
+                grandcru_csv=grandcru_csv_for_diagnostics,
+                cache_path=ROOT / "data" / "grandcru_llm_cache.json",
+                output_path=ROOT / "data" / "grandcru_match_diagnostics.csv",
+                max_candidates=args.llm_resolve_grandcru_max_candidates,
+                min_confidence=args.llm_resolve_grandcru_min_confidence,
+                env=env,
+            )
+        else:
+            print(
+                f"[refresh] Skipping Grand Cru diagnostics: missing {grandcru_csv_for_diagnostics}",
+                flush=True,
             )
 
     if args.resolve_market_prices:
@@ -783,7 +861,6 @@ def main() -> None:
                 str(ROOT / "scripts" / "llm_market_resolver.py"),
                 "--comparison", str(comparison_path),
                 "--output", str(market_output),
-                "--brave-api-key", brave_key,
                 "--cache-ttl-days", "14",
             ]
             print("[refresh] Running market price resolver with validation", flush=True)
