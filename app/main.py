@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -400,7 +401,11 @@ def social_card_svg() -> Response:
 
 @app.get("/llms.txt", response_class=PlainTextResponse, include_in_schema=False)
 def llms_txt(session: Session = Depends(get_session)) -> PlainTextResponse:
-    total_deals = count_deals(session)
+    try:
+        total_deals = count_deals(session)
+    except SQLAlchemyError:
+        session.rollback()
+        total_deals = 0
     text = f"""# MinMax Wine
 
 MinMax Wine is a Singapore wine price comparison and deal-scoring web app by Haoming Koo.
@@ -427,8 +432,13 @@ def _money(value: float | None) -> str:
 
 @app.get("/llms-full.txt", response_class=PlainTextResponse, include_in_schema=False)
 def llms_full_txt(session: Session = Depends(get_session)) -> PlainTextResponse:
-    deals = list_deals(session, limit=5, offset=0, sort_by="deal_score", sort_order="desc")
-    stats = get_deal_stats(session)
+    try:
+        deals = list_deals(session, limit=5, offset=0, sort_by="deal_score", sort_order="desc")
+        stats = get_deal_stats(session)
+    except SQLAlchemyError:
+        session.rollback()
+        deals = []
+        stats = {"total_deals": 0, "cheaper_sides": []}
     cheaper_sides = {item["value"]: item["count"] for item in stats.get("cheaper_sides", [])}
     comparable_count = sum(
         cheaper_sides.get(label, 0)
