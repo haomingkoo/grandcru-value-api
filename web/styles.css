@@ -2661,4 +2661,12 @@ h2 {
     width: 64px;
     height: 64px;
   }
+
+  .deal-row td:nth-child(4),
+  .deal-row td:nth-child(5),
+  .deal-row td:nth-child(6),
+  .deal-row td:nth-child(7) {
+    display: block;
+    width: 100%;
+  }
 }
