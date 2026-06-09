@@ -73,6 +73,8 @@ SNAPSHOT_FIELDS = {
     "price_diff",
     "price_diff_pct",
     "cheaper_side",
+    "platinum_in_stock",
+    "grand_cru_in_stock",
     "platinum_url",
     "grand_cru_url",
     "vivino_url",
@@ -289,6 +291,15 @@ class VivinoLookup:
 
 def _has_value(value: str | None) -> bool:
     return bool((value or "").strip())
+
+
+def parse_bool(value: str | None) -> bool | None:
+    text = (value or "").strip().lower()
+    if text in {"true", "1", "yes", "y", "in_stock", "in stock", "available"}:
+        return True
+    if text in {"false", "0", "no", "n", "out_of_stock", "out of stock", "sold out", "unavailable"}:
+        return False
+    return None
 
 
 def _vivino_row_quality(row: dict[str, str]) -> tuple[int, int, int, int]:
@@ -791,6 +802,10 @@ def import_data(
 
     ensure_column("wine_deals", "vivino_match_method", "VARCHAR(32)")
     ensure_column("wine_deal_snapshots", "vivino_match_method", "VARCHAR(32)")
+    ensure_column("wine_deals", "platinum_in_stock", "BOOLEAN")
+    ensure_column("wine_deal_snapshots", "platinum_in_stock", "BOOLEAN")
+    ensure_column("wine_deals", "grand_cru_in_stock", "BOOLEAN")
+    ensure_column("wine_deal_snapshots", "grand_cru_in_stock", "BOOLEAN")
     ensure_column("wine_deals", "vivino_price", "FLOAT")
     ensure_column("wine_deals", "vivino_description", "VARCHAR(512)")
     for column, col_type in DEAL_EXTRA_COLUMNS:
@@ -1015,6 +1030,8 @@ def import_data(
                 "price_diff": price_diff,
                 "price_diff_pct": price_diff_pct,
                 "cheaper_side": (row.get("cheaper_side") or "").strip() or None,
+                "platinum_in_stock": parse_bool(row.get("platinum_in_stock")),
+                "grand_cru_in_stock": parse_bool(row.get("grand_cru_in_stock")),
                 "platinum_url": normalize_platinum_url(row.get("url_plat")),
                 "grand_cru_url": grand_cru_url,
                 "vivino_url": vivino_url,

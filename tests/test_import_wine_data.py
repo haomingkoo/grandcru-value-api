@@ -12,7 +12,7 @@ import app.database as database_module
 import scripts.import_wine_data as import_wine_data_module
 import scripts.validate_wine_completeness as validate_module
 from app.database import Base
-from app.models import IngestionRun, WineDeal
+from app.models import IngestionRun, WineDeal, WineDealSnapshot
 from scripts.import_wine_data import (
     _db_has_fresh_data,
     _resolve_vivino_price_to_listing,
@@ -233,6 +233,8 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
                 "cheaper_side",
                 "url_plat",
                 "url_main",
+                "platinum_in_stock",
+                "grand_cru_in_stock",
             ],
             [
                 {
@@ -247,6 +249,8 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
                     "cheaper_side": "Grand Cru Cheaper",
                     "url_plat": "https://example.com/platinum/test-cuvee",
                     "url_main": "https://example.com/grandcru/test-cuvee",
+                    "platinum_in_stock": "true",
+                    "grand_cru_in_stock": "false",
                 }
             ],
         )
@@ -343,6 +347,21 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self._run_import()
 
         self.assertEqual(self._current_description(), "Fresh override note.")
+
+    def test_import_persists_availability_to_current_deal_and_snapshot(self) -> None:
+        self._write_seed_files("Bright cherry, cedar, graphite.")
+        self._run_import()
+
+        with self.Session() as session:
+            deal = session.scalar(select(WineDeal))
+            snapshot = session.scalar(select(WineDealSnapshot))
+
+        self.assertIsNotNone(deal)
+        self.assertIsNotNone(snapshot)
+        self.assertTrue(deal.platinum_in_stock)
+        self.assertFalse(deal.grand_cru_in_stock)
+        self.assertTrue(snapshot.platinum_in_stock)
+        self.assertFalse(snapshot.grand_cru_in_stock)
 
     def test_empty_comparison_refuses_to_replace_existing_data(self) -> None:
         self._write_seed_files("Keep this row.")

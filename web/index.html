@@ -72,41 +72,28 @@
     </div>
   </nav>
   <div class="page-shell">
-    <header class="masthead reveal">
+    <header class="masthead dashboard-hero reveal">
       <div class="masthead-copy">
         <p class="eyebrow">Platinum Wine Intelligence</p>
-        <h1>MinMax your wine.</h1>
-        <p class="lede">Three-way price comparison across Platinum, Grand Cru, and Vivino. AI-scored deals updated daily.</p>
+        <h1>Wine deal monitor</h1>
+        <p class="lede">Strict Grand Cru matching, Vivino market checks, price movement, and source coverage for Platinum offers.</p>
+      </div>
+      <div class="status-stack" aria-label="Data coverage status">
+        <span class="status-pill strong" data-freshness>Loading latest refresh</span>
+        <span class="status-pill">Grand Cru matches stay exact</span>
+        <span class="status-pill">Vivino covers market-only wines</span>
       </div>
     </header>
 
-    <nav class="discovery-hub reveal" aria-label="Browse wines">
-      <p class="eyebrow">How do you want to explore?</p>
-      <div class="discovery-grid">
-        <a class="discovery-card" href="#mapSection" data-focus="mapSection">
-          <span class="discovery-icon">&#127758;</span>
-          <strong>By Country</strong>
-          <span class="discovery-desc">Tap the map, pick a region</span>
-        </a>
-        <a class="discovery-card" href="#styleSection" data-focus="styleSection">
-          <span class="discovery-icon">&#127863;</span>
-          <strong>By Style</strong>
-          <span class="discovery-desc">Red, white, Champagne &amp; more</span>
-        </a>
-        <a class="discovery-card" href="#picksSection" data-focus="picksSection">
-          <span class="discovery-icon">&#11088;</span>
-          <strong>Best Deals</strong>
-          <span class="discovery-desc">Top value picks right now</span>
-        </a>
-        <a class="discovery-card" href="#offersSection" data-focus="offersSection">
-          <span class="discovery-icon">&#128203;</span>
-          <strong>See All</strong>
-          <span class="discovery-desc">Full table with filters</span>
-        </a>
-      </div>
+    <nav class="section-tabs reveal" aria-label="Dashboard sections">
+      <a href="#mapSection">Map</a>
+      <a href="#picksSection">Best deals</a>
+      <a href="#placeSection">Regions</a>
+      <a href="#styleSection">Styles</a>
+      <a href="#offersSection">All offers</a>
     </nav>
 
-    <section id="mapSection" class="browse-section hero-layout reveal">
+    <section id="mapSection" class="browse-section hero-layout reveal is-active">
       <article class="panel map-panel">
         <div class="panel-heading">
           <div>
@@ -144,7 +131,7 @@
       </aside>
     </section>
 
-    <section id="picksSection" class="browse-section panel picks-panel reveal">
+    <section id="picksSection" class="browse-section panel picks-panel reveal is-active">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Top Picks</p>
@@ -155,7 +142,7 @@
       <div id="topPicks" class="pick-grid"></div>
     </section>
 
-    <section id="placeSection" class="browse-section panel explorer-panel reveal">
+    <section id="placeSection" class="browse-section panel explorer-panel reveal is-active">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Browse By Place</p>
@@ -166,7 +153,7 @@
       <div id="regionGuide" class="country-grid"></div>
     </section>
 
-    <section id="styleSection" class="browse-section panel family-panel reveal">
+    <section id="styleSection" class="browse-section panel family-panel reveal is-active">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Browse By Style</p>
@@ -177,7 +164,7 @@
       <div id="familyBoard" class="family-grid"></div>
     </section>
 
-    <section id="offersSection" class="browse-section panel table-panel">
+    <section id="offersSection" class="browse-section panel table-panel is-active">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">All Offers</p>
@@ -334,7 +321,7 @@
     </footer>
 
     <footer class="site-footer">
-      <p id="dataFreshness" class="data-freshness"></p>
+      <p class="data-freshness" data-freshness></p>
       <p>Built by <a href="https://kooexperience.com/">Haoming Koo</a> &middot; <a href="https://github.com/haomingkoo/grandcru-value-api" target="_blank" rel="noopener noreferrer">Source on GitHub</a> &middot; <a href="mailto:haomingkoo@gmail.com">Work with me</a></p>
     </footer>
   </div>

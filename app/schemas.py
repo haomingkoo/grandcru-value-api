@@ -36,6 +36,8 @@ class DealOut(BaseModel):
         default=None,
         description="Retailer comparison outcome: Platinum Cheaper, Grand Cru Cheaper, Same Price, or No Match.",
     )
+    platinum_in_stock: bool | None = None
+    grand_cru_in_stock: bool | None = None
     platinum_url: str | None = None
     grand_cru_url: str | None = None
     vivino_url: str | None = None
@@ -124,6 +126,8 @@ class DealHistoryOut(BaseModel):
         default=None,
         description="Signed percentage: (Platinum - Grand Cru) / Grand Cru * 100. Negative means Platinum cheaper; positive means Grand Cru cheaper.",
     )
+    platinum_in_stock: bool | None = None
+    grand_cru_in_stock: bool | None = None
     deal_score: float = Field(
         description="0-100 ranking score using discount, Vivino rating, and rating-count confidence.",
     )

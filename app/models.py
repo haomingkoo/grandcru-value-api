@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Float, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -23,6 +23,8 @@ class WineDeal(Base):
     price_diff: Mapped[float | None] = mapped_column(Float, nullable=True)
     price_diff_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     cheaper_side: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    platinum_in_stock: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    grand_cru_in_stock: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     platinum_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     grand_cru_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -100,6 +102,8 @@ class WineDealSnapshot(Base):
     price_diff: Mapped[float | None] = mapped_column(Float, nullable=True)
     price_diff_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     cheaper_side: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    platinum_in_stock: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    grand_cru_in_stock: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     platinum_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     grand_cru_url: Mapped[str | None] = mapped_column(String(512), nullable=True)

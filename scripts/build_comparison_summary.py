@@ -150,6 +150,15 @@ def is_truthy_stock(value: str | None) -> bool:
     return text in {"true", "1", "yes", "y", "in_stock", "in stock", "available"}
 
 
+def normalized_stock(value: str | None) -> str:
+    text = (value or "").strip().lower()
+    if text in {"true", "1", "yes", "y", "in_stock", "in stock", "available"}:
+        return "true"
+    if text in {"false", "0", "no", "n", "out_of_stock", "out of stock", "sold out", "unavailable"}:
+        return "false"
+    return ""
+
+
 def jaccard_similarity(a: str, b: str) -> float:
     set_a = set(a.split())
     set_b = set(b.split())
@@ -192,6 +201,7 @@ def prepare_rows(rows: list[dict[str, str]], *, enforce_in_stock: bool = False) 
                 "name": name,
                 "price": (row.get("price") or "").strip(),
                 "url": url,
+                "in_stock": normalized_stock(row.get("in_stock")),
                 "quantity": quantity,
                 "volume": volume,
                 "year": year,
@@ -246,6 +256,7 @@ def build_matches(
                     "volume_plat": plat["volume"],
                     "price_plat": plat["price"],
                     "url_plat": plat["url"],
+                    "platinum_in_stock": plat.get("in_stock") or "",
                     "platinum_vivino_rating": plat.get("platinum_vivino_rating") or "",
                     "platinum_vivino_num_ratings": plat.get("platinum_vivino_num_ratings") or "",
                     "platinum_vivino_url": plat.get("platinum_vivino_url") or "",
@@ -255,6 +266,7 @@ def build_matches(
                     "volume_main": best_same_pack["volume"],
                     "price_main": best_same_pack["price"],
                     "url_main": best_same_pack["url"],
+                    "grand_cru_in_stock": best_same_pack.get("in_stock") or "",
                     "match_method": "name_same_bundle",
                     "match_score": round(best_same_pack_score, 4),
                 }
@@ -268,6 +280,7 @@ def build_matches(
                     "volume_plat": plat["volume"],
                     "price_plat": plat["price"],
                     "url_plat": plat["url"],
+                    "platinum_in_stock": plat.get("in_stock") or "",
                     "platinum_vivino_rating": plat.get("platinum_vivino_rating") or "",
                     "platinum_vivino_num_ratings": plat.get("platinum_vivino_num_ratings") or "",
                     "platinum_vivino_url": plat.get("platinum_vivino_url") or "",
@@ -277,6 +290,7 @@ def build_matches(
                     "volume_main": best_cross_pack["volume"],
                     "price_main": best_cross_pack["price"],
                     "url_main": best_cross_pack["url"],
+                    "grand_cru_in_stock": best_cross_pack.get("in_stock") or "",
                     "match_method": "name_cross_bundle",
                     "match_score": round(best_cross_pack_score, 4),
                 }
@@ -291,6 +305,7 @@ def build_matches(
                     "volume_plat": plat["volume"],
                     "price_plat": plat["price"],
                     "url_plat": plat["url"],
+                    "platinum_in_stock": plat.get("in_stock") or "",
                     "platinum_vivino_rating": plat.get("platinum_vivino_rating") or "",
                     "platinum_vivino_num_ratings": plat.get("platinum_vivino_num_ratings") or "",
                     "platinum_vivino_url": plat.get("platinum_vivino_url") or "",
@@ -300,6 +315,7 @@ def build_matches(
                     "volume_main": None,
                     "price_main": None,
                     "url_main": "",
+                    "grand_cru_in_stock": "",
                     "match_method": "no_match",
                     "match_score": round(best_score, 4),
                 }
@@ -359,6 +375,8 @@ def build_summary(matched_rows: list[dict[str, object]]) -> list[dict[str, objec
                 "cheaper_side": cheaper_side,
                 "url_plat": row["url_plat"],
                 "url_main": row["url_main"],
+                "platinum_in_stock": row.get("platinum_in_stock") or "",
+                "grand_cru_in_stock": row.get("grand_cru_in_stock") or "",
                 "platinum_vivino_rating": row.get("platinum_vivino_rating") or "",
                 "platinum_vivino_num_ratings": row.get("platinum_vivino_num_ratings") or "",
                 "platinum_vivino_url": row.get("platinum_vivino_url") or "",
@@ -408,6 +426,7 @@ def main() -> None:
                 "volume_plat",
                 "price_plat",
                 "url_plat",
+                "platinum_in_stock",
                 "platinum_vivino_rating",
                 "platinum_vivino_num_ratings",
                 "platinum_vivino_url",
@@ -417,6 +436,7 @@ def main() -> None:
                 "volume_main",
                 "price_main",
                 "url_main",
+                "grand_cru_in_stock",
                 "match_method",
                 "match_score",
             ],
@@ -437,6 +457,8 @@ def main() -> None:
             "cheaper_side",
             "url_plat",
             "url_main",
+            "platinum_in_stock",
+            "grand_cru_in_stock",
             "platinum_vivino_rating",
             "platinum_vivino_num_ratings",
             "platinum_vivino_url",

@@ -79,7 +79,6 @@ const els = {}
 
 document.addEventListener("DOMContentLoaded", async () => {
   initScrollReveal()
-  initDiscoveryFocus()
   captureElements()
   hydrateStateFromUrl()
   bindEvents()
@@ -97,8 +96,9 @@ async function loadDataFreshness() {
     if (ingestion && ingestion.finished_at) {
       const dt = new Date(ingestion.finished_at)
       const ago = formatTimeAgo(dt)
-      const el = document.getElementById("dataFreshness")
-      if (el) el.textContent = `Data updated ${ago} \u00b7 ${ingestion.merged_rows} live offers`
+      document.querySelectorAll("[data-freshness]").forEach((el) => {
+        el.textContent = `Data updated ${ago} \u00b7 ${ingestion.merged_rows} live offers`
+      })
     }
   } catch (_) { /* silent */ }
 }
@@ -129,83 +129,10 @@ function initScrollReveal() {
   document.querySelectorAll(".reveal").forEach((el) => observer.observe(el))
 }
 
-function initDiscoveryFocus() {
-  const cards = document.querySelectorAll(".discovery-card[data-focus]")
-
-  cards.forEach((card) => {
-    card.addEventListener("click", (event) => {
-      event.preventDefault()
-      const ids = card.dataset.focus.split(",")
-      activateSections(ids)
-    })
-  })
-}
-
-function activateSections(ids) {
-  const sections = document.querySelectorAll(".browse-section")
-  const hub = document.querySelector(".discovery-hub")
-  const show = new Set(ids)
-
-  sections.forEach((section) => {
-    if (show.has(section.id)) {
-      section.classList.add("is-active", "visible")
-    } else {
-      section.classList.remove("is-active")
-    }
-  })
-
-  if (hub) hub.classList.add("is-hidden")
-  showBackButton()
-
-  // Invalidate map size if it just became visible
-  if (show.has("mapSection") && originMap) {
-    window.setTimeout(() => {
-      originMap.invalidateSize()
-      if (latestMapPoints.length) renderMap(latestMapPoints)
-    }, 100)
-  }
-
-  const first = document.querySelector(".browse-section.is-active")
-  if (first) first.scrollIntoView({ behavior: "smooth", block: "start" })
-}
-
-function showBackButton() {
-  const existing = document.querySelector(".back-to-top")
-  if (existing) return
-
-  const backBtn = document.createElement("button")
-  backBtn.className = "back-to-top"
-  backBtn.type = "button"
-  backBtn.textContent = "Back to explore"
-  backBtn.addEventListener("click", () => exitFocusMode())
-
-  const first = document.querySelector(".browse-section.is-active")
-  if (first) first.before(backBtn)
-}
-
-function exitFocusMode() {
-  const sections = document.querySelectorAll(".browse-section")
-  const hub = document.querySelector(".discovery-hub")
-  const backBtn = document.querySelector(".back-to-top")
-
-  // Hide all sections, show hub
-  sections.forEach((section) => section.classList.remove("is-active"))
-  if (hub) hub.classList.remove("is-hidden")
-  if (backBtn) backBtn.remove()
-
-  // Clear all filters
-  Object.assign(state, { ...defaultState })
-  mapFocusCountry = ""
-  syncControlsFromState()
-  loadDashboard()
-  window.scrollTo({ top: 0, behavior: "smooth" })
-}
-
 function scrollToOffers() {
   const section = document.getElementById("offersSection")
   if (!section) return
-  section.classList.add("is-active", "visible")
-  showBackButton()
+  section.classList.add("visible")
   section.scrollIntoView({ behavior: "smooth", block: "start" })
 }
 
@@ -449,7 +376,7 @@ async function loadDashboard() {
 
     latestMapPoints = mapPoints
     renderResultsMeta(deals)
-    renderHeroStats(deals, mapPoints)
+    renderHeroStats(deals)
     renderDealMix(stats.cheaper_sides || [])
     renderOfferingMix(stats.offering_types || [])
     renderCountryQuickFilters(stats.countries || [])
@@ -603,20 +530,104 @@ function syncSortButtons() {
   })
 }
 
+function hasGrandCruMatch(deal) {
+  return deal.price_grand_cru != null
+}
+
+function hasVivinoMarket(deal) {
+  return deal.price_platinum != null && deal.vivino_price != null && deal.vivino_price > 0
+}
+
+function marketGapPct(deal) {
+  if (!hasVivinoMarket(deal)) return null
+  return ((deal.price_platinum - deal.vivino_price) / deal.vivino_price) * 100
+}
+
+function displayCheaperSide(value) {
+  return value === "No Match" ? "No Grand Cru" : value
+}
+
+function coverageStatus(deal) {
+  if (hasGrandCruMatch(deal)) {
+    return {
+      label: "Grand Cru matched",
+      tone: "retailer",
+    }
+  }
+  if (hasVivinoMarket(deal)) {
+    return {
+      label: "Vivino market only",
+      tone: "market",
+    }
+  }
+  return {
+    label: "Needs source",
+    tone: "missing",
+  }
+}
+
+function coverageChipHtml(deal) {
+  const status = coverageStatus(deal)
+  return `<span class="coverage-chip ${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span>`
+}
+
+function availabilityStatus(deal) {
+  if (deal.platinum_in_stock === false) {
+    return {
+      label: "Platinum unavailable",
+      tone: "missing",
+    }
+  }
+  if (deal.platinum_in_stock !== true) {
+    return {
+      label: "Availability pending",
+      tone: "missing",
+    }
+  }
+  if (hasGrandCruMatch(deal) && deal.grand_cru_in_stock === false) {
+    return {
+      label: "GC catalog only",
+      tone: "market",
+    }
+  }
+  if (hasGrandCruMatch(deal) && deal.grand_cru_in_stock === true) {
+    return {
+      label: "Both available",
+      tone: "retailer",
+    }
+  }
+  if (hasGrandCruMatch(deal)) {
+    return {
+      label: "GC stock pending",
+      tone: "missing",
+    }
+  }
+  return {
+    label: "Platinum available",
+    tone: "retailer",
+  }
+}
+
+function availabilityChipHtml(deal) {
+  const status = availabilityStatus(deal)
+  return `<span class="coverage-chip ${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span>`
+}
+
 function renderResultsMeta(deals) {
   const wineCount = groupDealsIntoFamilies(deals).length
-  const comparableCount = deals.filter((deal) => deal.price_diff_pct !== null).length
+  const comparableCount = deals.filter(hasGrandCruMatch).length
+  const marketOnlyCount = deals.filter((deal) => !hasGrandCruMatch(deal) && hasVivinoMarket(deal)).length
   const matchCopy = state.comparableOnly
     ? `${deals.length} Grand Cru-matched offers`
-    : `${deals.length} live offers · ${comparableCount} with Grand Cru match`
+    : `${deals.length} live offers · ${comparableCount} Grand Cru · ${marketOnlyCount} market-only`
   els.resultsMeta.textContent = `${wineCount} wines · ${matchCopy} - ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
 }
 
-function renderHeroStats(deals, mapPoints) {
-  const comparableCount = deals.filter((deal) => deal.price_diff_pct !== null).length
+function renderHeroStats(deals) {
+  const comparableCount = deals.filter(hasGrandCruMatch).length
+  const marketOnlyCount = deals.filter((deal) => !hasGrandCruMatch(deal) && hasVivinoMarket(deal)).length
+  const needsSourceCount = deals.filter((deal) => !hasGrandCruMatch(deal) && !hasVivinoMarket(deal)).length
   const platinumCheaper = deals.filter((deal) => deal.cheaper_side === "Platinum Cheaper").length
-  const strongSpends = deals.filter((deal) => resolveVerdict(deal).label === "Strong Credit Spend").length
-  const countries = new Set(mapPoints.map((point) => point.country).filter(Boolean)).size
 
   const comparableDiffs = deals
     .filter((deal) => typeof deal.price_diff_pct === "number")
@@ -627,9 +638,14 @@ function renderHeroStats(deals, mapPoints) {
 
   const cards = [
     {
-      label: "Comparable now",
+      label: "Grand Cru matched",
       value: String(comparableCount),
       detail: "Wines with a real retailer price comparison.",
+    },
+    {
+      label: "Market-only reads",
+      value: String(marketOnlyCount),
+      detail: "No Grand Cru match, but Vivino gives market context.",
     },
     {
       label: "Platinum cheaper",
@@ -637,14 +653,9 @@ function renderHeroStats(deals, mapPoints) {
       detail: "Bottles where Platinum currently beats Grand Cru.",
     },
     {
-      label: "Strong spends",
-      value: String(strongSpends),
-      detail: "4.0+ wines with 100+ ratings and no Platinum markup.",
-    },
-    {
-      label: "Map coverage",
-      value: String(countries),
-      detail: avgGap,
+      label: "Needs source",
+      value: String(needsSourceCount),
+      detail: needsSourceCount ? "No Grand Cru or Vivino market price yet." : avgGap,
     },
   ]
 
@@ -663,9 +674,9 @@ function renderHeroStats(deals, mapPoints) {
 
 function renderDealMix(items) {
   renderBarList(els.dealMixChart, items, (item) => ({
-    label: item.value,
+    label: displayCheaperSide(item.value),
     value: item.count,
-    detail: `${item.count} wines`,
+    detail: item.value === "No Match" ? `${item.count} without Grand Cru` : `${item.count} wines`,
     tone: toneForCheaperSide(item.value),
   }))
 }
@@ -1250,6 +1261,7 @@ function renderTable(deals) {
               <div class="price-line"><span class="price-label muted">Grand Cru</span><span class="muted">${formatMoney(deal.price_grand_cru)}</span></div>
               ${deal.vivino_price ? `<div class="price-line" title="Vivino price scaled to the same magnum/bundle total as the Platinum listing (magnum ×2, bundles ×quantity)."><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span></div>` : ""}
               ${deal.price_market ? `<div class="price-line" title="Wine-Searcher global average price per 750ml, scaled to match this listing's quantity/volume. Updated weekly."><span class="price-label muted">Global avg</span><span class="muted">${formatMoney(deal.price_market)}</span></div>` : ""}
+              <div class="coverage-line">${coverageChipHtml(deal)}${availabilityChipHtml(deal)}</div>
             </div>
             <div class="trend-list">
               ${renderTrendChip("P 7d", deal.price_platinum_change_7d, deal.platinum_trend_7d)}
@@ -1633,10 +1645,32 @@ function resolveVerdict(deal) {
     }
   }
   if (deal.cheaper_side === "No Match") {
+    const marketGap = marketGapPct(deal)
+    if (marketGap != null) {
+      if (Math.abs(marketGap) < 1) {
+        return {
+          label: "At Market",
+          tone: "calm",
+          detail: "No Grand Cru match, but Platinum is aligned with Vivino market.",
+        }
+      }
+      if (marketGap < 0) {
+        return {
+          label: "Market Value",
+          tone: "good",
+          detail: "No Grand Cru match, but Platinum is below Vivino market.",
+        }
+      }
+      return {
+        label: "Market Risk",
+        tone: "warn",
+        detail: "No Grand Cru match, and Platinum is above Vivino market.",
+      }
+    }
     return {
-      label: "Quality Only",
+      label: "Needs Source",
       tone: "ghost",
-      detail: "Interesting wine, but there is no retailer comparison yet.",
+      detail: "No Grand Cru match or Vivino market price is available yet.",
     }
   }
   return {
@@ -1658,8 +1692,14 @@ function compactVerdictLabel(label) {
       return "Match"
     case "Platinum Markup":
       return "Markup"
-    case "Quality Only":
-      return "No Comp"
+    case "Market Value":
+      return "Market Value"
+    case "At Market":
+      return "At Market"
+    case "Market Risk":
+      return "Market Risk"
+    case "Needs Source":
+      return "Needs Source"
     case "Needs Review":
       return "Review"
     default:
@@ -1679,14 +1719,20 @@ function recommendationScore(deal) {
 
 function gapDisplay(deal) {
   if (deal.price_diff_pct == null) {
-    return "No match"
+    return hasVivinoMarket(deal) ? "Market" : "No source"
   }
   return `${formatPct(deal.price_diff_pct_abs, 1)}`
 }
 
 function gapNarrative(deal) {
   if (deal.price_diff_pct == null) {
-    return "No Grand Cru comparison available."
+    if (hasVivinoMarket(deal)) {
+      const marketGap = marketGapPct(deal)
+      if (Math.abs(marketGap) < 1) return "No Grand Cru match, but Platinum is aligned with Vivino market."
+      const label = marketGap < 0 ? "below" : "above"
+      return `No Grand Cru match; Platinum is ${formatPct(Math.abs(marketGap), 1)} ${label} Vivino market.`
+    }
+    return "No Grand Cru or Vivino market price available."
   }
   if (deal.cheaper_side === "Platinum Cheaper") {
     return `Platinum is cheaper by ${formatPct(deal.price_diff_pct_abs, 1)}.`
@@ -1732,7 +1778,7 @@ function actionLink(url, label, tone = "secondary") {
 
 function gapLabel(deal, vs) {
   if (vs === "gc") {
-    if (deal.price_diff_pct == null) return "No Grand Cru match"
+    if (deal.price_diff_pct == null) return hasVivinoMarket(deal) ? "No Grand Cru - Vivino priced" : "No Grand Cru or market price"
     if (deal.cheaper_side === "Platinum Cheaper") return `vs Grand Cru`
     if (deal.cheaper_side === "Grand Cru Cheaper") return `vs Grand Cru`
     return "Same as Grand Cru"
@@ -1763,6 +1809,12 @@ function pickVivinoLabel(deal) {
 function gapTone(deal) {
   if (deal.cheaper_side === "Platinum Cheaper") return "gain"
   if (deal.cheaper_side === "Grand Cru Cheaper") return "loss"
+  if (deal.cheaper_side === "No Match") {
+    const marketGap = marketGapPct(deal)
+    if (marketGap == null) return "flat"
+    if (marketGap <= -3) return "gain"
+    if (marketGap >= 3) return "loss"
+  }
   return "flat"
 }
 
@@ -1915,7 +1967,12 @@ function familyOriginLine(family) {
 
 function gapShortCopy(deal) {
   if (deal.price_diff_pct == null) {
-    return "No direct comparison"
+    const marketGap = marketGapPct(deal)
+    if (marketGap == null) return "Needs source"
+    if (Math.abs(marketGap) < 1) return "At market"
+    return marketGap < 0
+      ? `${formatPct(Math.abs(marketGap), 0)} below market`
+      : `${formatPct(Math.abs(marketGap), 0)} above market`
   }
   if (deal.cheaper_side === "Platinum Cheaper") {
     return `Platinum -${formatPct(deal.price_diff_pct_abs, 1)}`

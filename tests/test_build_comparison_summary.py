@@ -57,6 +57,8 @@ def test_grandcru_catalog_match_can_use_out_of_stock_reference_rows() -> None:
 
     assert summary[0]["cheaper_side"] == "Same Price"
     assert summary[0]["url_main"] == "https://grandcruwines.com/products/2022-la-croix-de-brully-chassagne-montrachet-la-goujonne"
+    assert summary[0]["platinum_in_stock"] == "true"
+    assert summary[0]["grand_cru_in_stock"] == "false"
 
 
 def test_standard_bottle_does_not_match_gift_set_variant() -> None:
