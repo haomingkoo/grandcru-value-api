@@ -74,6 +74,7 @@ def test_resolve_rows_applies_cached_match() -> None:
             "url_main": "",
             "platinum_in_stock": "true",
             "grand_cru_in_stock": "",
+            "image_url": "https://8362297.app.netsuite.com/core/media/media.nl?id=1",
             "platinum_vivino_rating": "",
             "platinum_vivino_num_ratings": "",
             "platinum_vivino_url": "",
@@ -119,6 +120,7 @@ def test_resolve_rows_applies_cached_match() -> None:
     assert updated_rows[0]["price_main"] == "45.00"
     assert updated_rows[0]["platinum_in_stock"] == "true"
     assert updated_rows[0]["grand_cru_in_stock"] == "false"
+    assert updated_rows[0]["image_url"] == "https://8362297.app.netsuite.com/core/media/media.nl?id=1"
 
 
 def test_apply_match_scales_bundle_prices() -> None:
@@ -153,6 +155,7 @@ def test_comparison_fieldnames_preserve_availability_and_extra_columns() -> None
                 "name_plat": "Example",
                 "url_main": "",
                 "platinum_in_stock": "true",
+                "image_url": "https://8362297.app.netsuite.com/core/media/media.nl?id=1",
                 "custom_review_column": "keep",
             }
         ]
@@ -160,4 +163,5 @@ def test_comparison_fieldnames_preserve_availability_and_extra_columns() -> None
 
     assert "platinum_in_stock" in fields
     assert "grand_cru_in_stock" in fields
+    assert "image_url" in fields
     assert "custom_review_column" in fields

@@ -61,6 +61,7 @@ DEAL_EXTRA_COLUMNS = (
     ("origin_latitude", "FLOAT"),
     ("origin_longitude", "FLOAT"),
     ("origin_precision", "VARCHAR(32)"),
+    ("image_url", "VARCHAR(1024)"),
 )
 
 SNAPSHOT_FIELDS = {
@@ -1035,6 +1036,7 @@ def import_data(
                 "platinum_url": normalize_platinum_url(row.get("url_plat")),
                 "grand_cru_url": grand_cru_url,
                 "vivino_url": vivino_url,
+                "image_url": normalize_url(row.get("image_url")),
                 "vivino_rating": vivino_rating,
                 "vivino_num_ratings": vivino_num_ratings,
                 "vivino_price": vivino_price_adjusted,

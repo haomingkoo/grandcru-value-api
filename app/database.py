@@ -41,6 +41,7 @@ _ALLOWED_COLUMNS = {
     "vivino_match_method",
     "platinum_in_stock",
     "grand_cru_in_stock",
+    "image_url",
     "vivino_price",
     "vivino_description",
     "producer",

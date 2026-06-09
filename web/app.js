@@ -544,7 +544,7 @@ function marketGapPct(deal) {
 }
 
 function displayCheaperSide(value) {
-  return value === "No Match" ? "No Grand Cru" : value
+  return value === "No Match" ? "Platinum-only" : value
 }
 
 function coverageStatus(deal) {
@@ -613,6 +613,25 @@ function availabilityChipHtml(deal) {
   return `<span class="coverage-chip ${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span>`
 }
 
+function wineInitials(deal) {
+  const parts = [deal.producer, deal.label_name || deal.wine_name]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\b(19|20)\d{2}\b/g, "")
+    .split(/\s+/)
+    .filter((part) => part.length > 2)
+  return (parts[0]?.[0] || "W") + (parts[1]?.[0] || "")
+}
+
+function wineImageHtml(deal, className) {
+  const initials = wineInitials(deal).toUpperCase()
+  const baseClass = `${className} wine-image${deal.image_url ? " has-image" : " is-empty"}`
+  const image = deal.image_url
+    ? `<img src="${escapeHtml(deal.image_url)}" alt="${escapeHtml(deal.wine_name || "Wine bottle")}" loading="lazy" decoding="async" onerror="this.parentElement.classList.add('is-empty'); this.remove()">`
+    : ""
+  return `<div class="${escapeHtml(baseClass)}" data-initials="${escapeHtml(initials)}">${image}</div>`
+}
+
 function renderResultsMeta(deals) {
   const wineCount = groupDealsIntoFamilies(deals).length
   const comparableCount = deals.filter(hasGrandCruMatch).length
@@ -643,9 +662,9 @@ function renderHeroStats(deals) {
       detail: "Wines with a real retailer price comparison.",
     },
     {
-      label: "Market-only reads",
+      label: "Market-priced",
       value: String(marketOnlyCount),
-      detail: "No Grand Cru match, but Vivino gives market context.",
+      detail: "Platinum-only bottles with Vivino market context.",
     },
     {
       label: "Platinum cheaper",
@@ -676,7 +695,7 @@ function renderDealMix(items) {
   renderBarList(els.dealMixChart, items, (item) => ({
     label: displayCheaperSide(item.value),
     value: item.count,
-    detail: item.value === "No Match" ? `${item.count} without Grand Cru` : `${item.count} wines`,
+    detail: item.value === "No Match" ? `${item.count} Platinum offers` : `${item.count} wines`,
     tone: toneForCheaperSide(item.value),
   }))
 }
@@ -892,6 +911,9 @@ function renderTopPicks(deals) {
       const verdict = resolveVerdict(deal)
       return `
         <article class="pick-card">
+          <div class="pick-image-wrap">
+            ${wineImageHtml(deal, "pick-image")}
+          </div>
           <div class="pick-card-top">
             <div class="pick-head">
               <span class="verdict-chip ${verdict.tone}">${escapeHtml(compactVerdictLabel(verdict.label))}</span>
@@ -1236,13 +1258,18 @@ function renderTable(deals) {
       return `
         <tr class="deal-row">
           <td>
-            <div class="wine-title">${escapeHtml(displayName)}</div>
-            <div class="wine-subline">${escapeHtml(deal.producer || "Producer unknown")}</div>
-            <div class="wine-links">
-              ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
-              ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
-              ${actionLink(deal.vivino_url, "See Vivino")}
-              ${actionLink(deal.market_retailer_url, deal.price_market ? "Wine-Searcher" : "")}
+            <div class="wine-cell">
+              ${wineImageHtml(deal, "wine-thumb")}
+              <div>
+                <div class="wine-title">${escapeHtml(displayName)}</div>
+                <div class="wine-subline">${escapeHtml(deal.producer || "Producer unknown")}</div>
+                <div class="wine-links">
+                  ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
+                  ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
+                  ${actionLink(deal.vivino_url, "See Vivino")}
+                  ${actionLink(deal.market_retailer_url, deal.price_market ? "Wine-Searcher" : "")}
+                </div>
+              </div>
             </div>
           </td>
           <td>
@@ -1728,11 +1755,11 @@ function gapNarrative(deal) {
   if (deal.price_diff_pct == null) {
     if (hasVivinoMarket(deal)) {
       const marketGap = marketGapPct(deal)
-      if (Math.abs(marketGap) < 1) return "No Grand Cru match, but Platinum is aligned with Vivino market."
+      if (Math.abs(marketGap) < 1) return "Platinum-only, aligned with Vivino market."
       const label = marketGap < 0 ? "below" : "above"
-      return `No Grand Cru match; Platinum is ${formatPct(Math.abs(marketGap), 1)} ${label} Vivino market.`
+      return `Platinum-only, ${formatPct(Math.abs(marketGap), 1)} ${label} Vivino market.`
     }
-    return "No Grand Cru or Vivino market price available."
+    return "Platinum-only, no Vivino market price available."
   }
   if (deal.cheaper_side === "Platinum Cheaper") {
     return `Platinum is cheaper by ${formatPct(deal.price_diff_pct_abs, 1)}.`
@@ -1778,7 +1805,7 @@ function actionLink(url, label, tone = "secondary") {
 
 function gapLabel(deal, vs) {
   if (vs === "gc") {
-    if (deal.price_diff_pct == null) return hasVivinoMarket(deal) ? "No Grand Cru - Vivino priced" : "No Grand Cru or market price"
+    if (deal.price_diff_pct == null) return hasVivinoMarket(deal) ? "Platinum-only, Vivino priced" : "Platinum-only, needs market"
     if (deal.cheaper_side === "Platinum Cheaper") return `vs Grand Cru`
     if (deal.cheaper_side === "Grand Cru Cheaper") return `vs Grand Cru`
     return "Same as Grand Cru"

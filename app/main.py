@@ -70,7 +70,7 @@ CONTENT_SECURITY_POLICY = (
     "object-src 'none'; "
     "frame-ancestors 'none'; "
     "form-action 'self'; "
-    "img-src 'self' data: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://unpkg.com; "
+    "img-src 'self' data: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://unpkg.com https://*.app.netsuite.com; "
     "script-src 'self' 'unsafe-inline' https://unpkg.com https://static.cloudflareinsights.com; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
     "font-src 'self' https://fonts.gstatic.com; "
@@ -101,6 +101,7 @@ def _ensure_runtime_columns() -> None:
     ensure_column("wine_deal_snapshots", "platinum_in_stock", "BOOLEAN")
     ensure_column("wine_deals", "grand_cru_in_stock", "BOOLEAN")
     ensure_column("wine_deal_snapshots", "grand_cru_in_stock", "BOOLEAN")
+    ensure_column("wine_deals", "image_url", "VARCHAR(1024)")
     ensure_column("wine_deals", "vivino_price", "FLOAT")
     ensure_column("wine_deals", "vivino_description", "VARCHAR(512)")
     for column, col_type in DEAL_EXTRA_COLUMNS:

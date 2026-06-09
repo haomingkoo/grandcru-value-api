@@ -41,6 +41,7 @@ class DealOut(BaseModel):
     platinum_url: str | None = None
     grand_cru_url: str | None = None
     vivino_url: str | None = None
+    image_url: str | None = None
     vivino_rating: float | None = None
     vivino_num_ratings: int | None = None
     vivino_price: float | None = None

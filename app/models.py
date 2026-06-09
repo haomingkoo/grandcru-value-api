@@ -29,6 +29,7 @@ class WineDeal(Base):
     platinum_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     grand_cru_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     vivino_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
     vivino_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     vivino_num_ratings: Mapped[int | None] = mapped_column(Integer, nullable=True)

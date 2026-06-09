@@ -47,6 +47,7 @@ def test_grandcru_catalog_match_can_use_out_of_stock_reference_rows() -> None:
                 "price": "130.00",
                 "url": "https://platwineclub.wineportal.com/wines/2022-la-croix-de-brully-chassagne-montrachet-la-goujonne-white-750-ml-standard-bottle",
                 "in_stock": "true",
+                "image_url": "https://8362297.app.netsuite.com/core/media/media.nl?id=1",
             }
         ],
         enforce_in_stock=True,
@@ -59,6 +60,7 @@ def test_grandcru_catalog_match_can_use_out_of_stock_reference_rows() -> None:
     assert summary[0]["url_main"] == "https://grandcruwines.com/products/2022-la-croix-de-brully-chassagne-montrachet-la-goujonne"
     assert summary[0]["platinum_in_stock"] == "true"
     assert summary[0]["grand_cru_in_stock"] == "false"
+    assert summary[0]["image_url"] == "https://8362297.app.netsuite.com/core/media/media.nl?id=1"
 
 
 def test_standard_bottle_does_not_match_gift_set_variant() -> None:

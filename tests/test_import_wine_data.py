@@ -235,6 +235,7 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
                 "url_main",
                 "platinum_in_stock",
                 "grand_cru_in_stock",
+                "image_url",
             ],
             [
                 {
@@ -251,6 +252,7 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
                     "url_main": "https://example.com/grandcru/test-cuvee",
                     "platinum_in_stock": "true",
                     "grand_cru_in_stock": "false",
+                    "image_url": "https://8362297.app.netsuite.com/core/media/media.nl?id=1",
                 }
             ],
         )
@@ -362,6 +364,14 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self.assertFalse(deal.grand_cru_in_stock)
         self.assertTrue(snapshot.platinum_in_stock)
         self.assertFalse(snapshot.grand_cru_in_stock)
+
+    def test_import_persists_platinum_image_url(self) -> None:
+        self._write_seed_files("Bright cherry, cedar, graphite.")
+        self._run_import()
+
+        deal = self._current_deal()
+
+        self.assertEqual(deal.image_url, "https://8362297.app.netsuite.com/core/media/media.nl?id=1")
 
     def test_empty_comparison_refuses_to_replace_existing_data(self) -> None:
         self._write_seed_files("Keep this row.")

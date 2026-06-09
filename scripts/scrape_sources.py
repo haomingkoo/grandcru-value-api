@@ -121,6 +121,20 @@ def first_non_empty_text(root, selectors: list[str]) -> str:
     return "N/A"
 
 
+def extract_platinum_image_url(card, base_url: str) -> str:
+    for image in card.find_elements(By.CSS_SELECTOR, "img"):
+        src = (image.get_attribute("src") or "").strip()
+        alt = (image.get_attribute("alt") or "").strip().lower()
+        class_name = (image.get_attribute("class") or "").strip().lower()
+        if not src:
+            continue
+        if "vivino" in src.lower() or "vivino" in alt or "logo" in class_name:
+            continue
+        if "card-img" in class_name or "media.nl" in src.lower() or alt:
+            return urljoin(base_url, src)
+    return ""
+
+
 def _parse_compact_count(value: str) -> int | None:
     raw = (value or "").strip().replace(",", "")
     if not raw:
@@ -236,6 +250,7 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
     fieldnames = ["name", "price", "url"]
     optional_fields = [
         "in_stock",
+        "image_url",
         "platinum_vivino_rating",
         "platinum_vivino_num_ratings",
         "platinum_vivino_url",
@@ -496,6 +511,9 @@ def scrape_platinum(
                 "url": href,
                 "in_stock": "true" if in_stock else "false",
             }
+            image_url = extract_platinum_image_url(card, base + "/")
+            if image_url:
+                payload["image_url"] = image_url
             if vivino_fields.get("platinum_vivino_rating"):
                 payload["platinum_vivino_rating"] = vivino_fields["platinum_vivino_rating"]
             if vivino_fields.get("platinum_vivino_num_ratings"):

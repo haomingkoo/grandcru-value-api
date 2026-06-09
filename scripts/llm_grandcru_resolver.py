@@ -53,6 +53,7 @@ DEFAULT_COMPARISON_FIELDS = [
     "url_main",
     "platinum_in_stock",
     "grand_cru_in_stock",
+    "image_url",
     "platinum_vivino_rating",
     "platinum_vivino_num_ratings",
     "platinum_vivino_url",
