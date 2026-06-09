@@ -346,6 +346,7 @@ def robots_txt() -> PlainTextResponse:
                 "Disallow: /docs",
                 "Disallow: /redoc",
                 "Disallow: /openapi.json",
+                f"LLMs: {CANONICAL_BASE_URL}/llms.txt",
                 f"Sitemap: {CANONICAL_BASE_URL}/sitemap.xml",
                 "",
             ]
@@ -365,12 +366,6 @@ def sitemap_xml() -> Response:
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
-  <url>
-    <loc>{CANONICAL_BASE_URL}/legal</loc>
-    <lastmod>{lastmod}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
-  </url>
 </urlset>
 """
     return Response(
@@ -378,6 +373,95 @@ def sitemap_xml() -> Response:
         media_type="application/xml",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+@app.get("/social-card.svg", include_in_schema=False)
+def social_card_svg() -> Response:
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f2e2d5"/>
+  <rect y="0" width="1200" height="84" fill="#651c32"/>
+  <circle cx="955" cy="326" r="178" fill="#fef6ee" stroke="#651c32" stroke-width="4"/>
+  <circle cx="955" cy="326" r="112" fill="#651c32"/>
+  <text x="72" y="68" fill="#fef6ee" font-family="Arial, sans-serif" font-size="34" font-weight="700">MINMAX WINE</text>
+  <text x="72" y="216" fill="#651c32" font-family="Arial Narrow, Arial, sans-serif" font-size="82" font-weight="700">THE CREDIT CELLAR</text>
+  <text x="76" y="294" fill="#651c32" font-family="Georgia, serif" font-size="34">Platinum Wine Club, Grand Cru, and Vivino market checks.</text>
+  <text x="76" y="352" fill="#651c32" font-family="Georgia, serif" font-size="30">Live Singapore wine value tracker by Haoming Koo.</text>
+  <rect x="76" y="420" width="278" height="56" rx="28" fill="#ef6079"/>
+  <text x="112" y="457" fill="#fef6ee" font-family="Georgia, serif" font-size="24" font-weight="700">Compare live offers</text>
+  <text x="895" y="342" fill="#fef6ee" font-family="Arial Narrow, Arial, sans-serif" font-size="76" font-weight="700">SGD</text>
+</svg>
+"""
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/llms.txt", response_class=PlainTextResponse, include_in_schema=False)
+def llms_txt(session: Session = Depends(get_session)) -> PlainTextResponse:
+    total_deals = count_deals(session)
+    text = f"""# MinMax Wine
+
+MinMax Wine is a Singapore wine price comparison and deal-scoring web app by Haoming Koo.
+
+URL: {CANONICAL_BASE_URL}/
+Source: https://github.com/haomingkoo/grandcru-value-api
+Purpose: compare Platinum Wine Club offers against Grand Cru Wines and Vivino market context.
+Current coverage: {total_deals} live Platinum offers in the production database.
+Data sources: Platinum Wine Club inventory and prices, Grand Cru Wines comparison prices, Vivino ratings and market prices.
+Important note: prices and availability can change; users should verify on the merchant site before purchase.
+
+Useful endpoints:
+- {CANONICAL_BASE_URL}/
+- {CANONICAL_BASE_URL}/deals
+- {CANONICAL_BASE_URL}/deals/stats
+- {CANONICAL_BASE_URL}/llms-full.txt
+"""
+    return PlainTextResponse(text, headers={"Cache-Control": "public, max-age=3600"})
+
+
+def _money(value: float | None) -> str:
+    return "-" if value is None else f"SGD {value:,.2f}"
+
+
+@app.get("/llms-full.txt", response_class=PlainTextResponse, include_in_schema=False)
+def llms_full_txt(session: Session = Depends(get_session)) -> PlainTextResponse:
+    deals = list_deals(session, limit=5, offset=0, sort_by="deal_score", sort_order="desc")
+    stats = get_deal_stats(session)
+    cheaper_sides = {item["value"]: item["count"] for item in stats.get("cheaper_sides", [])}
+    comparable_count = sum(
+        cheaper_sides.get(label, 0)
+        for label in ("Platinum Cheaper", "Grand Cru Cheaper", "Same Price")
+    )
+    lines = [
+        "# MinMax Wine - full discovery notes",
+        "",
+        "MinMax Wine helps Singapore wine buyers decide whether a Platinum Wine Club offer is good value.",
+        "It compares Platinum prices with strict Grand Cru Wines matches and Vivino market prices where available.",
+        "The app also tracks seven-day and thirty-day price movement, source coverage, Vivino ratings, and offer formats such as single bottles, magnums, bundles, and cases.",
+        "",
+        f"Canonical URL: {CANONICAL_BASE_URL}/",
+        "Creator: Haoming Koo",
+        "Source code: https://github.com/haomingkoo/grandcru-value-api",
+        "Data caveat: prices and availability are not guaranteed and should be verified on merchant sites before purchase.",
+        "",
+        "Current production stats:",
+        f"- Live offers: {stats.get('total_deals', 0)}",
+        f"- Grand Cru matched offers: {comparable_count}",
+        f"- Platinum cheaper offers: {cheaper_sides.get('Platinum Cheaper', 0)}",
+        "",
+        "Top current offers by deal score:",
+    ]
+    for deal in deals:
+        lines.append(
+            "- "
+            f"{deal.wine_name}: Platinum {_money(deal.price_platinum)}, "
+            f"Grand Cru {_money(deal.price_grand_cru)}, "
+            f"Vivino rating {deal.vivino_rating or '-'}, score {deal.deal_score:.1f}."
+        )
+    lines.append("")
+    return PlainTextResponse("\n".join(lines), headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/api")
