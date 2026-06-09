@@ -1,6 +1,6 @@
 import time
 
-from scripts.llm_grandcru_resolver import _candidate_pool, _apply_match, resolve_rows
+from scripts.llm_grandcru_resolver import _candidate_pool, _apply_match, comparison_fieldnames, resolve_rows
 from scripts.llm_utils import cache_key
 from scripts.build_comparison_summary import prepare_rows
 
@@ -24,7 +24,7 @@ def test_candidate_pool_prefers_same_year_volume_rows() -> None:
                 "url": "https://grandcruwines.com/products/2023-famille-perrin-cotes-du-rhone-reserve-blanc",
             },
         ],
-        enforce_in_stock=True,
+        enforce_in_stock=False,
     )
 
     candidates = _candidate_pool(platinum_row, grandcru_rows, max_candidates=8)
@@ -72,6 +72,8 @@ def test_resolve_rows_applies_cached_match() -> None:
             "cheaper_side": "No Match",
             "url_plat": "https://platwineclub.wineportal.com/wines/2024-famille-perrin-cotes-du-rhone-reserve-blanc-white-750-ml-standard-bottle",
             "url_main": "",
+            "platinum_in_stock": "true",
+            "grand_cru_in_stock": "",
             "platinum_vivino_rating": "",
             "platinum_vivino_num_ratings": "",
             "platinum_vivino_url": "",
@@ -83,9 +85,10 @@ def test_resolve_rows_applies_cached_match() -> None:
                 "name": "2024 Famille Perrin - Cotes du Rhone Reserve Blanc",
                 "price": "45.00",
                 "url": "https://grandcruwines.com/products/2024-famille-perrin-cotes-du-rhone-reserve-blanc",
+                "in_stock": "false",
             }
         ],
-        enforce_in_stock=True,
+        enforce_in_stock=False,
     )
     cache = {
         cache_key(comparison_rows[0]["name_plat"]): {
@@ -114,6 +117,8 @@ def test_resolve_rows_applies_cached_match() -> None:
     assert updated_rows[0]["url_main"] == "https://grandcruwines.com/products/2024-famille-perrin-cotes-du-rhone-reserve-blanc"
     assert updated_rows[0]["cheaper_side"] == "Same Price"
     assert updated_rows[0]["price_main"] == "45.00"
+    assert updated_rows[0]["platinum_in_stock"] == "true"
+    assert updated_rows[0]["grand_cru_in_stock"] == "false"
 
 
 def test_apply_match_scales_bundle_prices() -> None:
@@ -131,9 +136,28 @@ def test_apply_match_scales_bundle_prices() -> None:
     candidate.quantity = 1
     candidate.price = "210.00"
     candidate.url = "https://grandcruwines.com/products/example"
+    candidate.in_stock = "false"
 
     updated = _apply_match(row, candidate)
 
     assert updated["quantity_main"] == "1"
     assert updated["price_main"] == "630.00"
     assert updated["cheaper_side"] == "Platinum Cheaper"
+    assert updated["grand_cru_in_stock"] == "false"
+
+
+def test_comparison_fieldnames_preserve_availability_and_extra_columns() -> None:
+    fields = comparison_fieldnames(
+        [
+            {
+                "name_plat": "Example",
+                "url_main": "",
+                "platinum_in_stock": "true",
+                "custom_review_column": "keep",
+            }
+        ]
+    )
+
+    assert "platinum_in_stock" in fields
+    assert "grand_cru_in_stock" in fields
+    assert "custom_review_column" in fields

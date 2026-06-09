@@ -38,6 +38,25 @@ logging.basicConfig(
 logger = logging.getLogger("grandcru.llm_grandcru_resolver")
 
 CACHE_TTL_DAYS = 30
+DEFAULT_COMPARISON_FIELDS = [
+    "name_plat",
+    "year_plat",
+    "quantity_plat",
+    "volume_plat",
+    "quantity_main",
+    "price_plat",
+    "price_main",
+    "price_diff",
+    "price_diff_pct",
+    "cheaper_side",
+    "url_plat",
+    "url_main",
+    "platinum_in_stock",
+    "grand_cru_in_stock",
+    "platinum_vivino_rating",
+    "platinum_vivino_num_ratings",
+    "platinum_vivino_url",
+]
 
 
 @dataclass(frozen=True)
@@ -50,6 +69,7 @@ class Candidate:
     volume: str
     package_type: str
     score: float
+    in_stock: str = ""
 
 
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -66,6 +86,14 @@ def write_csv_rows(path: Path, rows: list[dict[str, str]], fieldnames: list[str]
             writer.writerow(row)
 
 
+def comparison_fieldnames(rows: list[dict[str, str]]) -> list[str]:
+    fieldnames = list(rows[0].keys()) if rows else []
+    for field in DEFAULT_COMPARISON_FIELDS:
+        if field not in fieldnames:
+            fieldnames.append(field)
+    return fieldnames
+
+
 def _build_platinum_source_row(row: dict[str, str]) -> dict[str, object]:
     prepared = prepare_rows(
         [
@@ -73,6 +101,7 @@ def _build_platinum_source_row(row: dict[str, str]) -> dict[str, object]:
                 "name": row.get("name_plat") or "",
                 "price": row.get("price_plat") or "",
                 "url": row.get("url_plat") or "",
+                "in_stock": row.get("platinum_in_stock") or "",
             }
         ],
         enforce_in_stock=False,
@@ -114,6 +143,7 @@ def _candidate_pool(
             volume=str(grandcru.get("volume") or ""),
             package_type=str(grandcru.get("package_type") or ""),
             score=round(score, 4),
+            in_stock=str(grandcru.get("in_stock") or ""),
         )
 
         if candidate.package_type == target_package:
@@ -182,6 +212,7 @@ def _apply_match(row: dict[str, str], candidate: Candidate) -> dict[str, str]:
     updated["price_diff_pct"] = f"{price_diff_pct:.2f}" if price_diff_pct is not None else ""
     updated["cheaper_side"] = cheaper_side
     updated["url_main"] = candidate.url
+    updated["grand_cru_in_stock"] = getattr(candidate, "in_stock", "") or ""
     return updated
 
 
@@ -295,23 +326,7 @@ def main() -> None:
     write_csv_rows(
         output_path,
         updated_rows,
-        [
-            "name_plat",
-            "year_plat",
-            "quantity_plat",
-            "volume_plat",
-            "quantity_main",
-            "price_plat",
-            "price_main",
-            "price_diff",
-            "price_diff_pct",
-            "cheaper_side",
-            "url_plat",
-            "url_main",
-            "platinum_vivino_rating",
-            "platinum_vivino_num_ratings",
-            "platinum_vivino_url",
-        ],
+        comparison_fieldnames(comparison_rows),
     )
     save_cache(args.cache, cache)
 
