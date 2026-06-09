@@ -121,8 +121,6 @@
       </div>
       <div class="status-stack" aria-label="Data coverage status">
         <span class="status-pill strong" data-freshness>Loading latest refresh</span>
-        <span class="status-pill">Grand Cru matches stay exact</span>
-        <span class="status-pill">Platinum-only bottles still show</span>
       </div>
     </header>
 
@@ -133,6 +131,17 @@
       <a href="#styleSection">Styles</a>
       <a href="#offersSection">All offers</a>
     </nav>
+
+    <label class="section-select reveal" for="sectionSelect">
+      <span>View</span>
+      <select id="sectionSelect" aria-label="Choose dashboard section">
+        <option value="mapSection">Map</option>
+        <option value="picksSection">Best deals</option>
+        <option value="placeSection">Regions</option>
+        <option value="styleSection">Styles</option>
+        <option value="offersSection">All offers</option>
+      </select>
+    </label>
 
     <section id="mapSection" class="browse-section hero-layout reveal is-active">
       <article class="panel map-panel">
@@ -172,7 +181,7 @@
       </aside>
     </section>
 
-    <section id="picksSection" class="browse-section panel picks-panel reveal is-active">
+    <section id="picksSection" class="browse-section panel picks-panel reveal">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Top Picks</p>
@@ -183,7 +192,7 @@
       <div id="topPicks" class="pick-grid"></div>
     </section>
 
-    <section id="placeSection" class="browse-section panel explorer-panel reveal is-active">
+    <section id="placeSection" class="browse-section panel explorer-panel reveal">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Browse By Place</p>
@@ -194,7 +203,7 @@
       <div id="regionGuide" class="country-grid"></div>
     </section>
 
-    <section id="styleSection" class="browse-section panel family-panel reveal is-active">
+    <section id="styleSection" class="browse-section panel family-panel reveal">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Browse By Style</p>
@@ -205,7 +214,7 @@
       <div id="familyBoard" class="family-grid"></div>
     </section>
 
-    <section id="offersSection" class="browse-section panel table-panel is-active">
+    <section id="offersSection" class="browse-section panel table-panel">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">All Offers</p>
@@ -215,6 +224,17 @@
       </div>
 
       <div class="table-tools">
+        <div class="mobile-filter-selects" aria-label="Quick filters">
+          <label class="field" for="mobileCountrySelect">
+            <span>Country</span>
+            <select id="mobileCountrySelect"></select>
+          </label>
+          <label class="field" for="mobileStyleSelect">
+            <span>Style</span>
+            <select id="mobileStyleSelect"></select>
+          </label>
+        </div>
+
         <div class="quick-filter-layout">
           <div class="quick-filter-block">
             <p class="eyebrow">Quick Countries</p>

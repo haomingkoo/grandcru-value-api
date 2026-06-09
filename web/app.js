@@ -80,6 +80,7 @@ const els = {}
 document.addEventListener("DOMContentLoaded", async () => {
   initScrollReveal()
   captureElements()
+  syncActiveSectionFromHash()
   hydrateStateFromUrl()
   bindEvents()
   await loadFilterOptions()
@@ -96,8 +97,12 @@ async function loadDataFreshness() {
     if (ingestion && ingestion.finished_at) {
       const dt = new Date(ingestion.finished_at)
       const ago = formatTimeAgo(dt)
+      const isLocal =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+      const label = isLocal ? "Local sample" : data.ingestion_stale ? "Refresh stale" : "Latest refresh"
       document.querySelectorAll("[data-freshness]").forEach((el) => {
-        el.textContent = `Data updated ${ago} \u00b7 ${ingestion.merged_rows} live offers`
+        el.textContent = `${label} ${ago} \u00b7 ${ingestion.merged_rows} offers`
       })
     }
   } catch (_) { /* silent */ }
@@ -148,6 +153,8 @@ function captureElements() {
   els.producerSelect = document.getElementById("producerSelect")
   els.countryQuickFilters = document.getElementById("countryQuickFilters")
   els.styleQuickFilters = document.getElementById("styleQuickFilters")
+  els.mobileCountrySelect = document.getElementById("mobileCountrySelect")
+  els.mobileStyleSelect = document.getElementById("mobileStyleSelect")
   els.comparableOnlyToggle = document.getElementById("comparableOnlyToggle")
   els.platinumOnlyToggle = document.getElementById("platinumOnlyToggle")
   els.ratingToggle = document.getElementById("ratingToggle")
@@ -165,10 +172,26 @@ function captureElements() {
   els.mapSelection = document.getElementById("mapSelection")
   els.regionGuide = document.getElementById("regionGuide")
   els.sortButtons = Array.from(document.querySelectorAll(".sort-button"))
+  els.sectionLinks = Array.from(document.querySelectorAll(".section-tabs a"))
+  els.sectionSelect = document.getElementById("sectionSelect")
 }
 
 function bindEvents() {
   document.getElementById("filtersForm").addEventListener("submit", (e) => e.preventDefault())
+
+  els.sectionLinks.forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const sectionId = link.getAttribute("href")?.slice(1)
+      if (!sectionId) return
+      event.preventDefault()
+      setActiveSection(sectionId, { updateHash: true, scroll: true })
+    })
+  })
+
+  els.sectionSelect.addEventListener("change", (event) => {
+    setActiveSection(event.target.value, { updateHash: true, scroll: true })
+  })
+  window.addEventListener("hashchange", syncActiveSectionFromHash)
 
   els.searchInput.addEventListener("input", (event) => {
     window.clearTimeout(searchDebounce)
@@ -205,6 +228,19 @@ function bindEvents() {
 
   els.styleFamilySelect.addEventListener("change", (event) => {
     state.styleFamily = event.target.value
+    loadDashboard()
+  })
+
+  els.mobileCountrySelect.addEventListener("change", (event) => {
+    state.country = event.target.value
+    state.region = ""
+    syncControlsFromState()
+    loadDashboard()
+  })
+
+  els.mobileStyleSelect.addEventListener("change", (event) => {
+    state.styleFamily = event.target.value
+    syncControlsFromState()
     loadDashboard()
   })
 
@@ -458,7 +494,7 @@ function writeStateToUrl() {
   if (state.sortBy !== defaultState.sortBy) params.set("sort_by", state.sortBy)
   if (state.sortOrder !== defaultState.sortOrder) params.set("sort_order", state.sortOrder)
   const query = params.toString()
-  window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`)
+  window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`)
 }
 
 function renderSelectOptions() {
@@ -467,9 +503,11 @@ function renderSelectOptions() {
   }
 
   populateSelect(els.countrySelect, filterOptions.countries, state.country, "All countries")
+  populateSelect(els.mobileCountrySelect, filterOptions.countries, state.country, "All countries")
   populateSelect(els.regionSelect, filterOptions.regions, state.region, "All regions")
   populateSelect(els.wineTypeSelect, filterOptions.wine_types, state.wineType, "All wine types")
   populateSelect(els.styleFamilySelect, filterOptions.style_families, state.styleFamily, "All browse styles")
+  populateSelect(els.mobileStyleSelect, filterOptions.style_families, state.styleFamily, "All styles")
   populateSelect(els.grapeSelect, filterOptions.grapes, state.grape, "All grapes")
   populateSelect(els.offeringSelect, filterOptions.offering_types, state.offeringType, "All offer shapes")
   populateSelect(els.producerSelect, filterOptions.producers, state.producer, "All producers")
@@ -497,9 +535,11 @@ function syncControlsFromState() {
   els.searchInput.value = state.search
   syncSortSelect()
   els.countrySelect.value = state.country
+  els.mobileCountrySelect.value = state.country
   els.regionSelect.value = state.region
   els.wineTypeSelect.value = state.wineType
   els.styleFamilySelect.value = state.styleFamily
+  els.mobileStyleSelect.value = state.styleFamily
   els.grapeSelect.value = state.grape
   els.offeringSelect.value = state.offeringType
   els.producerSelect.value = state.producer
@@ -508,6 +548,41 @@ function syncControlsFromState() {
   els.ratingToggle.checked = Number(state.minVivinoRating || 0) >= 4
   els.confidenceToggle.checked = Number(state.minVivinoNumRatings || 0) >= 100
   syncSortButtons()
+}
+
+function syncActiveSectionFromHash() {
+  const hashId = window.location.hash ? window.location.hash.slice(1) : ""
+  const sectionId = document.getElementById(hashId)?.classList.contains("browse-section") ? hashId : "mapSection"
+  setActiveSection(sectionId, { updateHash: false, scroll: false })
+}
+
+function setActiveSection(sectionId, { updateHash = false, scroll = false } = {}) {
+  const section = document.getElementById(sectionId)
+  if (!section?.classList.contains("browse-section")) return
+
+  document.querySelectorAll(".browse-section").forEach((el) => {
+    const active = el.id === sectionId
+    el.classList.toggle("is-active", active)
+    if (active) el.classList.add("visible")
+  })
+
+  els.sectionLinks.forEach((link) => {
+    const active = link.getAttribute("href") === `#${sectionId}`
+    link.classList.toggle("is-active", active)
+    link.setAttribute("aria-current", active ? "page" : "false")
+  })
+
+  els.sectionSelect.value = sectionId
+
+  if (updateHash) {
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${sectionId}`)
+  }
+  if (scroll) {
+    section.scrollIntoView({ block: "start" })
+  }
+  if (sectionId === "mapSection" && originMap) {
+    window.setTimeout(() => originMap.invalidateSize(), 80)
+  }
 }
 
 function syncSortSelect() {
@@ -2071,16 +2146,34 @@ function formatVivinoNotes(desc) {
   const clean = cleanVivinoDescription(desc)
   if (!clean) return ""
   const parts = clean.split(" · ")
-  if (parts.length < 2) return escapeHtml(clean)
-  const regionStyle = parts.slice(0, -1).join(" · ")
-  const notes = parts[parts.length - 1]
+  const regionStyle = parts.length >= 2 ? parts.slice(0, -1).join(" · ") : ""
+  const notes = parts.length >= 2 ? parts[parts.length - 1] : clean
   const noteParts = notes.split(". ")
   const tastingLine = noteParts[0] || ""
   const communityNote = noteParts.slice(1).join(". ").trim()
-  let html = `<span class="notes-region">${escapeHtml(regionStyle)}</span>`
-  if (tastingLine) html += `<span class="notes-tasting">${escapeHtml(tastingLine)}</span>`
-  if (communityNote) html += `<span class="notes-community">${escapeHtml(communityNote)}</span>`
-  return html
+  const preview = buildNotesPreview(communityNote || tastingLine || notes)
+  const expanded = [
+    tastingLine ? `<span class="notes-tasting">${escapeHtml(tastingLine)}</span>` : "",
+    communityNote ? `<span class="notes-community">${escapeHtml(communityNote)}</span>` : "",
+  ].join("")
+
+  return `
+    ${regionStyle ? `<span class="notes-region">${escapeHtml(regionStyle)}</span>` : ""}
+    <details class="notes-details">
+      <summary><span class="notes-preview">${escapeHtml(preview)}</span></summary>
+      <div class="notes-expanded">${expanded}</div>
+    </details>
+  `
+}
+
+function buildNotesPreview(text) {
+  const clean = String(text || "").replace(/\s+/g, " ").trim()
+  if (!clean) return "Open tasting note"
+  const sentence = clean.match(/^.{24,180}?[.!?](?=\s|$)/)
+  if (sentence) return sentence[0]
+  const words = clean.split(" ")
+  if (words.length <= 24) return clean
+  return words.slice(0, 24).join(" ")
 }
 
 function escapeHtml(value) {
