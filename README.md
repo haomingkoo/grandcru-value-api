@@ -149,7 +149,9 @@ Both daily and weekly modes run as Railway cron services. The identity cache ens
 
 ### Grand Cru Match Troubleshooting
 
-`No Match` means the Platinum row has no confirmed Grand Cru equivalent in `comparison_summary.csv`. That can be real: Grand Cru may not stock the same vintage, bottle size, bundle size, or product variant.
+`No Match` means the Platinum row has no confirmed Grand Cru catalog equivalent in `comparison_summary.csv`. That can be real: Grand Cru may not list the same vintage, bottle size, bundle size, or product variant.
+
+Platinum is filtered to in-stock rows because it is the offer source. Grand Cru is treated as a catalog/price reference, so matching can use Grand Cru rows even when Grand Cru currently marks the item out of stock.
 
 Every scrape/build refresh now writes a no-cost diagnostic report:
 

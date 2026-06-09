@@ -33,6 +33,30 @@ def test_candidate_pool_prefers_same_year_volume_rows() -> None:
     assert candidates[0].url == "https://grandcruwines.com/products/2024-famille-perrin-cotes-du-rhone-reserve-blanc"
 
 
+def test_candidate_pool_can_use_catalog_rows_when_grandcru_is_out_of_stock() -> None:
+    platinum_row = {
+        "name_plat": "2022 La Croix de Brully - Chassagne-Montrachet La Goujonne - White - 750 ml - Standard Bottle",
+        "price_plat": "130.00",
+        "url_plat": "https://platwineclub.wineportal.com/wines/2022-la-croix-de-brully-chassagne-montrachet-la-goujonne-white-750-ml-standard-bottle",
+    }
+    grandcru_rows = prepare_rows(
+        [
+            {
+                "name": "2022 La Croix de Brully - Chassagne-Montrachet La Goujonne",
+                "price": "130.00",
+                "url": "https://grandcruwines.com/products/2022-la-croix-de-brully-chassagne-montrachet-la-goujonne",
+                "in_stock": "false",
+            }
+        ],
+        enforce_in_stock=False,
+    )
+
+    candidates = _candidate_pool(platinum_row, grandcru_rows, max_candidates=8)
+
+    assert candidates
+    assert candidates[0].url == "https://grandcruwines.com/products/2022-la-croix-de-brully-chassagne-montrachet-la-goujonne"
+
+
 def test_resolve_rows_applies_cached_match() -> None:
     comparison_rows = [
         {

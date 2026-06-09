@@ -28,6 +28,37 @@ def test_prepare_rows_can_filter_out_of_stock_grandcru_rows() -> None:
     assert [row["name"] for row in rows] == ["NV Charles Heidsieck - Blanc de Blancs"]
 
 
+def test_grandcru_catalog_match_can_use_out_of_stock_reference_rows() -> None:
+    grandcru = prepare_rows(
+        [
+            {
+                "name": "2022 La Croix de Brully - Chassagne-Montrachet La Goujonne",
+                "price": "130.00",
+                "url": "https://grandcruwines.com/products/2022-la-croix-de-brully-chassagne-montrachet-la-goujonne",
+                "in_stock": "false",
+            }
+        ],
+        enforce_in_stock=False,
+    )
+    platinum = prepare_rows(
+        [
+            {
+                "name": "2022 La Croix de Brully - Chassagne-Montrachet La Goujonne - White - 750 ml - Standard Bottle",
+                "price": "130.00",
+                "url": "https://platwineclub.wineportal.com/wines/2022-la-croix-de-brully-chassagne-montrachet-la-goujonne-white-750-ml-standard-bottle",
+                "in_stock": "true",
+            }
+        ],
+        enforce_in_stock=True,
+    )
+
+    matched = build_matches(grandcru, platinum, threshold=0.6)
+    summary = build_summary(matched)
+
+    assert summary[0]["cheaper_side"] == "Same Price"
+    assert summary[0]["url_main"] == "https://grandcruwines.com/products/2022-la-croix-de-brully-chassagne-montrachet-la-goujonne"
+
+
 def test_standard_bottle_does_not_match_gift_set_variant() -> None:
     grandcru = prepare_rows(
         [

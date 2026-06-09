@@ -153,7 +153,7 @@ def main() -> None:
     args = parser.parse_args()
 
     comparison_rows = read_csv_rows(args.comparison)
-    grandcru_rows = prepare_rows(read_csv_rows(args.grandcru), enforce_in_stock=True)
+    grandcru_rows = prepare_rows(read_csv_rows(args.grandcru), enforce_in_stock=False)
     report_rows = diagnose_rows(
         comparison_rows,
         grandcru_rows,

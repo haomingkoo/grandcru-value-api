@@ -277,7 +277,7 @@ def main() -> None:
         return
 
     comparison_rows = read_csv_rows(args.comparison)
-    grandcru_rows = prepare_rows(read_csv_rows(args.grandcru), enforce_in_stock=True)
+    grandcru_rows = prepare_rows(read_csv_rows(args.grandcru), enforce_in_stock=False)
 
     cache = load_cache(args.cache)
     updated_rows, matched_count = resolve_rows(

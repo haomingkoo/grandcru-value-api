@@ -393,7 +393,7 @@ def main() -> None:
     parser.add_argument("--match-threshold", type=float, default=0.6)
     args = parser.parse_args()
 
-    grandcru_rows = prepare_rows(read_rows(args.grandcru_csv), enforce_in_stock=True)
+    grandcru_rows = prepare_rows(read_rows(args.grandcru_csv), enforce_in_stock=False)
     platinum_rows = prepare_rows(read_rows(args.platinum_csv), enforce_in_stock=True)
     matched = build_matches(grandcru_rows, platinum_rows, threshold=args.match_threshold)
     summary = build_summary(matched)
