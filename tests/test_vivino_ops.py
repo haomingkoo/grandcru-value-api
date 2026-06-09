@@ -105,6 +105,12 @@ class RefreshCommandTests(unittest.TestCase):
 
         self.assertIn("--llm-resolve-grandcru", command)
 
+    def test_daily_refresh_runs_grandcru_llm_resolver(self) -> None:
+        command = build_refresh_command(mode="daily", health_url=None, strict_health=False)
+
+        self.assertIn("--llm-resolve-grandcru", command)
+        self.assertNotIn("--llm-resolve-all", command)
+
     def test_import_only_does_not_run_resolver(self) -> None:
         command = build_refresh_command(mode="import_only", health_url=None, strict_health=False)
 

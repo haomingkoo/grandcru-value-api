@@ -38,7 +38,7 @@ Three Railway services under project **zonal-purpose**:
 | Service | Role | Schedule |
 |---------|------|----------|
 | **web** | FastAPI app + static frontend | Always on |
-| **daily-ingest** | Scrape Platinum/Grand Cru, Brave resolver, import | Daily cron |
+| **daily-ingest** | Scrape Platinum/Grand Cru, Grand Cru LLM matcher, Brave resolver, import | Daily cron |
 | **weekly-ingest** | Full pipeline + Grand Cru LLM matcher + Vivino resolver | Mondays 02:00 UTC |
 
 Data flows into a shared PostgreSQL database. The web service reads from the DB — it does not re-import from CSVs if the daily cron has already refreshed the data within 20 hours.
@@ -123,13 +123,14 @@ This ensures code pushes never overwrite fresh cron data with older committed fa
 # Quick reimport from cached CSVs
 python scripts/refresh_pipeline.py
 
-# Daily (light — only new wines, 40 search calls max)
+# Daily (light — only new Vivino searches, Grand Cru LLM repair)
 python scripts/refresh_pipeline.py \
   --scrape-and-build \
   --resolve-vivino --resolver-provider auto \
   --resolver-auto-apply --resolver-require-vivino-metrics \
   --resolver-max-api-queries 40 \
-  --resolver-only-new-unresolved
+  --resolver-only-new-unresolved \
+  --llm-resolve-grandcru
 
 # Weekly (full — all wines, Grand Cru LLM repair + Vivino descriptions/prices)
 python scripts/refresh_pipeline.py \
@@ -168,7 +169,7 @@ Review `data/grandcru_match_diagnostics.csv` by `reason`:
 - `llm_low_confidence`: Gemini suggested a row below the acceptance threshold.
 - `llm_match_not_applied`: investigate immediately; a valid cached LLM match should have updated the comparison row.
 
-The Railway weekly command is checked in at `deploy/weekly-ingest-command.txt`. Keep the Railway UI command in sync with that file.
+The Railway cron commands are checked in under `deploy/`. Keep the Railway UI commands in sync with those files.
 
 ### CI/CD Guardrails
 

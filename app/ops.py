@@ -109,6 +109,7 @@ def build_refresh_command(
                 "--resolver-max-api-queries",
                 "40",
                 "--resolver-only-new-unresolved",
+                "--llm-resolve-grandcru",
             ]
         )
     elif mode == "weekly":

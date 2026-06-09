@@ -12,6 +12,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY_DIR = ROOT / "deploy"
 REQUIRED_FLAGS = {
+    "daily-ingest-command.txt": {
+        "--scrape-and-build",
+        "--resolve-vivino",
+        "--resolver-only-new-unresolved",
+        "--llm-resolve-grandcru",
+    },
     "weekly-ingest-command.txt": {
         "--scrape-and-build",
         "--resolve-vivino",
