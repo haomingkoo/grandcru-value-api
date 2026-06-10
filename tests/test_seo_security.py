@@ -21,6 +21,7 @@ def test_frontend_sets_security_headers() -> None:
     assert "https://unpkg.com" in csp
     assert "https://*.basemaps.cartocdn.com" in csp
     assert "https://static.cloudflareinsights.com" in csp
+    assert "connect-src 'self' https://cloudflareinsights.com https://unpkg.com" in csp
     assert "camera=()" in response.headers["permissions-policy"]
 
 

@@ -13,7 +13,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 import uvicorn
 
@@ -29,11 +28,10 @@ def _free_port() -> int:
 
 
 @pytest.fixture()
-def browser_app_url():
+def browser_app_url(tmp_path):
     engine = create_engine(
-        "sqlite://",
+        f"sqlite:///{tmp_path / 'browser.db'}",
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
@@ -211,3 +209,49 @@ def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_b
     assert metrics["stripTop"] < metrics["detailedPriceTop"]
     assert metrics["stripWidth"] >= 240
     assert metrics["scrollWidth"] <= metrics["innerWidth"]
+
+
+def test_filter_cards_activate_visible_offers_table(browser_app_url, mobile_browser) -> None:
+    mobile_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
+
+    section_select = WebDriverWait(mobile_browser, 10).until(
+        lambda driver: driver.find_element(By.ID, "sectionSelect")
+    )
+    Select(section_select).select_by_value("placeSection")
+
+    country_button = WebDriverWait(mobile_browser, 10).until(
+        lambda driver: driver.find_element(By.CSS_SELECTOR, "[data-country-pick='France']")
+    )
+    mobile_browser.execute_script("arguments[0].click()", country_button)
+
+    WebDriverWait(mobile_browser, 10).until(
+        lambda driver: driver.execute_script(
+            "return document.querySelector('#offersSection')?.classList.contains('is-active') === true"
+        )
+    )
+
+    metrics = mobile_browser.execute_script(
+        """
+        const offers = document.querySelector('#offersSection')
+        const place = document.querySelector('#placeSection')
+        const row = document.querySelector('.deal-row')
+        const strip = row?.querySelector('.mobile-price-strip')
+        return {
+          activeSections: [...document.querySelectorAll('.browse-section.is-active')].map((el) => el.id),
+          sectionValue: document.querySelector('#sectionSelect')?.value,
+          offersDisplay: getComputedStyle(offers).display,
+          placeDisplay: getComputedStyle(place).display,
+          rowCount: document.querySelectorAll('.deal-row').length,
+          stripText: strip?.innerText || '',
+          urlHash: window.location.hash,
+        }
+        """
+    )
+
+    assert metrics["activeSections"] == ["offersSection"]
+    assert metrics["sectionValue"] == "offersSection"
+    assert metrics["offersDisplay"] != "none"
+    assert metrics["placeDisplay"] == "none"
+    assert metrics["rowCount"] >= 1
+    assert "$120.00" in metrics["stripText"]
+    assert metrics["urlHash"] == "#offersSection"

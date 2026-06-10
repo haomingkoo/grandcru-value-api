@@ -75,7 +75,7 @@ CONTENT_SECURITY_POLICY = (
     "script-src 'self' 'unsafe-inline' https://unpkg.com https://static.cloudflareinsights.com; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
     "font-src 'self' https://fonts.gstatic.com; "
-    "connect-src 'self' https://cloudflareinsights.com; "
+    "connect-src 'self' https://cloudflareinsights.com https://unpkg.com; "
     "upgrade-insecure-requests"
 )
 

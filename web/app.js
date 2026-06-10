@@ -135,10 +135,7 @@ function initScrollReveal() {
 }
 
 function scrollToOffers() {
-  const section = document.getElementById("offersSection")
-  if (!section) return
-  section.classList.add("visible")
-  section.scrollIntoView({ behavior: "smooth", block: "start" })
+  setActiveSection("offersSection", { updateHash: true, scroll: true })
 }
 
 function captureElements() {
