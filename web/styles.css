@@ -2509,13 +2509,23 @@ h2 {
   min-width: 0;
 }
 
-.wine-cell > div {
+.wine-main {
   min-width: 0;
+}
+
+.wine-main,
+.wine-heading {
+  display: grid;
+  gap: 8px;
 }
 
 .wine-links {
   max-width: 100%;
   flex-wrap: wrap;
+}
+
+.mobile-price-strip {
+  display: none;
 }
 
 .wine-thumb {
@@ -2655,12 +2665,113 @@ h2 {
   }
 
   .wine-cell {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 12px 14px;
     min-width: 0;
+  }
+
+  .wine-main {
+    display: contents;
+  }
+
+  .wine-heading {
+    grid-column: 2;
+    align-self: start;
   }
 
   .wine-thumb {
     width: 64px;
     height: 64px;
+  }
+
+  .mobile-price-strip {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 2px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #fff8ef;
+  }
+
+  .mobile-price-strip div {
+    min-width: 0;
+  }
+
+  .mobile-price-strip span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.56rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    line-height: 1.1;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .mobile-price-strip strong {
+    display: block;
+    margin-top: 3px;
+    color: var(--wine);
+    font-size: 0.95rem;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-price-strip div:last-child {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 7px;
+    border-top: 1px solid var(--line);
+  }
+
+  .mobile-price-strip div:last-child strong {
+    margin-top: 0;
+    text-align: right;
+  }
+
+  .deal-row td:first-child {
+    order: 1;
+  }
+
+  .deal-row td:nth-child(4) {
+    order: 2;
+    border-bottom: 1px solid var(--line) !important;
+    background: #fff8ef !important;
+  }
+
+  .deal-row td:nth-child(5) {
+    order: 3;
+  }
+
+  .deal-row td:nth-child(2) {
+    order: 4;
+  }
+
+  .deal-row td:nth-child(6) {
+    order: 5;
+  }
+
+  .deal-row td:nth-child(7) {
+    order: 6;
+  }
+
+  .deal-row td:last-child {
+    order: 7;
+  }
+
+  .deal-row td:nth-child(4) .price-line {
+    justify-content: space-between;
+  }
+
+  .deal-row td:nth-child(4) .money {
+    font-size: 1.05rem;
   }
 
   .deal-row td:nth-child(4),

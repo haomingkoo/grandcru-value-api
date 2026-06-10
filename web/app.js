@@ -1330,14 +1330,22 @@ function renderTable(deals) {
       const displayName = deal.wine_name
         ? deal.wine_name.replace(/ - (Red|White|Rose|Rosé|Sparkling) - .+$/, "")
         : deal.label_name || "Unknown Wine"
+      const mobileBenchmark = mobileBenchmarkForDeal(deal)
       return `
         <tr class="deal-row">
           <td>
             <div class="wine-cell">
               ${wineImageHtml(deal, "wine-thumb")}
-              <div>
-                <div class="wine-title">${escapeHtml(displayName)}</div>
-                <div class="wine-subline">${escapeHtml(deal.producer || "Producer unknown")}</div>
+              <div class="wine-main">
+                <div class="wine-heading">
+                  <div class="wine-title">${escapeHtml(displayName)}</div>
+                  <div class="wine-subline">${escapeHtml(deal.producer || "Producer unknown")}</div>
+                </div>
+                <div class="mobile-price-strip" aria-label="Price summary">
+                  <div><span>Platinum</span><strong>${formatMoney(deal.price_platinum)}</strong></div>
+                  <div><span>${escapeHtml(mobileBenchmark.label)}</span><strong>${formatMoney(mobileBenchmark.value)}</strong></div>
+                  <div><span>Signal</span><strong>${escapeHtml(gapShortCopy(deal))}</strong></div>
+                </div>
                 <div class="wine-links">
                   ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
                   ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
@@ -1824,6 +1832,19 @@ function gapDisplay(deal) {
     return hasVivinoMarket(deal) ? "Market" : "No source"
   }
   return `${formatPct(deal.price_diff_pct_abs, 1)}`
+}
+
+function mobileBenchmarkForDeal(deal) {
+  if (deal.price_grand_cru != null) {
+    return { label: "Grand Cru", value: deal.price_grand_cru }
+  }
+  if (deal.vivino_price != null) {
+    return { label: "Vivino", value: deal.vivino_price }
+  }
+  if (deal.price_market != null) {
+    return { label: "Global avg", value: deal.price_market }
+  }
+  return { label: "Benchmark", value: null }
 }
 
 function gapNarrative(deal) {
