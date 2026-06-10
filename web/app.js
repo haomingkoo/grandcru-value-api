@@ -549,19 +549,24 @@ function syncControlsFromState() {
 
 function syncActiveSectionFromHash() {
   const hashId = window.location.hash ? window.location.hash.slice(1) : ""
-  const sectionId = document.getElementById(hashId)?.classList.contains("browse-section") ? hashId : "mapSection"
+  const sectionId = hashId === "offersSection" || document.getElementById(hashId)?.classList.contains("browse-section")
+    ? hashId
+    : "mapSection"
   setActiveSection(sectionId, { updateHash: false, scroll: false })
 }
 
 function setActiveSection(sectionId, { updateHash = false, scroll = false } = {}) {
   const section = document.getElementById(sectionId)
-  if (!section?.classList.contains("browse-section")) return
+  if (!section) return
+  const isBrowseSection = section.classList.contains("browse-section")
 
-  document.querySelectorAll(".browse-section").forEach((el) => {
-    const active = el.id === sectionId
-    el.classList.toggle("is-active", active)
-    if (active) el.classList.add("visible")
-  })
+  if (isBrowseSection) {
+    document.querySelectorAll(".browse-section").forEach((el) => {
+      const active = el.id === sectionId
+      el.classList.toggle("is-active", active)
+      if (active) el.classList.add("visible")
+    })
+  }
 
   els.sectionLinks.forEach((link) => {
     const active = link.getAttribute("href") === `#${sectionId}`

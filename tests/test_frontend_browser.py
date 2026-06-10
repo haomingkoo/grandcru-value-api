@@ -160,6 +160,13 @@ def mobile_browser():
 def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_browser) -> None:
     mobile_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
 
+    WebDriverWait(mobile_browser, 10).until(
+        lambda driver: driver.find_element(By.CSS_SELECTOR, ".deal-row")
+    )
+    assert mobile_browser.execute_script(
+        "return getComputedStyle(document.querySelector('#offersSection')).display !== 'none'"
+    )
+
     section_select = WebDriverWait(mobile_browser, 10).until(
         lambda driver: driver.find_element(By.ID, "sectionSelect")
     )
@@ -193,6 +200,7 @@ def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_b
           stripWidth: strip.getBoundingClientRect().width,
           linksTop: links.getBoundingClientRect().top,
           detailedPriceTop: detailedPrice.getBoundingClientRect().top,
+          sectionValue: document.querySelector('#sectionSelect')?.value,
           scrollWidth: document.documentElement.scrollWidth,
           innerWidth: window.innerWidth,
         }
@@ -203,7 +211,8 @@ def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_b
         detailed_price_cell,
     )
 
-    assert metrics["activeSections"] == ["offersSection"]
+    assert metrics["activeSections"] == ["mapSection"]
+    assert metrics["sectionValue"] == "offersSection"
     assert metrics["stripTop"] > metrics["rowTop"]
     assert metrics["stripTop"] < metrics["linksTop"]
     assert metrics["stripTop"] < metrics["detailedPriceTop"]
@@ -211,7 +220,7 @@ def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_b
     assert metrics["scrollWidth"] <= metrics["innerWidth"]
 
 
-def test_filter_cards_activate_visible_offers_table(browser_app_url, mobile_browser) -> None:
+def test_filter_cards_keep_bottom_offers_table_visible(browser_app_url, mobile_browser) -> None:
     mobile_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
 
     section_select = WebDriverWait(mobile_browser, 10).until(
@@ -224,11 +233,7 @@ def test_filter_cards_activate_visible_offers_table(browser_app_url, mobile_brow
     )
     mobile_browser.execute_script("arguments[0].click()", country_button)
 
-    WebDriverWait(mobile_browser, 10).until(
-        lambda driver: driver.execute_script(
-            "return document.querySelector('#offersSection')?.classList.contains('is-active') === true"
-        )
-    )
+    WebDriverWait(mobile_browser, 10).until(lambda driver: driver.find_elements(By.CSS_SELECTOR, ".deal-row"))
 
     metrics = mobile_browser.execute_script(
         """
@@ -248,10 +253,10 @@ def test_filter_cards_activate_visible_offers_table(browser_app_url, mobile_brow
         """
     )
 
-    assert metrics["activeSections"] == ["offersSection"]
+    assert metrics["activeSections"] == ["placeSection"]
     assert metrics["sectionValue"] == "offersSection"
     assert metrics["offersDisplay"] != "none"
-    assert metrics["placeDisplay"] == "none"
+    assert metrics["placeDisplay"] != "none"
     assert metrics["rowCount"] >= 1
     assert "$120.00" in metrics["stripText"]
     assert metrics["urlHash"] == "#offersSection"

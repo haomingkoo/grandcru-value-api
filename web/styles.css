@@ -1694,16 +1694,28 @@ h1 {
 }
 
 .map-selection-stats {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
 .map-selection-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(92px, 0.7fr) minmax(150px, 1.3fr);
   gap: 8px;
   align-items: center;
+}
+
+.map-selection-actions .meta-chip,
+.map-selection-actions .link-chip,
+.map-selection-stats .meta-chip {
+  width: 100%;
+  min-height: 36px;
+  box-sizing: border-box;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
 }
 
 .family-aside {
@@ -2065,6 +2077,11 @@ h1 {
 
   .map-selection-actions {
     width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .map-selection-stats {
+    grid-template-columns: 1fr;
   }
 
   .family-summary {
