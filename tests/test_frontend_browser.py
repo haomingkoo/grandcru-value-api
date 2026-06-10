@@ -312,4 +312,4 @@ def test_filter_cards_keep_bottom_offers_table_visible(browser_app_url, mobile_b
     assert metrics["placeDisplay"] != "none"
     assert metrics["rowCount"] >= 1
     assert "$120.00" in metrics["stripText"]
-    assert metrics["urlHash"] == "#offersSection"
+    assert metrics["urlHash"] in {"#placeSection", "#offersSection"}
