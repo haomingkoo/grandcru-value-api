@@ -121,8 +121,8 @@ class DealQueryTests(unittest.TestCase):
 
         self.assertEqual(deals[0].wine_name, "Champagne Markup Bottle")
         self.assertEqual(deals[1].wine_name, "Value Pick One")
-        self.assertEqual(deals[0].value_verdict, "Platinum Markup")
-        self.assertEqual(deals[1].value_verdict, "Strong Credit Spend")
+        self.assertEqual(deals[0].value_verdict, "Grand Cru cheaper")
+        self.assertEqual(deals[1].value_verdict, "Best Platinum buy")
 
     def test_comparable_only_excludes_unrated_wines_with_price_data(self) -> None:
         deals = list_deals(self.session, comparable_only=True, sort_by="wine_name", sort_order="asc")

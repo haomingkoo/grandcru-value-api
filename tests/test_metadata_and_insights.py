@@ -141,7 +141,7 @@ class MetadataAndInsightsTests(unittest.TestCase):
         self.assertTrue(insights.is_platinum_cheaper)
         self.assertTrue(insights.is_good_wine)
         self.assertTrue(insights.is_high_confidence)
-        self.assertEqual(insights.value_verdict, "Strong Credit Spend")
+        self.assertEqual(insights.value_verdict, "Best Platinum buy")
         self.assertEqual(insights.value_verdict_tone, "good")
         self.assertEqual(insights.platinum_trend_7d, "down")
         self.assertEqual(insights.grand_cru_trend_7d, "flat")
@@ -170,7 +170,7 @@ class MetadataAndInsightsTests(unittest.TestCase):
 
         insights = compute_deal_insights(deal)
 
-        self.assertEqual(insights.value_verdict, "Retail Match")
+        self.assertEqual(insights.value_verdict, "Same price")
         self.assertEqual(insights.value_verdict_tone, "calm")
 
 

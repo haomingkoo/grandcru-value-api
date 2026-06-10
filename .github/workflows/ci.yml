@@ -38,6 +38,7 @@ jobs:
             scripts/refresh_pipeline.py \
             scripts/llm_grandcru_resolver.py \
             scripts/diagnose_grandcru_matches.py \
+            scripts/validate_retailer_price_math.py \
             scripts/check_deploy_commands.py \
             scripts/check_no_plaintext_secrets.py
 

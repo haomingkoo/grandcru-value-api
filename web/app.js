@@ -621,24 +621,27 @@ function marketGapPct(deal) {
 }
 
 function displayCheaperSide(value) {
-  return value === "No Match" ? "Platinum-only" : value
+  if (value === "No Match") return "No Grand Cru listing"
+  if (value === "Platinum Cheaper") return "Platinum under"
+  if (value === "Grand Cru Cheaper") return "Grand Cru under"
+  return value
 }
 
 function coverageStatus(deal) {
   if (hasGrandCruMatch(deal)) {
     return {
-      label: "Grand Cru matched",
+      label: "Grand Cru benchmark",
       tone: "retailer",
     }
   }
   if (hasVivinoMarket(deal)) {
     return {
-      label: "Vivino market only",
+      label: "Vivino benchmark",
       tone: "market",
     }
   }
   return {
-    label: "Needs source",
+    label: "Benchmark pending",
     tone: "missing",
   }
 }
@@ -657,13 +660,13 @@ function availabilityStatus(deal) {
   }
   if (deal.platinum_in_stock !== true) {
     return {
-      label: "Availability pending",
+      label: "Stock check pending",
       tone: "missing",
     }
   }
   if (hasGrandCruMatch(deal) && deal.grand_cru_in_stock === false) {
     return {
-      label: "GC catalog only",
+      label: "Grand Cru listing only",
       tone: "market",
     }
   }
@@ -675,12 +678,12 @@ function availabilityStatus(deal) {
   }
   if (hasGrandCruMatch(deal)) {
     return {
-      label: "GC stock pending",
+      label: "Grand Cru stock unknown",
       tone: "missing",
     }
   }
   return {
-    label: "Platinum available",
+    label: "Platinum in stock",
     tone: "retailer",
   }
 }
@@ -714,9 +717,9 @@ function renderResultsMeta(deals) {
   const comparableCount = deals.filter(hasGrandCruMatch).length
   const marketOnlyCount = deals.filter((deal) => !hasGrandCruMatch(deal) && hasVivinoMarket(deal)).length
   const matchCopy = state.comparableOnly
-    ? `${deals.length} Grand Cru-matched offers`
-    : `${deals.length} live offers · ${comparableCount} Grand Cru · ${marketOnlyCount} market-only`
-  els.resultsMeta.textContent = `${wineCount} wines · ${matchCopy} - ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
+    ? `${deals.length} Grand Cru-benchmarked offers`
+    : `${deals.length} live offers · ${comparableCount} Grand Cru · ${marketOnlyCount} Vivino-only`
+  els.resultsMeta.textContent = `${wineCount} wines · ${matchCopy} · ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
 }
 
 function renderHeroStats(deals) {
@@ -734,24 +737,24 @@ function renderHeroStats(deals) {
 
   const cards = [
     {
-      label: "Grand Cru matched",
+      label: "Benchmarked",
       value: String(comparableCount),
-      detail: "Wines with a real retailer price comparison.",
+      detail: "Offers with a real Grand Cru comparison.",
     },
     {
-      label: "Market-priced",
+      label: "Vivino only",
       value: String(marketOnlyCount),
-      detail: "Platinum-only bottles with Vivino market context.",
+      detail: "No Grand Cru listing, but Vivino gives market context.",
     },
     {
-      label: "Platinum cheaper",
+      label: "Platinum under",
       value: String(platinumCheaper),
-      detail: "Bottles where Platinum currently beats Grand Cru.",
+      detail: "Platinum currently undercuts Grand Cru.",
     },
     {
-      label: "Needs source",
+      label: "Pending",
       value: String(needsSourceCount),
-      detail: needsSourceCount ? "No Grand Cru or Vivino market price yet." : avgGap,
+      detail: needsSourceCount ? "Needs a Grand Cru or Vivino benchmark." : avgGap,
     },
   ]
 
@@ -1168,7 +1171,7 @@ function renderMap(points) {
 
 function renderMapSelection(point) {
   if (!point) {
-    els.mapSelection.textContent = "Click a country bubble to inspect it."
+    els.mapSelection.textContent = "Choose a country to focus the offer shelf."
     return
   }
 
@@ -1186,7 +1189,7 @@ function renderMapSelection(point) {
     </div>
     <div class="map-selection-stats">
       <span class="meta-chip">${formatInteger(point.wineCount)} wines</span>
-      <span class="meta-chip">${formatInteger(point.platinumCheaperCount)} cheaper on Platinum</span>
+      <span class="meta-chip">${formatInteger(point.platinumCheaperCount)} Platinum under</span>
       <span class="meta-chip">${formatInteger(point.regionLabels.length)} regions</span>
       ${avgGapCopy ? `<span class="meta-chip">${escapeHtml(avgGapCopy)}</span>` : ""}
     </div>
@@ -1376,8 +1379,8 @@ function renderTable(deals) {
               <div class="coverage-line">${coverageChipHtml(deal)}${availabilityChipHtml(deal)}</div>
             </div>
             <div class="trend-list">
-              ${renderTrendChip("P 7d", deal.price_platinum_change_7d, deal.platinum_trend_7d)}
-              ${renderTrendChip("G 7d", deal.price_grand_cru_change_7d, deal.grand_cru_trend_7d)}
+              ${renderTrendChip("platinum", deal.price_platinum_change_7d, deal.platinum_trend_7d, deal.price_platinum)}
+              ${renderTrendChip("grand_cru", deal.price_grand_cru_change_7d, deal.grand_cru_trend_7d, deal.price_grand_cru)}
             </div>
           </td>
           <td>
@@ -1715,7 +1718,7 @@ function resetFilter(key) {
 function resolveVerdict(deal) {
   if (deal.value_verdict && deal.value_verdict_tone) {
     return {
-      label: deal.value_verdict,
+      label: normalizeVerdictLabel(deal.value_verdict),
       tone: deal.value_verdict_tone,
       detail: deal.value_verdict_reason || "",
     }
@@ -1723,35 +1726,35 @@ function resolveVerdict(deal) {
 
   if (deal.cheaper_side === "Platinum Cheaper" && (deal.vivino_rating || 0) >= 4 && (deal.vivino_num_ratings || 0) >= 100) {
     return {
-      label: "Strong Credit Spend",
+      label: "Best Platinum buy",
       tone: "good",
-      detail: "Good wine, healthy rating count, and no obvious Platinum markup.",
+      detail: "Platinum is cheaper and the Vivino rating sample is strong.",
     }
   }
   if (deal.cheaper_side === "Platinum Cheaper") {
     return {
-      label: "Solid Value",
+      label: "Good Platinum price",
       tone: "good",
       detail: "Platinum currently beats Grand Cru on price.",
     }
   }
   if (deal.cheaper_side === "Same Price" && (deal.vivino_rating || 0) >= 4.1) {
     return {
-      label: "Quality Buy",
+      label: "Good bottle, fair price",
       tone: "calm",
       detail: "Not cheaper, but still appealing if you want the bottle on Platinum.",
     }
   }
   if (deal.cheaper_side === "Same Price") {
     return {
-      label: "Retail Match",
+      label: "Same price",
       tone: "calm",
       detail: "Platinum matches Grand Cru on price, so this is more about convenience than edge.",
     }
   }
   if (deal.cheaper_side === "Grand Cru Cheaper") {
     return {
-      label: "Platinum Markup",
+      label: "Grand Cru cheaper",
       tone: "warn",
       detail: "Grand Cru is the better pure price play right now.",
     }
@@ -1761,58 +1764,87 @@ function resolveVerdict(deal) {
     if (marketGap != null) {
       if (Math.abs(marketGap) < 1) {
         return {
-          label: "At Market",
+          label: "At market",
           tone: "calm",
           detail: "No Grand Cru match, but Platinum is aligned with Vivino market.",
         }
       }
       if (marketGap < 0) {
         return {
-          label: "Market Value",
+          label: "Below market",
           tone: "good",
           detail: "No Grand Cru match, but Platinum is below Vivino market.",
         }
       }
       return {
-        label: "Market Risk",
+        label: "Above market",
         tone: "warn",
         detail: "No Grand Cru match, and Platinum is above Vivino market.",
       }
     }
     return {
-      label: "Needs Source",
+      label: "Benchmark pending",
       tone: "ghost",
       detail: "No Grand Cru match or Vivino market price is available yet.",
     }
   }
   return {
-    label: "Needs Review",
+    label: "Needs review",
     tone: "ghost",
     detail: "Worth a manual look before spending credits.",
   }
 }
 
-function compactVerdictLabel(label) {
+function normalizeVerdictLabel(label) {
   switch (label) {
     case "Strong Credit Spend":
-      return "Top Value"
+      return "Best Platinum buy"
     case "Solid Value":
-      return "Good Value"
+      return "Good Platinum price"
     case "Quality Buy":
-      return "Worth A Look"
+      return "Good bottle, fair price"
     case "Retail Match":
-      return "Match"
+      return "Same price"
     case "Platinum Markup":
-      return "Markup"
+      return "Grand Cru cheaper"
     case "Market Value":
-      return "Market Value"
+      return "Below market"
     case "At Market":
-      return "At Market"
+      return "At market"
     case "Market Risk":
-      return "Market Risk"
+      return "Above market"
     case "Needs Source":
-      return "Needs Source"
+    case "Quality Only":
+      return "Benchmark pending"
     case "Needs Review":
+      return "Needs review"
+    default:
+      return label
+  }
+}
+
+function compactVerdictLabel(label) {
+  switch (normalizeVerdictLabel(label)) {
+    case "Best Platinum buy":
+      return "Top value"
+    case "Good Platinum price":
+      return "Good price"
+    case "Good bottle, fair price":
+      return "Quality pick"
+    case "Same price":
+      return "Same price"
+    case "Grand Cru cheaper":
+      return "Grand Cru cheaper"
+    case "Below market":
+      return "Below market"
+    case "At market":
+      return "At market"
+    case "Above market":
+      return "Above market"
+    case "Benchmark pending":
+    case "No retail benchmark":
+      return "Benchmark pending"
+    case "Needs review":
       return "Review"
     default:
       return label
@@ -1831,7 +1863,7 @@ function recommendationScore(deal) {
 
 function gapDisplay(deal) {
   if (deal.price_diff_pct == null) {
-    return hasVivinoMarket(deal) ? "Market" : "No source"
+    return hasVivinoMarket(deal) ? "Vivino" : "Pending"
   }
   return `${formatPct(deal.price_diff_pct_abs, 1)}`
 }
@@ -1903,7 +1935,7 @@ function actionLink(url, label, tone = "secondary") {
 
 function gapLabel(deal, vs) {
   if (vs === "gc") {
-    if (deal.price_diff_pct == null) return hasVivinoMarket(deal) ? "Platinum-only, Vivino priced" : "Platinum-only, needs market"
+    if (deal.price_diff_pct == null) return hasVivinoMarket(deal) ? "No Grand Cru listing · Vivino benchmarked" : "No benchmark yet"
     if (deal.cheaper_side === "Platinum Cheaper") return `vs Grand Cru`
     if (deal.cheaper_side === "Grand Cru Cheaper") return `vs Grand Cru`
     return "Same as Grand Cru"
@@ -1983,15 +2015,26 @@ function dealSignalHtml(deal) {
   ).join("")
 }
 
-function renderTrendChip(label, change, direction) {
+function renderTrendChip(label, change, direction, currentPrice) {
+  const retailer = label === "platinum" ? "Platinum" : "Grand Cru"
   if (direction === "unknown") {
-    return `<span class="meta-chip"> ${escapeHtml(label)} no data </span>`
+    return `<span class="meta-chip">${escapeHtml(retailer)}: no 7-day history</span>`
+  }
+  if (isLikelyTrendCorrection(change, currentPrice)) {
+    return `<span class="meta-chip">${escapeHtml(retailer)}: trend reset after price correction</span>`
   }
   const tone = direction === "down" ? "good" : direction === "up" ? "warn" : "calm"
   const copy = direction === "flat"
-    ? `${label} flat`
-    : `${label} ${direction} ${formatMoney(Math.abs(change || 0))}`
+    ? `${retailer}: stable 7d`
+    : `${retailer}: ${direction} ${formatMoney(Math.abs(change || 0))} over 7d`
   return `<span class="pill ${tone}">${escapeHtml(copy)}</span>`
+}
+
+function isLikelyTrendCorrection(change, currentPrice) {
+  const absoluteChange = Math.abs(Number(change) || 0)
+  const price = Math.abs(Number(currentPrice) || 0)
+  if (!absoluteChange || !price) return false
+  return absoluteChange >= 1000 && absoluteChange >= price * 2
 }
 
 function toneForCheaperSide(label) {
@@ -2093,7 +2136,7 @@ function familyOriginLine(family) {
 function gapShortCopy(deal) {
   if (deal.price_diff_pct == null) {
     const marketGap = marketGapPct(deal)
-    if (marketGap == null) return "Needs source"
+    if (marketGap == null) return "Benchmark pending"
     if (Math.abs(marketGap) < 1) return "At market"
     return marketGap < 0
       ? `${formatPct(Math.abs(marketGap), 0)} below market`
@@ -2169,34 +2212,50 @@ function formatVivinoNotes(desc) {
   const clean = cleanVivinoDescription(desc)
   if (!clean) return ""
   const parts = clean.split(" · ")
-  const regionStyle = parts.length >= 2 ? parts.slice(0, -1).join(" · ") : ""
+  const regionStyle = parts.length >= 2 ? normalizeRegionStyle(parts.slice(0, -1).join(" · ")) : ""
   const notes = parts.length >= 2 ? parts[parts.length - 1] : clean
-  const noteParts = notes.split(". ")
-  const tastingLine = noteParts[0] || ""
-  const communityNote = noteParts.slice(1).join(". ").trim()
-  const preview = buildNotesPreview(communityNote || tastingLine || notes)
-  const expanded = [
-    tastingLine ? `<span class="notes-tasting">${escapeHtml(tastingLine)}</span>` : "",
-    communityNote ? `<span class="notes-community">${escapeHtml(communityNote)}</span>` : "",
-  ].join("")
+  const splitNote = splitVivinoNote(notes)
 
   return `
     ${regionStyle ? `<span class="notes-region">${escapeHtml(regionStyle)}</span>` : ""}
-    <details class="notes-details">
-      <summary><span class="notes-preview">${escapeHtml(preview)}</span></summary>
-      <div class="notes-expanded">${expanded}</div>
-    </details>
+    ${splitNote.profile ? `<span class="notes-profile"><strong>Style profile</strong>${escapeHtml(splitNote.profile)}</span>` : ""}
+    ${splitNote.community ? `
+      <details class="notes-details">
+        <summary><span class="notes-preview">Community note</span></summary>
+        <div class="notes-expanded">
+          <span class="notes-community">${escapeHtml(splitNote.community)}</span>
+        </div>
+      </details>
+    ` : ""}
   `
 }
 
-function buildNotesPreview(text) {
+function normalizeRegionStyle(text) {
+  return String(text || "")
+    .replace(/^Regions\s*·\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function splitVivinoNote(text) {
   const clean = String(text || "").replace(/\s+/g, " ").trim()
-  if (!clean) return "Open tasting note"
-  const sentence = clean.match(/^.{24,180}?[.!?](?=\s|$)/)
-  if (sentence) return sentence[0]
-  const words = clean.split(" ")
-  if (words.length <= 24) return clean
-  return words.slice(0, 24).join(" ")
+  if (!clean) return { profile: "", community: "" }
+  const firstSentence = (clean.match(/^[^.!?]+[.!?]?/) || [clean])[0].trim()
+  const candidate = firstSentence.replace(/[.!?]+$/, "")
+  const lower = candidate.toLowerCase()
+  const blocked = ["pass", "reminded", "bathroom", "cough", "soap", "tasted", "vintage", "wow"]
+  const descriptors = candidate
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 3 && item.length <= 28)
+  const hasProfile = descriptors.length >= 4 && !blocked.some((word) => lower.includes(word))
+  if (!hasProfile) {
+    return { profile: "", community: clean }
+  }
+  return {
+    profile: `${descriptors.slice(0, 8).join(", ")}.`,
+    community: clean.slice(firstSentence.length).replace(/^[\s.]+/, "").trim(),
+  }
 }
 
 function escapeHtml(value) {

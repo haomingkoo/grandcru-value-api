@@ -68,7 +68,7 @@ def test_social_card_svg_is_available() -> None:
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("image/svg+xml")
-    assert "THE CREDIT CELLAR" in response.text
+    assert "BUY THE RIGHT BOTTLE" in response.text
 
 
 def test_llms_txt_discovery_files_are_available() -> None:

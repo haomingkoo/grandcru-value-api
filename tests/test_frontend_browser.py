@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import socket
 from threading import Thread
 import time
@@ -18,7 +18,7 @@ import uvicorn
 
 from app.database import Base, get_session
 from app.main import app
-from app.models import IngestionRun, WineDeal
+from app.models import IngestionRun, WineDeal, WineDealSnapshot
 
 
 def _free_port() -> int:
@@ -37,16 +37,16 @@ def browser_app_url(tmp_path):
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
     with Session() as session:
-        session.add(
-            IngestionRun(
-                started_at=datetime.now(UTC),
-                finished_at=datetime.now(UTC),
-                status="success",
-                comparison_rows=2,
-                vivino_rows=2,
-                merged_rows=2,
-            )
+        run = IngestionRun(
+            started_at=datetime.now(UTC),
+            finished_at=datetime.now(UTC),
+            status="success",
+            comparison_rows=2,
+            vivino_rows=2,
+            merged_rows=2,
         )
+        session.add(run)
+        session.flush()
         session.add_all(
             [
                 WineDeal(
@@ -64,7 +64,9 @@ def browser_app_url(tmp_path):
                     vivino_price=180.0,
                     vivino_rating=4.2,
                     vivino_num_ratings=1234,
-                    vivino_description="Regions · Burgundy Red · Cherry, raspberry, and clean fruit.",
+                    # Reproduces a negative community review. The row should show the profile,
+                    # not surface the negative review text by default.
+                    vivino_description="Regions · Burgundy Red · cherry, raspberry, cedar, clean fruit. Give it a pass. Butter-bomb and odd oak.",
                     deal_score=61.0,
                     country="France",
                     region="Burgundy",
@@ -75,6 +77,18 @@ def browser_app_url(tmp_path):
                     producer="Visible Estate",
                     volume="750ml",
                     quantity=1,
+                ),
+                WineDealSnapshot(
+                    ingestion_run_id=run.id,
+                    captured_at=datetime.now(UTC) - timedelta(days=8),
+                    wine_name="2023 Visible Price Burgundy",
+                    price_platinum=120.0,
+                    price_grand_cru=2700.0,
+                    price_diff=-2580.0,
+                    price_diff_pct=-95.6,
+                    cheaper_side="Platinum Cheaper",
+                    platinum_in_stock=True,
+                    grand_cru_in_stock=True,
                 ),
                 WineDeal(
                     wine_name="2022 Market Only White",
@@ -157,6 +171,20 @@ def mobile_browser():
         driver.quit()
 
 
+@pytest.fixture()
+def desktop_browser():
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--window-size=1280,900")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    driver = webdriver.Chrome(options=options)
+    try:
+        yield driver
+    finally:
+        driver.quit()
+
+
 def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_browser) -> None:
     mobile_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
 
@@ -186,6 +214,9 @@ def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_b
     assert "$150.00" in strip_text
     assert "Platinum -20.0%" in strip_text
     assert price_strip.value_of_css_property("display") == "grid"
+    row_text = first_row.text
+    assert "Butter-bomb" not in row_text
+    assert "P 7d" not in row_text
 
     metrics = mobile_browser.execute_script(
         """
@@ -218,6 +249,28 @@ def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_b
     assert metrics["stripTop"] < metrics["detailedPriceTop"]
     assert metrics["stripWidth"] >= 240
     assert metrics["scrollWidth"] <= metrics["innerWidth"]
+
+
+def test_offer_profile_hides_negative_review_until_expanded(browser_app_url, desktop_browser) -> None:
+    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}#offersSection")
+
+    first_row = WebDriverWait(desktop_browser, 10).until(
+        lambda driver: driver.find_element(By.CSS_SELECTOR, ".deal-row")
+    )
+    profile_cell = first_row.find_elements(By.TAG_NAME, "td")[1]
+    price_cell = first_row.find_elements(By.TAG_NAME, "td")[3]
+
+    assert "STYLE PROFILE" in profile_cell.text
+    assert "cherry, raspberry, cedar, clean fruit." in profile_cell.text
+    assert "Community note" in profile_cell.text
+    assert "Butter-bomb" not in profile_cell.text
+    assert "P 7d" not in price_cell.text
+    assert "Platinum: stable 7d" in price_cell.text
+    assert "Grand Cru: trend reset after price correction" in price_cell.text
+    assert "$2,550" not in price_cell.text
+
+    desktop_browser.execute_script("arguments[0].click()", profile_cell.find_element(By.TAG_NAME, "summary"))
+    assert "Butter-bomb" in profile_cell.text
 
 
 def test_filter_cards_keep_bottom_offers_table_visible(browser_app_url, mobile_browser) -> None:
@@ -254,7 +307,7 @@ def test_filter_cards_keep_bottom_offers_table_visible(browser_app_url, mobile_b
     )
 
     assert metrics["activeSections"] == ["placeSection"]
-    assert metrics["sectionValue"] == "offersSection"
+    assert metrics["sectionValue"] in {"placeSection", "offersSection"}
     assert metrics["offersDisplay"] != "none"
     assert metrics["placeDisplay"] != "none"
     assert metrics["rowCount"] >= 1

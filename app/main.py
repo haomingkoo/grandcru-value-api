@@ -384,9 +384,9 @@ def social_card_svg() -> Response:
   <circle cx="955" cy="326" r="178" fill="#fef6ee" stroke="#651c32" stroke-width="4"/>
   <circle cx="955" cy="326" r="112" fill="#651c32"/>
   <text x="72" y="68" fill="#fef6ee" font-family="Arial, sans-serif" font-size="34" font-weight="700">MINMAX WINE</text>
-  <text x="72" y="216" fill="#651c32" font-family="Arial Narrow, Arial, sans-serif" font-size="82" font-weight="700">THE CREDIT CELLAR</text>
-  <text x="76" y="294" fill="#651c32" font-family="Georgia, serif" font-size="34">Platinum Wine Club, Grand Cru, and Vivino market checks.</text>
-  <text x="76" y="352" fill="#651c32" font-family="Georgia, serif" font-size="30">Live Singapore wine value tracker by Haoming Koo.</text>
+  <text x="72" y="216" fill="#651c32" font-family="Arial Narrow, Arial, sans-serif" font-size="82" font-weight="700">BUY THE RIGHT BOTTLE</text>
+  <text x="76" y="294" fill="#651c32" font-family="Georgia, serif" font-size="34">Platinum offers, Grand Cru benchmarks, and Vivino market checks.</text>
+  <text x="76" y="352" fill="#651c32" font-family="Georgia, serif" font-size="30">Singapore wine intelligence by Haoming Koo.</text>
   <rect x="76" y="420" width="278" height="56" rx="28" fill="#ef6079"/>
   <text x="112" y="457" fill="#fef6ee" font-family="Georgia, serif" font-size="24" font-weight="700">Compare live offers</text>
   <text x="895" y="342" fill="#fef6ee" font-family="Arial Narrow, Arial, sans-serif" font-size="76" font-weight="700">SGD</text>
@@ -448,7 +448,7 @@ def llms_full_txt(session: Session = Depends(get_session)) -> PlainTextResponse:
         "# MinMax Wine - full discovery notes",
         "",
         "MinMax Wine helps Singapore wine buyers decide whether a Platinum Wine Club offer is good value.",
-        "It compares Platinum prices with strict Grand Cru Wines matches and Vivino market prices where available.",
+        "It compares Platinum offers with Grand Cru benchmarks and Vivino market prices where available.",
         "The app also tracks seven-day and thirty-day price movement, source coverage, Vivino ratings, and offer formats such as single bottles, magnums, bundles, and cases.",
         "",
         f"Canonical URL: {CANONICAL_BASE_URL}/",
@@ -458,7 +458,7 @@ def llms_full_txt(session: Session = Depends(get_session)) -> PlainTextResponse:
         "",
         "Current production stats:",
         f"- Live offers: {stats.get('total_deals', 0)}",
-        f"- Grand Cru matched offers: {comparable_count}",
+        f"- Grand Cru benchmarked offers: {comparable_count}",
         f"- Platinum cheaper offers: {cheaper_sides.get('Platinum Cheaper', 0)}",
         "",
         "Top current offers by deal score:",

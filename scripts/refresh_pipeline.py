@@ -227,6 +227,21 @@ def run_completeness_validation(*, strict: bool, env: dict[str, str]) -> None:
     run_step("completeness validation", validation_cmd, env)
 
 
+def run_retailer_price_math_validation(*, comparison_path: Path, strict: bool, env: dict[str, str]) -> None:
+    validation_cmd = [
+        sys.executable,
+        str(ROOT / "scripts" / "validate_retailer_price_math.py"),
+        "--comparison",
+        str(comparison_path),
+    ]
+    if strict:
+        validation_cmd.append("--strict")
+    else:
+        validation_cmd.append("--no-strict")
+    print("[refresh] Validating retailer price math", flush=True)
+    run_step("retailer price math validation", validation_cmd, env)
+
+
 def run_scrape_and_build(
     *,
     grandcru_base_url: str,
@@ -586,6 +601,18 @@ def main() -> None:
         help="Fail post-import validation on documented warnings as well as errors.",
     )
     parser.add_argument(
+        "--validate-retailer-price-math",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Validate Grand Cru scaled prices against live product JSON before import.",
+    )
+    parser.add_argument(
+        "--validate-retailer-price-math-strict",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Fail the run if live Grand Cru price math does not match the comparison CSV.",
+    )
+    parser.add_argument(
         "--enrich-platinum-vivino",
         action="store_true",
         help=(
@@ -893,6 +920,13 @@ def main() -> None:
             enrich_cmd.extend(["--limit", str(args.enrich_vivino_limit)])
         print("[refresh] Enriching vivino_results.csv from override URLs", flush=True)
         run_step("vivino enrichment", enrich_cmd, env)
+
+    if args.validate_retailer_price_math:
+        run_retailer_price_math_validation(
+            comparison_path=comparison_path,
+            strict=args.validate_retailer_price_math_strict,
+            env=env,
+        )
 
     run_import(comparison_path, vivino_path, vivino_overrides_path, env)
 

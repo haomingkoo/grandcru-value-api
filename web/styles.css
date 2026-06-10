@@ -703,6 +703,10 @@ h2 {
   text-decoration: none;
   font-size: 0.82rem;
   font-weight: 700;
+  overflow-wrap: normal;
+  text-align: center;
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .controls-grid {
@@ -1177,10 +1181,25 @@ h2 {
   line-height: 1.45;
 }
 
+.notes-profile {
+  display: grid;
+  gap: 3px;
+  color: var(--ink);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.notes-profile strong {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .notes-community {
   font-size: 0.78rem;
   color: var(--muted);
-  font-style: italic;
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -2753,6 +2772,21 @@ h2 {
     text-align: right;
   }
 
+  .wine-links {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .wine-links .link-chip {
+    min-height: 42px;
+    justify-content: center;
+    padding: 8px 10px;
+    white-space: normal;
+  }
+
   .deal-row td:first-child {
     order: 1;
   }
@@ -3232,7 +3266,7 @@ h2 {
 }
 
 .notes-details summary::after {
-  content: "Expand note";
+  content: "Show note";
   width: fit-content;
   padding: 5px 10px;
   border: 1px solid var(--line);
@@ -3244,7 +3278,7 @@ h2 {
 }
 
 .notes-details[open] summary::after {
-  content: "Collapse note";
+  content: "Hide note";
 }
 
 .notes-details[open] .notes-preview {

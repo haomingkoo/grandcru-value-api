@@ -56,19 +56,19 @@ def compute_deal_insights(deal: Any) -> DealInsights:
     )
 
     if is_platinum_cheaper and is_good_wine and is_high_confidence:
-        verdict = ("Strong Credit Spend", "good", "Good wine, healthy rating count, and no obvious Platinum markup.")
+        verdict = ("Best Platinum buy", "good", "Platinum is cheaper and the Vivino rating sample is strong.")
     elif is_platinum_cheaper:
-        verdict = ("Solid Value", "good", "Platinum currently beats Grand Cru on price.")
+        verdict = ("Good Platinum price", "good", "Platinum currently beats Grand Cru on price.")
     elif getattr(deal, "cheaper_side", None) == "Same Price" and rating >= 4.1:
-        verdict = ("Quality Buy", "calm", "Not cheaper, but still appealing if you want the bottle on Platinum.")
+        verdict = ("Good bottle, fair price", "calm", "Not cheaper, but still appealing if you want the bottle on Platinum.")
     elif getattr(deal, "cheaper_side", None) == "Same Price":
-        verdict = ("Retail Match", "calm", "Platinum matches Grand Cru on price, so this is more about convenience than edge.")
+        verdict = ("Same price", "calm", "Platinum matches Grand Cru on price, so this is more about convenience than edge.")
     elif getattr(deal, "cheaper_side", None) == "Grand Cru Cheaper":
-        verdict = ("Platinum Markup", "warn", "Grand Cru is the better pure price play right now.")
+        verdict = ("Grand Cru cheaper", "warn", "Grand Cru is the better pure price play right now.")
     elif getattr(deal, "cheaper_side", None) == "No Match":
-        verdict = ("Quality Only", "ghost", "Interesting wine, but there is no retailer comparison yet.")
+        verdict = ("No retail benchmark", "ghost", "Interesting wine, but there is no Grand Cru comparison yet.")
     else:
-        verdict = ("Needs Review", "ghost", "Worth a manual look before spending credits.")
+        verdict = ("Needs review", "ghost", "Worth a manual look before spending credits.")
 
     return DealInsights(
         has_competitor_match=has_competitor_match,
