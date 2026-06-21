@@ -41,9 +41,9 @@ def browser_app_url(tmp_path):
             started_at=datetime.now(UTC),
             finished_at=datetime.now(UTC),
             status="success",
-            comparison_rows=2,
-            vivino_rows=2,
-            merged_rows=2,
+            comparison_rows=3,
+            vivino_rows=3,
+            merged_rows=3,
         )
         session.add(run)
         session.flush()
@@ -75,6 +75,7 @@ def browser_app_url(tmp_path):
                     grapes="Pinot Noir",
                     offering_type="Single Bottle",
                     producer="Visible Estate",
+                    label_name="Visible Price Burgundy",
                     volume="750ml",
                     quantity=1,
                 ),
@@ -89,6 +90,34 @@ def browser_app_url(tmp_path):
                     cheaper_side="Platinum Cheaper",
                     platinum_in_stock=True,
                     grand_cru_in_stock=True,
+                ),
+                WineDeal(
+                    wine_name="2022 Visible Price Burgundy",
+                    platinum_url="https://example.com/platinum-2022",
+                    grand_cru_url="https://example.com/grand-cru-2022",
+                    vivino_url="https://example.com/vivino-2022",
+                    price_platinum=118.0,
+                    price_grand_cru=118.0,
+                    price_diff=0.0,
+                    price_diff_pct=0.0,
+                    cheaper_side="Same Price",
+                    platinum_in_stock=True,
+                    grand_cru_in_stock=True,
+                    vivino_price=130.0,
+                    vivino_rating=4.1,
+                    vivino_num_ratings=400,
+                    vivino_description="Regions · Burgundy Red · cherry, raspberry, cedar, clean fruit.",
+                    deal_score=44.0,
+                    country="France",
+                    region="Burgundy",
+                    wine_type="Red",
+                    style_family="Red",
+                    grapes="Pinot Noir",
+                    offering_type="Single Bottle",
+                    producer="Visible Estate",
+                    label_name="Visible Price Burgundy",
+                    volume="750ml",
+                    quantity=1,
                 ),
                 WineDeal(
                     wine_name="2022 Market Only White",
@@ -204,8 +233,11 @@ def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_b
         lambda driver: driver.find_element(By.CSS_SELECTOR, ".deal-row")
     )
     price_strip = first_row.find_element(By.CSS_SELECTOR, ".mobile-price-strip")
+    mobile_meta = first_row.find_element(By.CSS_SELECTOR, ".mobile-card-meta")
     action_links = first_row.find_element(By.CSS_SELECTOR, ".wine-links")
     detailed_price_cell = first_row.find_elements(By.TAG_NAME, "td")[3]
+    profile_cell = first_row.find_elements(By.TAG_NAME, "td")[1]
+    score_cell = first_row.find_elements(By.TAG_NAME, "td")[6]
 
     strip_text = price_strip.text
     assert "PLATINUM" in strip_text
@@ -214,9 +246,13 @@ def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_b
     assert "$150.00" in strip_text
     assert "Platinum -20.0%" in strip_text
     assert price_strip.value_of_css_property("display") == "grid"
+    assert "Vivino 4.2" in mobile_meta.text
+    assert "Score 61.0" in mobile_meta.text
+    assert mobile_meta.value_of_css_property("display") == "flex"
     row_text = first_row.text
     assert "Butter-bomb" not in row_text
     assert "P 7d" not in row_text
+    assert "STYLE PROFILE" not in row_text
 
     metrics = mobile_browser.execute_script(
         """
@@ -224,13 +260,17 @@ def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_b
         const strip = arguments[1]
         const links = arguments[2]
         const detailedPrice = arguments[3]
+        const profile = arguments[4]
+        const score = arguments[5]
         return {
           activeSections: [...document.querySelectorAll('.browse-section.is-active')].map((el) => el.id),
           rowTop: row.getBoundingClientRect().top,
           stripTop: strip.getBoundingClientRect().top,
           stripWidth: strip.getBoundingClientRect().width,
           linksTop: links.getBoundingClientRect().top,
-          detailedPriceTop: detailedPrice.getBoundingClientRect().top,
+          detailedPriceDisplay: getComputedStyle(detailedPrice).display,
+          profileDisplay: getComputedStyle(profile).display,
+          scoreDisplay: getComputedStyle(score).display,
           sectionValue: document.querySelector('#sectionSelect')?.value,
           scrollWidth: document.documentElement.scrollWidth,
           innerWidth: window.innerWidth,
@@ -240,13 +280,17 @@ def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_b
         price_strip,
         action_links,
         detailed_price_cell,
+        profile_cell,
+        score_cell,
     )
 
     assert metrics["activeSections"] == ["mapSection"]
     assert metrics["sectionValue"] == "offersSection"
     assert metrics["stripTop"] > metrics["rowTop"]
     assert metrics["stripTop"] < metrics["linksTop"]
-    assert metrics["stripTop"] < metrics["detailedPriceTop"]
+    assert metrics["detailedPriceDisplay"] == "none"
+    assert metrics["profileDisplay"] == "none"
+    assert metrics["scoreDisplay"] == "none"
     assert metrics["stripWidth"] >= 240
     assert metrics["scrollWidth"] <= metrics["innerWidth"]
 
@@ -271,6 +315,46 @@ def test_offer_profile_hides_negative_review_until_expanded(browser_app_url, des
 
     desktop_browser.execute_script("arguments[0].click()", profile_cell.find_element(By.TAG_NAME, "summary"))
     assert "Butter-bomb" in profile_cell.text
+
+
+def test_offer_shelf_groups_duplicate_wine_families(browser_app_url, desktop_browser) -> None:
+    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}#offersSection")
+
+    WebDriverWait(desktop_browser, 10).until(
+        lambda driver: driver.find_element(By.CSS_SELECTOR, ".offer-group")
+    )
+
+    metrics = desktop_browser.execute_script(
+        """
+        const group = document.querySelector('.offer-group')
+        return {
+          rowCount: document.querySelectorAll('.deal-row').length,
+          groupRowCount: document.querySelectorAll('.deal-group-row').length,
+          meta: document.querySelector('#resultsMeta')?.innerText || '',
+          groupedCopy: document.querySelector('.group-summary-line')?.innerText || '',
+          summary: group?.querySelector('summary')?.innerText || '',
+          open: group?.open || false,
+        }
+        """
+    )
+
+    assert metrics["rowCount"] == 2
+    assert metrics["groupRowCount"] == 1
+    assert "2 wine groups" in metrics["meta"]
+    assert "3 live offers" in metrics["meta"]
+    assert "2 offers grouped" in metrics["groupedCopy"]
+    assert "View 2 offers" in metrics["summary"]
+    assert metrics["open"] is False
+
+    summary = desktop_browser.find_element(By.CSS_SELECTOR, ".offer-group summary")
+    desktop_browser.execute_script("arguments[0].click()", summary)
+
+    WebDriverWait(desktop_browser, 10).until(
+        lambda driver: driver.find_element(By.CSS_SELECTOR, ".offer-group").get_attribute("open")
+    )
+    group_text = desktop_browser.find_element(By.CSS_SELECTOR, ".offer-group").text
+    assert "2023 Visible Price Burgundy" in group_text
+    assert "2022 Visible Price Burgundy" in group_text
 
 
 def test_filter_cards_keep_bottom_offers_table_visible(browser_app_url, mobile_browser) -> None:
