@@ -716,10 +716,11 @@ function renderResultsMeta(deals) {
   const wineCount = groupDealsIntoFamilies(deals).length
   const comparableCount = deals.filter(hasGrandCruMatch).length
   const marketOnlyCount = deals.filter((deal) => !hasGrandCruMatch(deal) && hasVivinoMarket(deal)).length
+  const wineCopy = wineCount === deals.length ? `${wineCount} wines` : `${wineCount} wine groups`
   const matchCopy = state.comparableOnly
     ? `${deals.length} Grand Cru-benchmarked offers`
     : `${deals.length} live offers · ${comparableCount} Grand Cru · ${marketOnlyCount} Vivino-only`
-  els.resultsMeta.textContent = `${wineCount} wines · ${matchCopy} · ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
+  els.resultsMeta.textContent = `${wineCopy} · ${matchCopy} · ${sortLabels[`${state.sortBy}:${state.sortOrder}`] || "Custom sort"}`
 }
 
 function renderHeroStats(deals) {
@@ -1326,91 +1327,198 @@ function renderTable(deals) {
     return
   }
 
-  els.dealTableBody.innerHTML = deals
-    .map((deal) => {
-      const verdict = resolveVerdict(deal)
-      const styleLabel = deal.style_family || deal.wine_type || "Unclassified"
-      const subtypeLabel = deal.wine_type && deal.wine_type !== styleLabel ? ` · ${deal.wine_type}` : ""
-      const formattedNotes = formatVivinoNotes(deal.vivino_description)
-      const displayName = deal.wine_name
-        ? deal.wine_name.replace(/ - (Red|White|Rose|Rosé|Sparkling) - .+$/, "")
-        : deal.label_name || "Unknown Wine"
-      const mobileBenchmark = mobileBenchmarkForDeal(deal)
+  els.dealTableBody.innerHTML = groupDealsForShelf(deals)
+    .map(renderDealTableGroup)
+    .join("")
+}
+
+function renderDealTableGroup(family) {
+  const row = renderDealTableRow(family.bestOffer, family)
+  if (family.offers.length === 1) {
+    return row
+  }
+  return `${row}${renderGroupedOffersRow(family)}`
+}
+
+function renderDealTableRow(deal, family = null) {
+  const verdict = resolveVerdict(deal)
+  const styleLabel = deal.style_family || deal.wine_type || "Unclassified"
+  const subtypeLabel = deal.wine_type && deal.wine_type !== styleLabel ? ` · ${deal.wine_type}` : ""
+  const formattedNotes = formatVivinoNotes(deal.vivino_description)
+  const displayName = deal.wine_name
+    ? deal.wine_name.replace(/ - (Red|White|Rose|Rosé|Sparkling) - .+$/, "")
+    : deal.label_name || "Unknown Wine"
+  const mobileBenchmark = mobileBenchmarkForDeal(deal)
+  const mobileMetaItems = [
+    deal.vivino_rating != null
+      ? `Vivino ${deal.vivino_rating.toFixed(1)}${deal.vivino_num_ratings ? ` (${formatCompactInteger(deal.vivino_num_ratings)})` : ""}`
+      : "",
+    `Score ${deal.deal_score.toFixed(1)}`,
+    deal.offering_type || "",
+    `${deal.volume || "-"} x ${deal.quantity || 1}`,
+  ].filter(Boolean)
+  const groupedCopy = family && family.offers.length > 1
+    ? `
+      <div class="group-summary-line">
+        <span class="meta-chip">${formatInteger(family.offers.length)} offers grouped</span>
+        ${family.vintageLabel ? `<span class="meta-chip">${escapeHtml(family.vintageLabel)}</span>` : ""}
+      </div>
+    `
+    : ""
+
+  return `
+    <tr class="deal-row${family && family.offers.length > 1 ? " is-grouped" : ""}">
+      <td>
+        <div class="wine-cell">
+          ${wineImageHtml(deal, "wine-thumb")}
+          <div class="wine-main">
+            <div class="wine-heading">
+              <div class="wine-title">${escapeHtml(displayName)}</div>
+              <div class="wine-subline">${escapeHtml(deal.producer || "Producer unknown")}</div>
+              ${groupedCopy}
+            </div>
+            <div class="mobile-price-strip" aria-label="Price summary">
+              <div><span>Platinum</span><strong>${formatMoney(deal.price_platinum)}</strong></div>
+              <div><span>${escapeHtml(mobileBenchmark.label)}</span><strong>${formatMoney(mobileBenchmark.value)}</strong></div>
+              <div><span>Signal</span><strong>${escapeHtml(gapShortCopy(deal))}</strong></div>
+            </div>
+            <div class="mobile-card-meta">
+              ${mobileMetaItems.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
+            </div>
+            <div class="wine-links">
+              ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
+              ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
+              ${actionLink(deal.vivino_url, "See Vivino")}
+              ${actionLink(deal.market_retailer_url, deal.price_market ? "Wine-Searcher" : "")}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td>
+        ${formattedNotes ? `<div class="wine-notes-cell">${formattedNotes}</div>` : `<span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>`}
+      </td>
+      <td>
+        <div class="cell-subline">
+          <strong>${escapeHtml(deal.region || "Unknown region")}</strong><br>
+          ${escapeHtml(deal.country || "Unknown country")}<br>
+          ${escapeHtml(styleLabel)}${escapeHtml(subtypeLabel)} · ${escapeHtml(deal.grapes || "Grape blend unknown")}
+        </div>
+      </td>
+      <td>
+        <div class="price-stack">
+          <div class="price-line"><span class="price-label">Platinum</span><span class="money">${formatMoney(deal.price_platinum)}</span></div>
+          <div class="price-line"><span class="price-label muted">Grand Cru</span><span class="muted">${formatMoney(deal.price_grand_cru)}</span></div>
+          ${deal.vivino_price ? `<div class="price-line" title="Vivino price scaled to the same magnum/bundle total as the Platinum listing (magnum ×2, bundles ×quantity)."><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span></div>` : ""}
+          ${deal.price_market ? `<div class="price-line" title="Wine-Searcher global average price per 750ml, scaled to match this listing's quantity/volume. Updated weekly."><span class="price-label muted">Global avg</span><span class="muted">${formatMoney(deal.price_market)}</span></div>` : ""}
+          <div class="coverage-line">${coverageChipHtml(deal)}${availabilityChipHtml(deal)}</div>
+        </div>
+        <div class="trend-list">
+          ${renderTrendChip("platinum", deal.price_platinum_change_7d, deal.platinum_trend_7d, deal.price_platinum)}
+          ${renderTrendChip("grand_cru", deal.price_grand_cru_change_7d, deal.grand_cru_trend_7d, deal.price_grand_cru)}
+        </div>
+      </td>
+      <td>
+        <div class="gap-figure ${gapTone(deal)}">${escapeHtml(gapDisplay(deal))}</div>
+        <div class="cell-subline">${escapeHtml(gapLabel(deal, "gc"))}</div>
+        ${vivinoGapHtml(deal)}
+      </td>
+      <td>
+        <div class="rating-stack">
+          <span class="money">${deal.vivino_rating != null ? deal.vivino_rating.toFixed(1) : "-"}</span>
+          <span class="muted">${deal.vivino_num_ratings ? `${formatInteger(deal.vivino_num_ratings)} ratings` : ""}</span>
+        </div>
+      </td>
+      <td>
+        <div class="score-stack">
+          <span class="money">${deal.deal_score.toFixed(1)}</span>
+          <div class="score-bar"><span style="width:${Math.max(6, Math.min(100, deal.deal_score))}%"></span></div>
+        </div>
+        <div class="deal-signal">${dealSignalHtml(deal)}</div>
+      </td>
+      <td>
+        <div class="offer-stack">
+          <span class="pill ghost">${escapeHtml(deal.offering_type || "Unknown offer")}</span>
+          <span class="muted">${escapeHtml(deal.volume || "-")} · ${escapeHtml(String(deal.quantity || 1))} bottle${deal.quantity > 1 ? "s" : ""}</span>
+        </div>
+      </td>
+    </tr>
+  `
+}
+
+function renderGroupedOffersRow(family) {
+  const variants = family.offers
+    .map((offer, index) => {
       return `
-        <tr class="deal-row">
-          <td>
-            <div class="wine-cell">
-              ${wineImageHtml(deal, "wine-thumb")}
-              <div class="wine-main">
-                <div class="wine-heading">
-                  <div class="wine-title">${escapeHtml(displayName)}</div>
-                  <div class="wine-subline">${escapeHtml(deal.producer || "Producer unknown")}</div>
-                </div>
-                <div class="mobile-price-strip" aria-label="Price summary">
-                  <div><span>Platinum</span><strong>${formatMoney(deal.price_platinum)}</strong></div>
-                  <div><span>${escapeHtml(mobileBenchmark.label)}</span><strong>${formatMoney(mobileBenchmark.value)}</strong></div>
-                  <div><span>Signal</span><strong>${escapeHtml(gapShortCopy(deal))}</strong></div>
-                </div>
-                <div class="wine-links">
-                  ${actionLink(deal.platinum_url, "Buy on Platinum", "primary")}
-                  ${actionLink(deal.grand_cru_url, "Compare Grand Cru")}
-                  ${actionLink(deal.vivino_url, "See Vivino")}
-                  ${actionLink(deal.market_retailer_url, deal.price_market ? "Wine-Searcher" : "")}
-                </div>
-              </div>
+        <article class="grouped-offer-card">
+          <div class="grouped-offer-head">
+            <div>
+              <strong>${escapeHtml(offer.wine_name)}</strong>
+              <div class="cell-subline">${escapeHtml(volumeQuantityCopy(offer))}</div>
             </div>
-          </td>
-          <td>
-            ${formattedNotes ? `<div class="wine-notes-cell">${formattedNotes}</div>` : `<span class="verdict-chip ${verdict.tone}">${escapeHtml(verdict.label)}</span>`}
-          </td>
-          <td>
-            <div class="cell-subline">
-              <strong>${escapeHtml(deal.region || "Unknown region")}</strong><br>
-              ${escapeHtml(deal.country || "Unknown country")}<br>
-              ${escapeHtml(styleLabel)}${escapeHtml(subtypeLabel)} · ${escapeHtml(deal.grapes || "Grape blend unknown")}
-            </div>
-          </td>
-          <td>
-            <div class="price-stack">
-              <div class="price-line"><span class="price-label">Platinum</span><span class="money">${formatMoney(deal.price_platinum)}</span></div>
-              <div class="price-line"><span class="price-label muted">Grand Cru</span><span class="muted">${formatMoney(deal.price_grand_cru)}</span></div>
-              ${deal.vivino_price ? `<div class="price-line" title="Vivino price scaled to the same magnum/bundle total as the Platinum listing (magnum ×2, bundles ×quantity)."><span class="price-label muted">Vivino</span><span class="muted">${formatMoney(deal.vivino_price)}</span></div>` : ""}
-              ${deal.price_market ? `<div class="price-line" title="Wine-Searcher global average price per 750ml, scaled to match this listing's quantity/volume. Updated weekly."><span class="price-label muted">Global avg</span><span class="muted">${formatMoney(deal.price_market)}</span></div>` : ""}
-              <div class="coverage-line">${coverageChipHtml(deal)}${availabilityChipHtml(deal)}</div>
-            </div>
-            <div class="trend-list">
-              ${renderTrendChip("platinum", deal.price_platinum_change_7d, deal.platinum_trend_7d, deal.price_platinum)}
-              ${renderTrendChip("grand_cru", deal.price_grand_cru_change_7d, deal.grand_cru_trend_7d, deal.price_grand_cru)}
-            </div>
-          </td>
-          <td>
-            <div class="gap-figure ${gapTone(deal)}">${escapeHtml(gapDisplay(deal))}</div>
-            <div class="cell-subline">${escapeHtml(gapLabel(deal, "gc"))}</div>
-            ${vivinoGapHtml(deal)}
-          </td>
-          <td>
-            <div class="rating-stack">
-              <span class="money">${deal.vivino_rating != null ? deal.vivino_rating.toFixed(1) : "-"}</span>
-              <span class="muted">${deal.vivino_num_ratings ? `${formatInteger(deal.vivino_num_ratings)} ratings` : ""}</span>
-            </div>
-          </td>
-          <td>
-            <div class="score-stack">
-              <span class="money">${deal.deal_score.toFixed(1)}</span>
-              <div class="score-bar"><span style="width:${Math.max(6, Math.min(100, deal.deal_score))}%"></span></div>
-            </div>
-            <div class="deal-signal">${dealSignalHtml(deal)}</div>
-          </td>
-          <td>
-            <div class="offer-stack">
-              <span class="pill ghost">${escapeHtml(deal.offering_type || "Unknown offer")}</span>
-              <span class="muted">${escapeHtml(deal.volume || "-")} · ${escapeHtml(String(deal.quantity || 1))} bottle${deal.quantity > 1 ? "s" : ""}</span>
-            </div>
-          </td>
-        </tr>
+            ${index === 0 ? `<span class="meta-chip">Shown above</span>` : renderInlineRatingBadge(offer)}
+          </div>
+          <div class="grouped-offer-metrics">
+            <span class="pill ghost">Platinum ${formatMoney(offer.price_platinum)}</span>
+            ${offer.price_grand_cru != null ? `<span class="pill ghost">Grand Cru ${formatMoney(offer.price_grand_cru)}</span>` : ""}
+            <span class="pill ${gapTone(offer)}">${escapeHtml(gapShortCopy(offer))}</span>
+          </div>
+          <div class="offer-variant-links">
+            ${actionLink(offer.platinum_url, "Buy on Platinum", "primary")}
+            ${actionLink(offer.grand_cru_url, "Compare Grand Cru")}
+            ${actionLink(offer.vivino_url, "See Vivino")}
+          </div>
+        </article>
       `
     })
     .join("")
+
+  return `
+    <tr class="deal-group-row">
+      <td colspan="8">
+        <details class="offer-group">
+          <summary>
+            <span>View ${formatInteger(family.offers.length)} offers for ${escapeHtml(family.title)}</span>
+            ${family.priceBand ? `<span class="meta-chip">${escapeHtml(family.priceBand)}</span>` : ""}
+          </summary>
+          <div class="grouped-offer-grid">
+            ${variants}
+          </div>
+        </details>
+      </td>
+    </tr>
+  `
+}
+
+function groupDealsForShelf(deals) {
+  const families = new Map()
+
+  deals.forEach((deal) => {
+    const descriptor = describeWineFamily(deal)
+    if (!families.has(descriptor.key)) {
+      families.set(descriptor.key, {
+        ...descriptor,
+        offers: [],
+      })
+    }
+    families.get(descriptor.key).offers.push(deal)
+  })
+
+  return Array.from(families.values()).map((family) => {
+    const offers = family.offers
+    const prices = offers.map((offer) => offer.price_platinum).filter((value) => typeof value === "number")
+    const vintages = Array.from(new Set(offers.map((offer) => formatVintage(offer.vintage)))).filter(Boolean)
+    const priceBand = prices.length
+      ? `${formatMoney(Math.min(...prices))}${prices.length > 1 && Math.min(...prices) !== Math.max(...prices) ? ` to ${formatMoney(Math.max(...prices))}` : ""}`
+      : null
+
+    return {
+      ...family,
+      offers,
+      bestOffer: offers[0],
+      priceBand,
+      vintageLabel: vintages.join(", "),
+    }
+  })
 }
 
 function groupDealsIntoFamilies(deals) {

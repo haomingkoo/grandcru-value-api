@@ -1135,6 +1135,82 @@ h2 {
   border-radius: 0 18px 18px 0;
 }
 
+.group-summary-line,
+.grouped-offer-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.group-summary-line {
+  margin-top: 2px;
+}
+
+.deal-group-row td {
+  padding: 0 10px 8px;
+}
+
+.offer-group {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card-strong);
+}
+
+.offer-group summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  color: var(--wine);
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+}
+
+.offer-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.offer-group summary::after {
+  content: "+";
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.offer-group[open] summary::after {
+  content: "-";
+}
+
+.grouped-offer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.grouped-offer-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.grouped-offer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.grouped-offer-head strong {
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
 .wine-title {
   font-size: 1rem;
   font-weight: 800;
@@ -2146,6 +2222,28 @@ h1 {
     background: var(--card-strong);
   }
 
+  .deal-group-row {
+    display: block;
+  }
+
+  .deal-group-row td {
+    display: block;
+    padding: 0;
+  }
+
+  .offer-group summary {
+    align-items: flex-start;
+  }
+
+  .grouped-offer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grouped-offer-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .deal-row td {
     border: none !important;
     border-radius: 0 !important;
@@ -2564,6 +2662,10 @@ h2 {
   display: none;
 }
 
+.mobile-card-meta {
+  display: none;
+}
+
 .wine-thumb {
   width: 72px;
   height: 72px;
@@ -2772,6 +2874,27 @@ h2 {
     text-align: right;
   }
 
+  .mobile-card-meta {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .mobile-card-meta span {
+    display: inline-flex;
+    min-height: 28px;
+    align-items: center;
+    padding: 0 9px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fff8ef;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
   .wine-links {
     grid-column: 1 / -1;
     display: grid;
@@ -2789,48 +2912,16 @@ h2 {
 
   .deal-row td:first-child {
     order: 1;
+    border-bottom: 0 !important;
   }
 
-  .deal-row td:nth-child(4) {
-    order: 2;
-    border-bottom: 1px solid var(--line) !important;
-    background: #fff8ef !important;
-  }
-
-  .deal-row td:nth-child(5) {
-    order: 3;
-  }
-
-  .deal-row td:nth-child(2) {
-    order: 4;
-  }
-
-  .deal-row td:nth-child(6) {
-    order: 5;
-  }
-
-  .deal-row td:nth-child(7) {
-    order: 6;
-  }
-
-  .deal-row td:last-child {
-    order: 7;
-  }
-
-  .deal-row td:nth-child(4) .price-line {
-    justify-content: space-between;
-  }
-
-  .deal-row td:nth-child(4) .money {
-    font-size: 1.05rem;
-  }
-
+  .deal-row td:nth-child(2),
   .deal-row td:nth-child(4),
   .deal-row td:nth-child(5),
   .deal-row td:nth-child(6),
-  .deal-row td:nth-child(7) {
-    display: block;
-    width: 100%;
+  .deal-row td:nth-child(7),
+  .deal-row td:last-child {
+    display: none;
   }
 }
 
