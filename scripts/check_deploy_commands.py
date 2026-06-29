@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY_DIR = ROOT / "deploy"
@@ -77,7 +79,22 @@ def command_tokens(text: str) -> list[str]:
     return shlex.split(text)
 
 
-def live_start_command(service: str, environment: str) -> str:
+def railway_token() -> str:
+    token = os.getenv("RAILWAY_TOKEN", "").strip()
+    if token:
+        return token
+
+    config_path = Path.home() / ".railway" / "config.json"
+    if not config_path.exists():
+        raise RuntimeError("RAILWAY_TOKEN is not set and Railway CLI config was not found")
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    token = str(payload.get("user", {}).get("token") or "").strip()
+    if not token:
+        raise RuntimeError("Railway CLI config does not contain a user token")
+    return token
+
+
+def service_instance_ids(service: str, environment: str) -> tuple[str, str]:
     railway = shutil.which("railway")
     if not railway:
         raise RuntimeError("railway CLI is not installed")
@@ -85,8 +102,7 @@ def live_start_command(service: str, environment: str) -> str:
     result = subprocess.run(
         [
             railway,
-            "deployment",
-            "list",
+            "variables",
             "--service",
             service,
             "--environment",
@@ -100,16 +116,45 @@ def live_start_command(service: str, environment: str) -> str:
     if result.returncode != 0:
         raise RuntimeError(result.stderr or result.stdout)
 
-    deployments = json.loads(result.stdout)
-    if not deployments:
-        raise RuntimeError(f"No deployments found for service {service!r}")
-    return (
-        deployments[0]
-        .get("meta", {})
-        .get("serviceManifest", {})
-        .get("deploy", {})
-        .get("startCommand", "")
+    payload = json.loads(result.stdout)
+    service_id = str(payload.get("RAILWAY_SERVICE_ID") or "").strip()
+    environment_id = str(payload.get("RAILWAY_ENVIRONMENT_ID") or "").strip()
+    if not service_id or not environment_id:
+        raise RuntimeError(f"Missing Railway IDs for service {service!r}")
+    return service_id, environment_id
+
+
+def live_start_command(service: str, environment: str) -> str:
+    service_id, environment_id = service_instance_ids(service, environment)
+    query = (
+        "query serviceInstance($serviceId: String!, $environmentId: String!) {"
+        " serviceInstance(serviceId: $serviceId, environmentId: $environmentId) {"
+        " startCommand } }"
     )
+    body = json.dumps(
+        {
+            "query": query,
+            "variables": {
+                "serviceId": service_id,
+                "environmentId": environment_id,
+            },
+        }
+    ).encode("utf-8")
+    request = Request(
+        "https://backboard.railway.com/graphql/v2",
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {railway_token()}",
+            "Content-Type": "application/json",
+            "User-Agent": "railway-cli",
+        },
+    )
+    with urlopen(request, timeout=30) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if payload.get("errors"):
+        raise RuntimeError(payload["errors"])
+    return str(payload.get("data", {}).get("serviceInstance", {}).get("startCommand") or "")
 
 
 def main() -> int:
