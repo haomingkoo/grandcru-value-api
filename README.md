@@ -172,6 +172,7 @@ Review `data/grandcru_match_diagnostics.csv` by `reason`:
 - `llm_match_not_applied`: investigate immediately; a valid cached LLM match should have updated the comparison row.
 
 The Railway cron commands are checked in under `deploy/`. Keep the Railway UI commands in sync with those files.
+Use `python scripts/check_deploy_commands.py --live` locally to compare checked-in commands with the latest Railway deployment manifests.
 
 ### CI/CD Guardrails
 

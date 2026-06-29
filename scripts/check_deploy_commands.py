@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import re
 import shlex
 import shutil
@@ -17,13 +19,19 @@ REQUIRED_FLAGS = {
         "--resolve-vivino",
         "--resolver-only-new-unresolved",
         "--llm-resolve-grandcru",
+        "--no-validate-retailer-price-math",
     },
     "weekly-ingest-command.txt": {
         "--scrape-and-build",
         "--resolve-vivino",
         "--no-resolver-only-new-unresolved",
         "--llm-resolve-grandcru",
+        "--no-validate-retailer-price-math",
     }
+}
+SERVICE_BY_FILE = {
+    "daily-ingest-command.txt": "daily-ingest",
+    "weekly-ingest-command.txt": "weekly-ingest",
 }
 
 
@@ -65,12 +73,61 @@ def command_text(path: Path) -> str:
     return " ".join(lines)
 
 
+def command_tokens(text: str) -> list[str]:
+    return shlex.split(text)
+
+
+def live_start_command(service: str, environment: str) -> str:
+    railway = shutil.which("railway")
+    if not railway:
+        raise RuntimeError("railway CLI is not installed")
+
+    result = subprocess.run(
+        [
+            railway,
+            "deployment",
+            "list",
+            "--service",
+            service,
+            "--environment",
+            environment,
+            "--json",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr or result.stdout)
+
+    deployments = json.loads(result.stdout)
+    if not deployments:
+        raise RuntimeError(f"No deployments found for service {service!r}")
+    return (
+        deployments[0]
+        .get("meta", {})
+        .get("serviceManifest", {})
+        .get("deploy", {})
+        .get("startCommand", "")
+    )
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Also compare checked-in commands with the latest Railway deployment manifests.",
+    )
+    parser.add_argument("--environment", default="production")
+    args = parser.parse_args()
+
     known_flags = refresh_pipeline_flags()
     findings: list[str] = []
 
     for path in deploy_command_files():
-        parts = shlex.split(command_text(path))
+        checked_in_command = command_text(path)
+        parts = command_tokens(checked_in_command)
         seen_flags = set()
         for token in parts:
             if not token.startswith("--"):
@@ -81,6 +138,18 @@ def main() -> int:
                 findings.append(f"{path.relative_to(ROOT)} uses unknown refresh_pipeline flag: {flag}")
         for flag in sorted(REQUIRED_FLAGS.get(path.name, set()) - seen_flags):
             findings.append(f"{path.relative_to(ROOT)} is missing required flag: {flag}")
+
+        if args.live and path.name in SERVICE_BY_FILE:
+            service = SERVICE_BY_FILE[path.name]
+            try:
+                live_command = live_start_command(service, args.environment)
+            except Exception as exc:
+                findings.append(f"{service} live command check failed: {exc}")
+            else:
+                if command_tokens(live_command) != parts:
+                    findings.append(
+                        f"{service} live startCommand differs from {path.relative_to(ROOT)}"
+                    )
 
     if findings:
         print("Deploy command check failed.", file=sys.stderr)

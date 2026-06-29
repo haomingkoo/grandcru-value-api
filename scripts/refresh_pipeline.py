@@ -603,8 +603,8 @@ def main() -> None:
     parser.add_argument(
         "--validate-retailer-price-math",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Validate Grand Cru scaled prices against live product JSON before import.",
+        default=False,
+        help="Validate Grand Cru scaled prices against live product JSON before import (default: false).",
     )
     parser.add_argument(
         "--validate-retailer-price-math-strict",

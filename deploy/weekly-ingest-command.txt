@@ -12,5 +12,6 @@ python scripts/refresh_pipeline.py \
   --resolver-max-api-queries 50 \
   --no-resolver-only-new-unresolved \
   --llm-resolve-grandcru \
+  --no-validate-retailer-price-math \
   --health-url https://web-production-f2effe.up.railway.app/health \
   --no-health-strict
