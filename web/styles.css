@@ -814,7 +814,13 @@ input[type="checkbox"] {
 
 /* Scoring and sources */
 .prose-section {
-  padding-block: 48px;
+  padding-block: 0 48px;
+}
+
+.prose-section::before {
+  content: "";
+  display: block;
+  margin-bottom: 48px;
   border-top: 1px solid var(--hairline);
 }
 
