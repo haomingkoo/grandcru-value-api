@@ -214,111 +214,79 @@ def desktop_browser():
         driver.quit()
 
 
-def test_mobile_all_offers_shows_prices_before_actions(browser_app_url, mobile_browser) -> None:
+def test_mobile_offer_card_shows_prices_before_actions(browser_app_url, mobile_browser) -> None:
     mobile_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
-
-    WebDriverWait(mobile_browser, 10).until(
-        lambda driver: driver.find_element(By.CSS_SELECTOR, ".deal-row")
-    )
-    assert mobile_browser.execute_script(
-        "return getComputedStyle(document.querySelector('#offersSection')).display !== 'none'"
-    )
-
-    section_select = WebDriverWait(mobile_browser, 10).until(
-        lambda driver: driver.find_element(By.ID, "sectionSelect")
-    )
-    Select(section_select).select_by_value("offersSection")
 
     first_row = WebDriverWait(mobile_browser, 10).until(
         lambda driver: driver.find_element(By.CSS_SELECTOR, ".deal-row")
     )
-    price_strip = first_row.find_element(By.CSS_SELECTOR, ".mobile-price-strip")
-    mobile_meta = first_row.find_element(By.CSS_SELECTOR, ".mobile-card-meta")
-    action_links = first_row.find_element(By.CSS_SELECTOR, ".wine-links")
-    detailed_price_cell = first_row.find_elements(By.TAG_NAME, "td")[3]
-    profile_cell = first_row.find_elements(By.TAG_NAME, "td")[1]
-    score_cell = first_row.find_elements(By.TAG_NAME, "td")[6]
+    cells = first_row.find_elements(By.TAG_NAME, "td")
+    platinum_cell, grand_cru_cell = cells[1], cells[2]
+    links = first_row.find_element(By.CSS_SELECTOR, ".wine-links")
 
-    strip_text = price_strip.text
-    assert "PLATINUM" in strip_text
-    assert "$120.00" in strip_text
-    assert "GRAND CRU" in strip_text
-    assert "$150.00" in strip_text
-    assert "Platinum -20.0%" in strip_text
-    assert price_strip.value_of_css_property("display") == "grid"
-    assert "Vivino 4.2" in mobile_meta.text
-    assert "Score 61.0" in mobile_meta.text
-    assert mobile_meta.value_of_css_property("display") == "flex"
+    assert "Platinum" in platinum_cell.text
+    assert "$120.00" in platinum_cell.text
+    assert "Grand Cru" in grand_cru_cell.text
+    assert "$150.00" in grand_cru_cell.text
+    assert "Platinum 20.0% less" in grand_cru_cell.text
     row_text = first_row.text
     assert "Butter-bomb" not in row_text
-    assert "P 7d" not in row_text
-    assert "STYLE PROFILE" not in row_text
+    assert "stable" not in row_text
+    assert "Buy on Platinum" in links.text
 
     metrics = mobile_browser.execute_script(
         """
-        const row = arguments[0]
-        const strip = arguments[1]
-        const links = arguments[2]
-        const detailedPrice = arguments[3]
-        const profile = arguments[4]
-        const score = arguments[5]
+        const [row, price, links] = arguments
         return {
-          activeSections: [...document.querySelectorAll('.browse-section.is-active')].map((el) => el.id),
-          rowTop: row.getBoundingClientRect().top,
-          stripTop: strip.getBoundingClientRect().top,
-          stripWidth: strip.getBoundingClientRect().width,
+          priceTop: price.getBoundingClientRect().top,
           linksTop: links.getBoundingClientRect().top,
-          detailedPriceDisplay: getComputedStyle(detailedPrice).display,
-          profileDisplay: getComputedStyle(profile).display,
-          scoreDisplay: getComputedStyle(score).display,
-          sectionValue: document.querySelector('#sectionSelect')?.value,
+          priceDisplay: getComputedStyle(price).display,
           scrollWidth: document.documentElement.scrollWidth,
           innerWidth: window.innerWidth,
         }
         """,
         first_row,
-        price_strip,
-        action_links,
-        detailed_price_cell,
-        profile_cell,
-        score_cell,
+        platinum_cell,
+        links,
     )
-
-    assert metrics["activeSections"] == ["mapSection"]
-    assert metrics["sectionValue"] == "offersSection"
-    assert metrics["stripTop"] > metrics["rowTop"]
-    assert metrics["stripTop"] < metrics["linksTop"]
-    assert metrics["detailedPriceDisplay"] == "none"
-    assert metrics["profileDisplay"] == "none"
-    assert metrics["scoreDisplay"] == "none"
-    assert metrics["stripWidth"] >= 240
+    assert metrics["priceDisplay"] != "none"
+    assert metrics["priceTop"] < metrics["linksTop"]
     assert metrics["scrollWidth"] <= metrics["innerWidth"]
 
 
-def test_offer_profile_hides_negative_review_until_expanded(browser_app_url, desktop_browser) -> None:
-    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}#offersSection")
+def test_summary_sentence_counts_offers_by_cheaper_side(browser_app_url, desktop_browser) -> None:
+    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
+
+    WebDriverWait(desktop_browser, 10).until(
+        lambda driver: "of 3" in driver.find_element(By.ID, "summary").text
+    )
+    summary = desktop_browser.find_element(By.ID, "summary").text
+    assert summary.startswith("1 of 3 offers are cheaper on Platinum than at Grand Cru.")
+    assert "1 costs the same" in summary
+    assert "1 is not sold at Grand Cru" in summary
+
+
+def test_offer_notes_hide_negative_review_until_expanded(browser_app_url, desktop_browser) -> None:
+    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}#offers")
 
     first_row = WebDriverWait(desktop_browser, 10).until(
         lambda driver: driver.find_element(By.CSS_SELECTOR, ".deal-row")
     )
-    profile_cell = first_row.find_elements(By.TAG_NAME, "td")[1]
-    price_cell = first_row.find_elements(By.TAG_NAME, "td")[3]
+    wine_cell = first_row.find_elements(By.TAG_NAME, "td")[0]
+    grand_cru_cell = first_row.find_elements(By.TAG_NAME, "td")[2]
 
-    assert "STYLE PROFILE" in profile_cell.text
-    assert "cherry, raspberry, cedar, clean fruit." in profile_cell.text
-    assert "Community note" in profile_cell.text
-    assert "Butter-bomb" not in profile_cell.text
-    assert "P 7d" not in price_cell.text
-    assert "Platinum: stable 7d" in price_cell.text
-    assert "Grand Cru: trend reset after price correction" in price_cell.text
-    assert "$2,550" not in price_cell.text
+    assert "cherry, raspberry, cedar, clean fruit." in wine_cell.text
+    assert "Read a Vivino review" in wine_cell.text
+    assert "Butter-bomb" not in wine_cell.text
+    # A 7-day change far larger than the price is a data correction, not a trend.
+    assert "this week" not in grand_cru_cell.text
 
-    desktop_browser.execute_script("arguments[0].click()", profile_cell.find_element(By.TAG_NAME, "summary"))
-    assert "Butter-bomb" in profile_cell.text
+    desktop_browser.execute_script("arguments[0].click()", wine_cell.find_element(By.TAG_NAME, "summary"))
+    assert "Butter-bomb" in wine_cell.text
 
 
-def test_offer_shelf_groups_duplicate_wine_families(browser_app_url, desktop_browser) -> None:
-    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}#offersSection")
+def test_offer_list_groups_duplicate_wine_families(browser_app_url, desktop_browser) -> None:
+    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}#offers")
 
     WebDriverWait(desktop_browser, 10).until(
         lambda driver: driver.find_element(By.CSS_SELECTOR, ".offer-group")
@@ -340,60 +308,29 @@ def test_offer_shelf_groups_duplicate_wine_families(browser_app_url, desktop_bro
 
     assert metrics["rowCount"] == 2
     assert metrics["groupRowCount"] == 1
-    assert "2 wine groups" in metrics["meta"]
-    assert "3 live offers" in metrics["meta"]
-    assert "2 offers grouped" in metrics["groupedCopy"]
-    assert "View 2 offers" in metrics["summary"]
+    assert "2 wine groups, 3 live offers" in metrics["meta"]
+    assert "2 offers for this wine" in metrics["groupedCopy"]
+    assert "1 more offer for Visible Estate Visible Price Burgundy" in metrics["summary"]
     assert metrics["open"] is False
 
     summary = desktop_browser.find_element(By.CSS_SELECTOR, ".offer-group summary")
     desktop_browser.execute_script("arguments[0].click()", summary)
-
     WebDriverWait(desktop_browser, 10).until(
         lambda driver: driver.find_element(By.CSS_SELECTOR, ".offer-group").get_attribute("open")
     )
     group_text = desktop_browser.find_element(By.CSS_SELECTOR, ".offer-group").text
-    assert "2023 Visible Price Burgundy" in group_text
     assert "2022 Visible Price Burgundy" in group_text
 
 
-def test_filter_cards_keep_bottom_offers_table_visible(browser_app_url, mobile_browser) -> None:
-    mobile_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
+def test_filter_with_no_results_shows_empty_state_and_clears(browser_app_url, desktop_browser) -> None:
+    desktop_browser.get(f"{browser_app_url}/?search=zzzz-no-such-wine&e2e={time.time_ns()}")
 
-    section_select = WebDriverWait(mobile_browser, 10).until(
-        lambda driver: driver.find_element(By.ID, "sectionSelect")
+    state = WebDriverWait(desktop_browser, 10).until(
+        lambda driver: driver.find_element(By.CSS_SELECTOR, "#tableState:not([hidden])")
     )
-    Select(section_select).select_by_value("placeSection")
+    assert "No offers match these filters." in state.text
+    assert desktop_browser.find_elements(By.CSS_SELECTOR, ".deal-row") == []
 
-    country_button = WebDriverWait(mobile_browser, 10).until(
-        lambda driver: driver.find_element(By.CSS_SELECTOR, "[data-country-pick='France']")
-    )
-    mobile_browser.execute_script("arguments[0].click()", country_button)
-
-    WebDriverWait(mobile_browser, 10).until(lambda driver: driver.find_elements(By.CSS_SELECTOR, ".deal-row"))
-
-    metrics = mobile_browser.execute_script(
-        """
-        const offers = document.querySelector('#offersSection')
-        const place = document.querySelector('#placeSection')
-        const row = document.querySelector('.deal-row')
-        const strip = row?.querySelector('.mobile-price-strip')
-        return {
-          activeSections: [...document.querySelectorAll('.browse-section.is-active')].map((el) => el.id),
-          sectionValue: document.querySelector('#sectionSelect')?.value,
-          offersDisplay: getComputedStyle(offers).display,
-          placeDisplay: getComputedStyle(place).display,
-          rowCount: document.querySelectorAll('.deal-row').length,
-          stripText: strip?.innerText || '',
-          urlHash: window.location.hash,
-        }
-        """
-    )
-
-    assert metrics["activeSections"] == ["placeSection"]
-    assert metrics["sectionValue"] in {"placeSection", "offersSection"}
-    assert metrics["offersDisplay"] != "none"
-    assert metrics["placeDisplay"] != "none"
-    assert metrics["rowCount"] >= 1
-    assert "$120.00" in metrics["stripText"]
-    assert metrics["urlHash"] in {"#placeSection", "#offersSection"}
+    desktop_browser.execute_script("arguments[0].click()", state.find_element(By.CSS_SELECTOR, "[data-action='clear']"))
+    WebDriverWait(desktop_browser, 10).until(lambda driver: driver.find_elements(By.CSS_SELECTOR, ".deal-row"))
+    assert desktop_browser.find_element(By.ID, "searchInput").get_attribute("value") == ""

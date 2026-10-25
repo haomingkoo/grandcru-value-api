@@ -3,70 +3,41 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MinMax Wine | Platinum Wine Intelligence</title>
+  <title>MinMax Wine: Platinum Wine Club prices compared</title>
   <meta
     name="description"
-    content="Singapore wine offer intelligence for Platinum Wine Club buyers. Compare Platinum offers with Grand Cru benchmarks, Vivino market prices, ratings, stock signals, and price history."
+    content="Check each Platinum Wine Club offer against Grand Cru Wines and Vivino before you spend. Prices in Singapore dollars, refreshed daily."
   >
-  <meta name="keywords" content="wine price comparison Singapore, Platinum Wine Club, Grand Cru wines, Vivino ratings, wine deals Singapore, wine deal score, MinMax Wine">
   <meta name="author" content="Haoming Koo">
   <meta name="robots" content="index, follow">
-  <meta name="theme-color" content="#651c32">
+  <meta name="theme-color" content="#faf6f0">
   <link rel="canonical" href="https://wine.kooexperience.com/">
-  <meta property="og:title" content="MinMax Wine | Buy the Right Bottle">
-  <meta property="og:description" content="Platinum Wine Club offers compared with Grand Cru benchmarks, Vivino market prices, ratings, stock signals, and price history.">
+  <meta property="og:title" content="MinMax Wine: Platinum Wine Club prices compared">
+  <meta property="og:description" content="Each Platinum Wine Club offer checked against Grand Cru Wines and Vivino, in Singapore dollars.">
   <meta property="og:url" content="https://wine.kooexperience.com/">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Haoming Koo">
+  <meta property="og:site_name" content="MinMax Wine">
   <meta property="og:locale" content="en_SG">
-  <meta property="og:image" content="https://wine.kooexperience.com/social-card.svg">
-  <meta property="og:image:alt" content="MinMax Wine compares Platinum Wine Club, Grand Cru Wines, and Vivino market prices.">
+  <meta property="og:image" content="https://wine.kooexperience.com/social-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="MinMax Wine: Platinum Wine Club prices compared with Grand Cru Wines and Vivino.">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="MinMax Wine | Buy the Right Bottle">
-  <meta name="twitter:description" content="Singapore wine offer intelligence across Platinum, Grand Cru, Vivino, ratings, and price history.">
-  <meta name="twitter:image" content="https://wine.kooexperience.com/social-card.svg">
-  <meta name="twitter:image:alt" content="MinMax Wine compares Platinum Wine Club, Grand Cru Wines, and Vivino market prices.">
+  <meta name="twitter:title" content="MinMax Wine: Platinum Wine Club prices compared">
+  <meta name="twitter:description" content="Each Platinum Wine Club offer checked against Grand Cru Wines and Vivino, in Singapore dollars.">
+  <meta name="twitter:image" content="https://wine.kooexperience.com/social-card.png">
+  <meta name="twitter:image:alt" content="MinMax Wine: Platinum Wine Club prices compared with Grand Cru Wines and Vivino.">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "MinMax Wine",
-    "alternateName": "Buy the Right Bottle",
     "url": "https://wine.kooexperience.com/",
-    "description": "Singapore wine offer intelligence for Platinum Wine Club buyers. Compares Platinum offers with Grand Cru benchmarks, Vivino market prices, ratings, stock signals, and price history.",
+    "description": "Checks each Platinum Wine Club offer against Grand Cru Wines and Vivino market prices and ratings, in Singapore dollars.",
     "applicationCategory": "ShoppingApplication",
     "operatingSystem": "Web",
     "inLanguage": "en-SG",
     "isAccessibleForFree": true,
-    "keywords": [
-      "Singapore wine price comparison",
-      "Platinum Wine Club",
-      "Grand Cru Wines",
-      "Vivino market price",
-      "wine deal scoring"
-    ],
-    "about": [
-      {
-        "@type": "Thing",
-        "name": "Wine price comparison"
-      },
-      {
-        "@type": "Organization",
-        "name": "Platinum Wine Club"
-      },
-      {
-        "@type": "Organization",
-        "name": "Grand Cru Wines"
-      },
-      {
-        "@type": "Organization",
-        "name": "Vivino"
-      }
-    ],
-    "audience": {
-      "@type": "Audience",
-      "audienceType": "Singapore wine buyers and Platinum cardholders"
-    },
     "offers": {
       "@type": "Offer",
       "price": "0",
@@ -77,312 +48,159 @@
       "name": "Haoming Koo",
       "url": "https://kooexperience.com"
     },
-    "creator": {
-      "@type": "Person",
-      "name": "Haoming Koo",
-      "url": "https://kooexperience.com"
-    },
     "potentialAction": {
       "@type": "SearchAction",
-      "target": "https://wine.kooexperience.com/?q={search_term_string}",
+      "target": "https://wine.kooexperience.com/?search={search_term_string}",
       "query-input": "required name=search_term_string"
     }
   }
   </script>
-  <link
-    rel="icon"
-    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230c161c'/%3E%3Cpath d='M20 18h24c0 10-4 16-12 18v8h10v4H22v-4h10v-8c-8-2-12-8-12-18Z' fill='%23d8b36a'/%3E%3C/svg%3E"
-  >
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico" sizes="32x32">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+  <link rel="preload" href="/static/fonts/figtree-latin-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/fonts/fonts.css">
   <link rel="stylesheet" href="/static/styles.css?v=__ASSET_VERSION__">
 </head>
 <body>
-  <nav class="site-nav">
-    <div class="site-nav-inner">
-      <a class="site-logo" href="https://kooexperience.com/">HK</a>
-      <div class="site-nav-links">
-        <a href="https://kooexperience.com/">Home</a>
-        <a href="https://github.com/haomingkoo/grandcru-value-api" target="_blank" rel="noopener noreferrer">GitHub</a>
-      </div>
+  <a class="skip-link" href="#offers">Skip to offers</a>
+
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="wordmark" href="/">MinMax Wine</a>
+      <nav class="header-nav" aria-label="Sections">
+        <a href="#offers">Offers</a>
+        <a href="#scoring">Scoring</a>
+        <a href="#sources">Sources</a>
+      </nav>
+      <a class="button button-primary header-cta" href="https://platwineclub.wineportal.com/" target="_blank" rel="noopener noreferrer">Platinum Wine Club</a>
     </div>
-  </nav>
-  <div class="page-shell">
-    <header class="masthead dashboard-hero reveal">
-      <div class="masthead-copy">
-        <p class="eyebrow">Platinum Wine Club intelligence</p>
-        <h1>Buy the right bottle</h1>
-        <p class="lede">See which Platinum bottles are fairly priced, in stock, and worth the spend.</p>
-      </div>
-      <div class="status-stack" aria-label="Data coverage status">
-        <span class="status-pill strong" data-freshness>Loading latest refresh</span>
-      </div>
-    </header>
+  </header>
 
-    <nav class="section-tabs reveal" aria-label="Dashboard sections">
-      <a href="#mapSection">Origins</a>
-      <a href="#picksSection">Best value</a>
-      <a href="#placeSection">Regions</a>
-      <a href="#styleSection">Styles</a>
-      <a href="#offersSection">Offer shelf</a>
-    </nav>
-
-    <label class="section-select reveal" for="sectionSelect">
-      <span>View</span>
-      <select id="sectionSelect" aria-label="Choose dashboard section">
-        <option value="mapSection">Origins</option>
-        <option value="picksSection">Best value</option>
-        <option value="placeSection">Regions</option>
-        <option value="styleSection">Styles</option>
-        <option value="offersSection">Offer shelf</option>
-      </select>
-    </label>
-
-    <section id="mapSection" class="browse-section hero-layout reveal is-active">
-      <article class="panel map-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Origins</p>
-            <h2>Shop by country</h2>
-          </div>
-          <button id="clearMapFocus" class="ghost-button" type="button" hidden>Clear selection</button>
-        </div>
-
-        <div class="map-stage">
-          <div id="originMap" aria-label="Wine origin map" role="img"></div>
-        </div>
-
-        <div id="mapSelection" class="map-selection">
-          Choose a country to focus the offer shelf.
-        </div>
-      </article>
-
-      <aside class="insight-rail">
-        <section class="panel">
-          <p class="eyebrow">Market readout</p>
-          <div id="heroStats" class="stat-grid"></div>
-        </section>
-
-        <section class="panel">
-          <div class="split-heading">
-            <div>
-              <p class="eyebrow">Pricing</p>
-              <h2>Price position</h2>
-            </div>
-          </div>
-          <div id="dealMixChart" class="bar-list"></div>
-        </section>
-
-      </aside>
+  <main>
+    <section class="shell intro" aria-labelledby="pageTitle">
+      <h1 id="pageTitle">Is that Platinum bottle a good price?</h1>
+      <p class="lede">Every Platinum Wine Club offer, checked against Grand Cru Wines and Vivino.</p>
+      <p class="summary" id="summary" aria-live="polite">Checking today&rsquo;s prices&hellip;</p>
+      <p class="freshness" id="freshness" hidden></p>
     </section>
 
-    <section id="picksSection" class="browse-section panel picks-panel reveal">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">Top value</p>
-          <h2>Best bottles now</h2>
-        </div>
-        <p class="panel-note">Ranked by price edge, rating strength, and confidence.</p>
-      </div>
-      <div id="topPicks" class="pick-grid"></div>
-    </section>
-
-    <section id="placeSection" class="browse-section panel explorer-panel reveal">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">Regions</p>
-          <h2>Find bottles by place</h2>
-        </div>
-        <p class="panel-note">Start with country, then narrow by region.</p>
-      </div>
-      <div id="regionGuide" class="country-grid"></div>
-    </section>
-
-    <section id="styleSection" class="browse-section panel family-panel reveal">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">Styles</p>
-          <h2>Choose a drinking lane</h2>
-        </div>
-        <p class="panel-note">See the strongest bottles by style.</p>
-      </div>
-      <div id="familyBoard" class="family-grid"></div>
-    </section>
-
-    <section id="offersSection" class="panel table-panel offers-panel reveal visible">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">Offer shelf</p>
-          <h2>Every live bottle</h2>
-        </div>
-        <div id="resultsMeta" class="results-meta"></div>
+    <section id="offers" class="shell offers" aria-labelledby="offersTitle">
+      <div class="offers-head">
+        <h2 id="offersTitle">All offers</h2>
+        <p id="resultsMeta" class="results-meta" aria-live="polite"></p>
       </div>
 
-      <div class="table-tools">
-        <div class="mobile-filter-selects" aria-label="Quick filters">
-          <label class="field" for="mobileCountrySelect">
-            <span>Country</span>
-            <select id="mobileCountrySelect"></select>
-          </label>
-          <label class="field" for="mobileStyleSelect">
-            <span>Style</span>
-            <select id="mobileStyleSelect"></select>
-          </label>
-        </div>
+      <form id="filtersForm" class="filters" role="search">
+        <label class="field field-search">
+          <span>Search</span>
+          <input id="searchInput" type="search" placeholder="Producer, grape, region or vintage" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Country</span>
+          <select id="countrySelect"></select>
+        </label>
+        <label class="field">
+          <span>Style</span>
+          <select id="styleFamilySelect"></select>
+        </label>
+        <label class="field">
+          <span>Sort by</span>
+          <select id="sortSelect">
+            <option value="deal_score:desc">Best score</option>
+            <option value="price_diff_pct:asc">Biggest saving vs Grand Cru</option>
+            <option value="vivino_rating:desc">Highest Vivino rating</option>
+            <option value="price_platinum:asc">Lowest Platinum price</option>
+            <option value="price_platinum:desc">Highest Platinum price</option>
+            <option value="wine_name:asc">Name, A to Z</option>
+          </select>
+        </label>
 
-        <div class="quick-filter-layout">
-          <div class="quick-filter-block">
-            <p class="eyebrow">Country</p>
-            <div id="countryQuickFilters" class="quick-filter-row"></div>
-          </div>
-          <div class="quick-filter-block">
-            <p class="eyebrow">Style</p>
-            <div id="styleQuickFilters" class="quick-filter-row"></div>
-          </div>
-        </div>
-
-        <details class="filter-drawer">
-          <summary class="filter-drawer-toggle">
-            <span>Filters &amp; sorting</span>
-          </summary>
-          <div class="filter-drawer-body">
-            <form id="filtersForm" class="controls-grid">
-              <label class="field">
-                <span>Search wine</span>
-                <input id="searchInput" type="search" placeholder="Producer, grape, region, or vintage">
-              </label>
-
-              <label class="field">
-                <span>Sort by</span>
-                <select id="sortSelect">
-                  <option value="deal_score:desc">Best overall</option>
-                  <option value="price_diff_pct:asc">Biggest Platinum discount</option>
-                  <option value="price_diff_pct_abs:desc">Largest gap either way</option>
-                  <option value="vivino_rating:desc">Highest Vivino rating</option>
-                  <option value="price_platinum:asc">Lowest Platinum price</option>
-                  <option value="wine_name:asc">Alphabetical</option>
-                </select>
-              </label>
-
-              <label class="field advanced-filter">
-                <span>Country</span>
-                <select id="countrySelect"></select>
-              </label>
-
-              <label class="field advanced-filter">
-                <span>Region</span>
-                <select id="regionSelect"></select>
-              </label>
-
-              <label class="field advanced-filter">
-                <span>Wine type</span>
-                <select id="wineTypeSelect"></select>
-              </label>
-
-              <label class="field advanced-filter">
-                <span>Browse style</span>
-                <select id="styleFamilySelect"></select>
-              </label>
-
-              <label class="field advanced-filter">
-                <span>Grape</span>
-                <select id="grapeSelect"></select>
-              </label>
-
-              <label class="field advanced-filter">
-                <span>Offering</span>
-                <select id="offeringSelect"></select>
-              </label>
-
-              <label class="field advanced-filter">
-                <span>Producer</span>
-                <select id="producerSelect"></select>
-              </label>
-            </form>
-
-            <div class="toggle-row">
-              <label class="toggle-pill">
-                <input id="comparableOnlyToggle" type="checkbox">
-                <span>With Grand Cru benchmark</span>
-              </label>
-              <label class="toggle-pill">
-                <input id="platinumOnlyToggle" type="checkbox">
-                <span>Platinum undercuts Grand Cru</span>
-              </label>
-              <label class="toggle-pill">
-                <input id="ratingToggle" type="checkbox">
-                <span>4.0+ rated</span>
-              </label>
-              <label class="toggle-pill">
-                <input id="confidenceToggle" type="checkbox">
-                <span>100+ ratings</span>
-              </label>
-            </div>
+        <details class="more-filters">
+          <summary>More filters</summary>
+          <div class="more-filters-body">
+            <label class="field">
+              <span>Region</span>
+              <select id="regionSelect"></select>
+            </label>
+            <label class="field">
+              <span>Wine type</span>
+              <select id="wineTypeSelect"></select>
+            </label>
+            <label class="field">
+              <span>Grape</span>
+              <select id="grapeSelect"></select>
+            </label>
+            <label class="field">
+              <span>Format</span>
+              <select id="offeringSelect"></select>
+            </label>
+            <label class="field">
+              <span>Producer</span>
+              <select id="producerSelect"></select>
+            </label>
+            <fieldset class="checks">
+              <legend>Only show</legend>
+              <label><input id="comparableOnlyToggle" type="checkbox"> Listed at Grand Cru</label>
+              <label><input id="platinumOnlyToggle" type="checkbox"> Cheaper on Platinum</label>
+              <label><input id="ratingToggle" type="checkbox"> Rated 4.0 or higher</label>
+              <label><input id="confidenceToggle" type="checkbox"> 100 or more ratings</label>
+            </fieldset>
           </div>
         </details>
+      </form>
 
-        <div id="activeFilters" class="active-filters"></div>
-      </div>
+      <div id="activeFilters" class="active-filters"></div>
 
-      <div class="table-scroll">
-        <table class="deal-table">
-          <colgroup>
-            <col style="width:22%">
-            <col style="width:14%">
-            <col style="width:10%">
-            <col style="width:15%">
-            <col style="width:9%">
-            <col style="width:7%">
-            <col style="width:14%">
-            <col style="width:9%">
-          </colgroup>
+      <div class="table-wrap">
+        <table class="offer-table" aria-describedby="resultsMeta">
           <thead>
             <tr>
-              <th><button class="sort-button" data-sort="wine_name" type="button">Wine</button></th>
-              <th>Profile</th>
-              <th>Origin</th>
-              <th><button class="sort-button" data-sort="price_platinum" type="button">Prices</button></th>
-              <th><button class="sort-button" data-sort="price_diff_pct_abs" type="button">Edge</button></th>
-              <th><button class="sort-button" data-sort="vivino_rating" type="button">Rating</button></th>
-              <th><button class="sort-button" data-sort="deal_score" type="button">Value</button></th>
-              <th>Offer</th>
+              <th scope="col" class="col-wine"><button class="sort-button" data-sort="wine_name" type="button">Wine</button></th>
+              <th scope="col" class="num"><button class="sort-button" data-sort="price_platinum" type="button">Platinum</button></th>
+              <th scope="col" class="num"><button class="sort-button" data-sort="price_diff_pct" type="button">Grand Cru</button></th>
+              <th scope="col" class="num">Vivino</th>
+              <th scope="col" class="num"><button class="sort-button" data-sort="vivino_rating" type="button">Rating</button></th>
+              <th scope="col" class="num"><button class="sort-button" data-sort="deal_score" type="button">Score</button></th>
+              <th scope="col"><span class="visually-hidden">Links</span></th>
             </tr>
           </thead>
           <tbody id="dealTableBody"></tbody>
         </table>
       </div>
+      <div id="tableState" class="table-state" hidden></div>
     </section>
 
-    <footer class="methodology reveal">
-      <details class="filter-drawer">
-        <summary class="filter-drawer-toggle">
-          <span>How value is scored</span>
-        </summary>
-        <div class="filter-drawer-body methodology-body">
-          <p>Each wine is scored <strong>0 &ndash; 100</strong> based on five components:</p>
-          <table class="method-table">
-            <thead><tr><th>Component</th><th>Max</th><th>What it measures</th></tr></thead>
-            <tbody>
-              <tr><td>Retailer discount</td><td>30 pts</td><td>How much cheaper Platinum is vs Grand Cru. Bigger discount = more points.</td></tr>
-              <tr><td>Market discount</td><td>30 pts</td><td>How much cheaper Platinum is vs the Vivino market price. This catches &ldquo;fake deals&rdquo; where Grand Cru is just overpriced.</td></tr>
-              <tr><td>Wine quality</td><td>25 pts</td><td>Vivino community rating (0 &ndash; 5 scale). Higher rated wines score more.</td></tr>
-              <tr><td>Confidence</td><td>10 pts</td><td>Number of Vivino ratings. More ratings = more reliable signal.</td></tr>
-              <tr><td>Double-beat bonus</td><td>5 pts</td><td>Bonus when Platinum beats <em>both</em> Grand Cru and Vivino market price.</td></tr>
-            </tbody>
-          </table>
-          <p class="panel-note">A score of 70+ means the wine is well-rated, supported by enough ratings, and genuinely cheaper on Platinum than the available benchmarks.</p>
-          <p class="panel-note">Data sources: <strong>Platinum Wine Club</strong> (inventory &amp; pricing), <strong>Grand Cru Wines</strong> (competitor pricing), <strong>Vivino</strong> (community ratings &amp; market prices). All prices in SGD. Ratings are community-sourced and may vary. Prices and availability are not guaranteed; always verify on the merchant site before purchase.</p>
-        </div>
-      </details>
-    </footer>
+    <section id="scoring" class="shell prose-section" aria-labelledby="scoringTitle">
+      <h2 id="scoringTitle">How the score works</h2>
+      <p>Each offer gets a score out of 100. Higher means a better price for a well-rated wine.</p>
+      <div class="method-wrap">
+        <table class="method-table">
+          <thead><tr><th scope="col">Part</th><th scope="col" class="num">Up to</th><th scope="col">How it is counted</th></tr></thead>
+          <tbody>
+            <tr><td>Saving vs Grand Cru</td><td class="num">30</td><td>One point for each percent Platinum is cheaper than Grand Cru.</td></tr>
+            <tr><td>Saving vs Vivino</td><td class="num">30</td><td>One point for each percent Platinum is cheaper than the Vivino market price. This catches bottles that only look cheap because Grand Cru is expensive.</td></tr>
+            <tr><td>Vivino rating</td><td class="num">25</td><td>The Vivino rating out of 5, scaled to 25.</td></tr>
+            <tr><td>Number of ratings</td><td class="num">10</td><td>More ratings earn more points, reaching the full 10 at about 1,000 ratings.</td></tr>
+            <tr><td>Cheaper than both</td><td class="num">5</td><td>Added when Platinum is more than 5% cheaper than both Grand Cru and Vivino.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-    <footer class="site-footer">
-      <p class="data-freshness" data-freshness></p>
-      <p>Built by <a href="https://kooexperience.com/">Haoming Koo</a> &middot; <a href="https://github.com/haomingkoo/grandcru-value-api" target="_blank" rel="noopener noreferrer">Source on GitHub</a> &middot; <a href="mailto:haomingkoo@gmail.com">Work with me</a></p>
-    </footer>
-  </div>
+    <section id="sources" class="shell prose-section" aria-labelledby="sourcesTitle">
+      <h2 id="sourcesTitle">Where the prices come from</h2>
+      <p>Platinum prices and stock come from the Platinum Wine Club shop. Comparison prices come from Grand Cru Wines. Ratings and market prices come from Vivino; for magnums and bundles, the Vivino price is scaled to the same number of bottles.</p>
+      <p>Prices can change between checks. Confirm the price on the shop&rsquo;s own page before you buy. This site is independent and is not affiliated with American Express, Platinum Wine Club, Grand Cru Wines or Vivino.</p>
+    </section>
+  </main>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <footer class="site-footer">
+    <div class="shell">
+      <p>&copy; 2026 Haoming Koo &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; Contact (<a href="mailto:privacy@kooexperience.com">privacy@kooexperience.com</a>) &middot; More projects &rarr; <a href="https://kooexperience.com/">kooexperience.com</a></p>
+    </div>
+  </footer>
+
   <script src="/static/app.js?v=__ASSET_VERSION__" defer></script>
 </body>
 </html>
