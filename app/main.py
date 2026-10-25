@@ -9,7 +9,7 @@ import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -64,6 +64,7 @@ FRONTEND_ASSET_PATHS = (
     WEB_DIR / "styles.css",
     WEB_DIR / "app.js",
 )
+LEGAL_PAGES = {"privacy": WEB_DIR / "privacy.html", "terms": WEB_DIR / "terms.html"}
 CANONICAL_BASE_URL = "https://wine.kooexperience.com"
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
@@ -71,11 +72,11 @@ CONTENT_SECURITY_POLICY = (
     "object-src 'none'; "
     "frame-ancestors 'none'; "
     "form-action 'self'; "
-    "img-src 'self' data: https://tile.openstreetmap.org https://unpkg.com https://*.app.netsuite.com; "
-    "script-src 'self' 'unsafe-inline' https://unpkg.com https://static.cloudflareinsights.com; "
-    "style-src 'self' 'unsafe-inline' https://unpkg.com; "
+    "img-src 'self' data: https://*.app.netsuite.com; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
     "font-src 'self'; "
-    "connect-src 'self' https://cloudflareinsights.com https://unpkg.com; "
+    "connect-src 'self'; "
     "upgrade-insecure-requests"
 )
 
@@ -327,13 +328,35 @@ async def access_log_middleware(request, call_next):
     return response
 
 
-@app.get("/", include_in_schema=False)
-def frontend() -> HTMLResponse:
-    asset_version = str(
+def _asset_version() -> str:
+    return str(
         max((path.stat().st_mtime_ns for path in FRONTEND_ASSET_PATHS if path.exists()), default=int(time.time_ns()))
     )
-    html = (WEB_DIR / "index.html").read_text(encoding="utf-8").replace("__ASSET_VERSION__", asset_version)
+
+
+def _render_page(path: Path) -> HTMLResponse:
+    html = path.read_text(encoding="utf-8").replace("__ASSET_VERSION__", _asset_version())
     return HTMLResponse(html, headers={"Cache-Control": "no-store, max-age=0"})
+
+
+@app.get("/", include_in_schema=False)
+def frontend() -> HTMLResponse:
+    return _render_page(WEB_DIR / "index.html")
+
+
+@app.get("/privacy", include_in_schema=False)
+def privacy_page() -> HTMLResponse:
+    return _render_page(LEGAL_PAGES["privacy"])
+
+
+@app.get("/terms", include_in_schema=False)
+def terms_page() -> HTMLResponse:
+    return _render_page(LEGAL_PAGES["terms"])
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> FileResponse:
+    return FileResponse(WEB_DIR / "favicon.ico", media_type="image/x-icon", headers={"Cache-Control": "public, max-age=604800"})
 
 
 @app.get("/robots.txt", response_class=PlainTextResponse, include_in_schema=False)
@@ -367,6 +390,12 @@ def sitemap_xml() -> Response:
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
+  <url>
+    <loc>{CANONICAL_BASE_URL}/privacy</loc>
+  </url>
+  <url>
+    <loc>{CANONICAL_BASE_URL}/terms</loc>
+  </url>
 </urlset>
 """
     return Response(
@@ -376,27 +405,9 @@ def sitemap_xml() -> Response:
     )
 
 
-@app.get("/social-card.svg", include_in_schema=False)
-def social_card_svg() -> Response:
-    svg = """<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <rect width="1200" height="630" fill="#f2e2d5"/>
-  <rect y="0" width="1200" height="84" fill="#651c32"/>
-  <circle cx="955" cy="326" r="178" fill="#fef6ee" stroke="#651c32" stroke-width="4"/>
-  <circle cx="955" cy="326" r="112" fill="#651c32"/>
-  <text x="72" y="68" fill="#fef6ee" font-family="Arial, sans-serif" font-size="34" font-weight="700">MINMAX WINE</text>
-  <text x="72" y="216" fill="#651c32" font-family="Arial Narrow, Arial, sans-serif" font-size="82" font-weight="700">BUY THE RIGHT BOTTLE</text>
-  <text x="76" y="294" fill="#651c32" font-family="Georgia, serif" font-size="34">Platinum offers, Grand Cru benchmarks, and Vivino market checks.</text>
-  <text x="76" y="352" fill="#651c32" font-family="Georgia, serif" font-size="30">Singapore wine intelligence by Haoming Koo.</text>
-  <rect x="76" y="420" width="278" height="56" rx="28" fill="#ef6079"/>
-  <text x="112" y="457" fill="#fef6ee" font-family="Georgia, serif" font-size="24" font-weight="700">Compare live offers</text>
-  <text x="895" y="342" fill="#fef6ee" font-family="Arial Narrow, Arial, sans-serif" font-size="76" font-weight="700">SGD</text>
-</svg>
-"""
-    return Response(
-        content=svg,
-        media_type="image/svg+xml",
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+@app.get("/social-card.png", include_in_schema=False)
+def social_card_png() -> FileResponse:
+    return FileResponse(WEB_DIR / "social-card.png", media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/llms.txt", response_class=PlainTextResponse, include_in_schema=False)

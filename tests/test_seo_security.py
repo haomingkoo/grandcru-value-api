@@ -18,11 +18,11 @@ def test_frontend_sets_security_headers() -> None:
     assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
     csp = response.headers["content-security-policy"]
     assert "frame-ancestors 'none'" in csp
-    assert "https://unpkg.com" in csp
-    assert "https://tile.openstreetmap.org" in csp
-    assert "cartocdn" not in csp
-    assert "https://static.cloudflareinsights.com" in csp
-    assert "connect-src 'self' https://cloudflareinsights.com https://unpkg.com" in csp
+    assert "unpkg" not in csp
+    assert "cloudflareinsights" not in csp
+    assert "script-src 'self' 'unsafe-inline';" in csp
+    assert "connect-src 'self';" in csp
+    assert "img-src 'self' data: https://*.app.netsuite.com;" in csp
     assert "font-src 'self';" in csp
     assert "googleapis" not in csp and "gstatic" not in csp
     assert "camera=()" in response.headers["permissions-policy"]
@@ -47,6 +47,7 @@ def test_sitemap_xml_lists_canonical_pages() -> None:
     body = response.text
     assert "<loc>https://wine.kooexperience.com/</loc>" in body
     assert "<loc>https://wine.kooexperience.com/legal</loc>" not in body
+    assert "<loc>https://wine.kooexperience.com/privacy</loc>" in body
 
 
 def test_frontend_has_social_and_structured_metadata() -> None:
@@ -55,7 +56,7 @@ def test_frontend_has_social_and_structured_metadata() -> None:
     assert response.status_code == 200
     body = response.text
     assert '<link rel="canonical" href="https://wine.kooexperience.com/">' in body
-    assert 'property="og:image" content="https://wine.kooexperience.com/social-card.svg"' in body
+    assert 'property="og:image" content="https://wine.kooexperience.com/social-card.png"' in body
     assert 'name="twitter:card" content="summary_large_image"' in body
 
     match = re.search(r'<script type="application/ld\+json">\s*(.*?)\s*</script>', body, re.S)
@@ -66,12 +67,29 @@ def test_frontend_has_social_and_structured_metadata() -> None:
     assert schema["url"] == "https://wine.kooexperience.com/"
 
 
-def test_social_card_svg_is_available() -> None:
-    response = client.get("/social-card.svg")
+def test_social_card_png_and_favicon_are_available() -> None:
+    card = client.get("/social-card.png")
+    assert card.status_code == 200
+    assert card.headers["content-type"] == "image/png"
+    assert card.content.startswith(b"\x89PNG")
 
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("image/svg+xml")
-    assert "BUY THE RIGHT BOTTLE" in response.text
+    icon = client.get("/favicon.ico")
+    assert icon.status_code == 200
+    assert icon.headers["content-type"] == "image/x-icon"
+
+
+def test_privacy_and_terms_pages_render_with_shared_footer() -> None:
+    for path, heading in (("/privacy", "<h1>Privacy</h1>"), ("/terms", "<h1>Terms</h1>")):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert heading in response.text
+        assert "privacy@kooexperience.com" in response.text
+        assert "__ASSET_VERSION__" not in response.text
+
+    home = client.get("/").text
+    assert '<a href="/privacy">Privacy</a>' in home
+    assert '<a href="/terms">Terms</a>' in home
+    assert "kooexperience.com</a></p>" in home
 
 
 def test_llms_txt_discovery_files_are_available() -> None:
