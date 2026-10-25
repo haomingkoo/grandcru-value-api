@@ -19,9 +19,8 @@ def test_frontend_sets_security_headers() -> None:
     csp = response.headers["content-security-policy"]
     assert "frame-ancestors 'none'" in csp
     assert "unpkg" not in csp
-    assert "cloudflareinsights" not in csp
-    assert "script-src 'self' 'unsafe-inline';" in csp
-    assert "connect-src 'self';" in csp
+    assert "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com;" in csp
+    assert "connect-src 'self' https://cloudflareinsights.com;" in csp
     assert "img-src 'self' data: https://*.app.netsuite.com;" in csp
     assert "font-src 'self';" in csp
     assert "googleapis" not in csp and "gstatic" not in csp
