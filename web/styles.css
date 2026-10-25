@@ -1929,6 +1929,12 @@ h1 {
   filter: grayscale(1) contrast(0.85) brightness(1.08);
 }
 
+/* Fractional zoom leaves hairline gaps between tiles; overlap them by half a pixel. */
+.muted-basemap img.leaflet-tile {
+  width: 256.5px !important;
+  height: 256.5px !important;
+}
+
 .leaflet-container {
   background: #06080d;
   font-family: var(--font-body);
