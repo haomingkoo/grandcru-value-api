@@ -1046,6 +1046,18 @@ input[type="checkbox"] {
     grid-template-columns: 1fr;
     gap: 4px;
   }
+
+  .method-table td:first-child {
+    white-space: normal;
+  }
+
+  .method-table th.num {
+    white-space: nowrap;
+  }
+
+  .method-table .num {
+    padding-right: 12px;
+  }
 }
 
 @media (max-width: 420px) {
