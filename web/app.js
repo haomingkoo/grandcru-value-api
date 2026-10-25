@@ -1215,10 +1215,11 @@ function ensureOriginMap() {
       maxBoundsViscosity: 1.0,
     }).setView([25, 10], 1.2)
 
-    window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    // CARTO basemaps now require an API key; OSM's standard tiles do not.
+    window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
-      subdomains: "abcd",
+      className: "muted-basemap",
     }).addTo(originMap)
 
     originMarkerLayer = window.L.layerGroup().addTo(originMap)

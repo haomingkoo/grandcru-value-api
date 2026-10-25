@@ -71,7 +71,7 @@ CONTENT_SECURITY_POLICY = (
     "object-src 'none'; "
     "frame-ancestors 'none'; "
     "form-action 'self'; "
-    "img-src 'self' data: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://unpkg.com https://*.app.netsuite.com; "
+    "img-src 'self' data: https://tile.openstreetmap.org https://unpkg.com https://*.app.netsuite.com; "
     "script-src 'self' 'unsafe-inline' https://unpkg.com https://static.cloudflareinsights.com; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
     "font-src 'self' https://fonts.gstatic.com; "
