@@ -1924,6 +1924,11 @@ h1 {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
 }
 
+/* Soft grey basemap to match the old CARTO light style. */
+.muted-basemap {
+  filter: grayscale(1) contrast(0.85) brightness(1.08);
+}
+
 .leaflet-container {
   background: #06080d;
   font-family: var(--font-body);

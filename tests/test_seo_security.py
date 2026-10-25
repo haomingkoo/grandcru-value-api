@@ -19,7 +19,8 @@ def test_frontend_sets_security_headers() -> None:
     csp = response.headers["content-security-policy"]
     assert "frame-ancestors 'none'" in csp
     assert "https://unpkg.com" in csp
-    assert "https://*.basemaps.cartocdn.com" in csp
+    assert "https://tile.openstreetmap.org" in csp
+    assert "cartocdn" not in csp
     assert "https://static.cloudflareinsights.com" in csp
     assert "connect-src 'self' https://cloudflareinsights.com https://unpkg.com" in csp
     assert "camera=()" in response.headers["permissions-policy"]
