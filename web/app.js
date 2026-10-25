@@ -357,38 +357,41 @@ function renderResultsMeta(deals, families) {
 function renderLoadingRows() {
   els.dealTableBody.innerHTML = Array.from({ length: 4 }, () => `
     <tr class="skeleton-row" aria-hidden="true">
-      <td colspan="7"><span class="skeleton-block"></span><span class="skeleton-line"></span><span class="skeleton-line short"></span></td>
+      <td colspan="7"><div class="skeleton"><span class="skeleton-block"></span><span class="skeleton-line"></span><span class="skeleton-line short"></span></div></td>
     </tr>
   `).join("")
   els.resultsMeta.textContent = "Loading offers…"
 }
 
+function showTableState(html) {
+  els.dealTableBody.innerHTML = ""
+  els.tableState.innerHTML = html
+  els.tableState.hidden = false
+  document.querySelector(".table-wrap").hidden = true
+}
+
 function renderTable(families) {
   els.tableState.hidden = true
+  document.querySelector(".table-wrap").hidden = false
   if (!families.length) {
-    els.dealTableBody.innerHTML = ""
-    const filtered = hasActiveFilters()
-    els.tableState.innerHTML = filtered
+    showTableState(hasActiveFilters()
       ? `<p class="state-title">No offers match these filters.</p>
          <p>Try a different search, or remove a filter.</p>
          <button class="button" type="button" data-action="clear">Clear all filters</button>`
       : `<p class="state-title">No offers to show right now.</p>
-         <p>The Platinum Wine Club list is empty or being refreshed. Check back later today.</p>`
-    els.tableState.hidden = false
+         <p>The Platinum Wine Club list is empty or being refreshed. Check back later today.</p>`)
     return
   }
   els.dealTableBody.innerHTML = families.map(renderFamily).join("")
 }
 
 function renderErrorState() {
-  els.dealTableBody.innerHTML = ""
   els.resultsMeta.textContent = ""
-  els.tableState.innerHTML = `
+  showTableState(`
     <p class="state-title">The offers could not load.</p>
     <p>Check your connection, then try again.</p>
     <button class="button" type="button" data-action="retry">Try again</button>
-  `
-  els.tableState.hidden = false
+  `)
 }
 
 function renderFamily(family) {

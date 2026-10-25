@@ -446,6 +446,10 @@ input[type="checkbox"] {
 }
 
 /* Table */
+.table-wrap[hidden] {
+  display: none;
+}
+
 .table-wrap {
   margin-top: 16px;
   background: var(--surface);
@@ -745,7 +749,7 @@ input[type="checkbox"] {
 }
 
 /* States */
-.skeleton-row td {
+.skeleton {
   display: grid;
   grid-template-columns: 40px 1fr;
   gap: 8px 12px;
@@ -1000,9 +1004,9 @@ input[type="checkbox"] {
   }
 
   .skeleton-row,
-  .skeleton-row td {
-    display: grid;
-    padding: 16px;
+  .offer-table .skeleton-row td {
+    display: block;
+    border-bottom: 1px solid var(--hairline);
   }
 }
 
