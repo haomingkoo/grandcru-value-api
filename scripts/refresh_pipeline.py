@@ -14,6 +14,11 @@ from typing import Any
 from sqlalchemy import create_engine, text
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.config import normalize_database_url
+
 SENSITIVE_ARG_NAMES = {
     "--api-key",
     "--brave-api-key",
@@ -423,7 +428,7 @@ def compute_rating_coverage(database_url: str) -> tuple[int, int, int, int, floa
     connect_args: dict[str, Any] = {}
     if database_url.startswith("sqlite"):
         connect_args = {"check_same_thread": False}
-    engine = create_engine(database_url, connect_args=connect_args)
+    engine = create_engine(normalize_database_url(database_url), connect_args=connect_args)
     with engine.connect() as conn:
         total = conn.execute(text("select count(*) from wine_deals")).scalar() or 0
         rated = conn.execute(

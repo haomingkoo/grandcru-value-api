@@ -12,6 +12,17 @@ DEFAULT_CORS_ORIGINS = ",".join(
 )
 
 
+POSTGRES_DRIVER_SCHEME = "postgresql+psycopg"
+
+
+def normalize_database_url(url: str) -> str:
+    """Pin the Postgres driver to psycopg 3 instead of SQLAlchemy's version-dependent default."""
+    for scheme in ("postgres", "postgresql"):
+        if url.startswith(f"{scheme}://"):
+            return f"{POSTGRES_DRIVER_SCHEME}://{url.removeprefix(f'{scheme}://')}"
+    return url
+
+
 def _as_bool(value: str, default: bool) -> bool:
     if value is None:
         return default
@@ -21,7 +32,7 @@ def _as_bool(value: str, default: bool) -> bool:
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "GrandCru Value API")
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./data/wines.db")
+    database_url: str = normalize_database_url(os.getenv("DATABASE_URL", "sqlite:///./data/wines.db"))
     legal_notice_path: str = os.getenv("LEGAL_NOTICE_PATH", "LEGAL_NOTICE.md")
     ingestion_stale_hours: int = int(os.getenv("INGESTION_STALE_HOURS", "24"))
     cors_origins: str = os.getenv("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
