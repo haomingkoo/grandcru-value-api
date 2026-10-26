@@ -212,6 +212,9 @@ def prepare_rows(rows: list[dict[str, str]], *, enforce_in_stock: bool = False) 
                 "platinum_vivino_rating": (row.get("platinum_vivino_rating") or "").strip(),
                 "platinum_vivino_num_ratings": (row.get("platinum_vivino_num_ratings") or "").strip(),
                 "platinum_vivino_url": (row.get("platinum_vivino_url") or "").strip(),
+                "platinum_country": (row.get("platinum_country") or "").strip(),
+                "platinum_region": (row.get("platinum_region") or "").strip(),
+                "platinum_grapes": (row.get("platinum_grapes") or "").strip(),
             }
         )
     return prepared
@@ -262,6 +265,9 @@ def build_matches(
                     "platinum_vivino_rating": plat.get("platinum_vivino_rating") or "",
                     "platinum_vivino_num_ratings": plat.get("platinum_vivino_num_ratings") or "",
                     "platinum_vivino_url": plat.get("platinum_vivino_url") or "",
+                    "platinum_country": plat.get("platinum_country") or "",
+                    "platinum_region": plat.get("platinum_region") or "",
+                    "platinum_grapes": plat.get("platinum_grapes") or "",
                     "name_main": best_same_pack["name"],
                     "year_main": best_same_pack["year"],
                     "quantity_main": best_same_pack["quantity"],
@@ -287,6 +293,9 @@ def build_matches(
                     "platinum_vivino_rating": plat.get("platinum_vivino_rating") or "",
                     "platinum_vivino_num_ratings": plat.get("platinum_vivino_num_ratings") or "",
                     "platinum_vivino_url": plat.get("platinum_vivino_url") or "",
+                    "platinum_country": plat.get("platinum_country") or "",
+                    "platinum_region": plat.get("platinum_region") or "",
+                    "platinum_grapes": plat.get("platinum_grapes") or "",
                     "name_main": best_cross_pack["name"],
                     "year_main": best_cross_pack["year"],
                     "quantity_main": best_cross_pack["quantity"],
@@ -313,6 +322,9 @@ def build_matches(
                     "platinum_vivino_rating": plat.get("platinum_vivino_rating") or "",
                     "platinum_vivino_num_ratings": plat.get("platinum_vivino_num_ratings") or "",
                     "platinum_vivino_url": plat.get("platinum_vivino_url") or "",
+                    "platinum_country": plat.get("platinum_country") or "",
+                    "platinum_region": plat.get("platinum_region") or "",
+                    "platinum_grapes": plat.get("platinum_grapes") or "",
                     "name_main": None,
                     "year_main": None,
                     "quantity_main": None,
@@ -385,6 +397,9 @@ def build_summary(matched_rows: list[dict[str, object]]) -> list[dict[str, objec
                 "platinum_vivino_rating": row.get("platinum_vivino_rating") or "",
                 "platinum_vivino_num_ratings": row.get("platinum_vivino_num_ratings") or "",
                 "platinum_vivino_url": row.get("platinum_vivino_url") or "",
+                "platinum_country": row.get("platinum_country") or "",
+                "platinum_region": row.get("platinum_region") or "",
+                "platinum_grapes": row.get("platinum_grapes") or "",
             }
         )
 
@@ -436,6 +451,9 @@ def main() -> None:
                 "platinum_vivino_rating",
                 "platinum_vivino_num_ratings",
                 "platinum_vivino_url",
+                "platinum_country",
+                "platinum_region",
+                "platinum_grapes",
                 "name_main",
                 "year_main",
                 "quantity_main",
@@ -469,6 +487,9 @@ def main() -> None:
             "platinum_vivino_rating",
             "platinum_vivino_num_ratings",
             "platinum_vivino_url",
+            "platinum_country",
+            "platinum_region",
+            "platinum_grapes",
         ],
         summary,
     )

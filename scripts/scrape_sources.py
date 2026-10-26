@@ -149,6 +149,39 @@ def _parse_compact_count(value: str) -> int | None:
         return None
 
 
+def parse_vivino_badge_rating(text: str | None) -> str:
+    """Platinum cards show the Vivino rating alone in a badge, e.g. "4.1"."""
+    try:
+        value = float((text or "").strip())
+    except ValueError:
+        return ""
+    if not 0.0 < value <= 5.0:
+        return ""
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+_PLATINUM_COUNTRY_ALIASES = {"USA": "United States"}
+
+
+def parse_platinum_origin(parts: list[str]) -> dict[str, str]:
+    """Card body spans read "Country, Region, Variety"; the region is sometimes absent."""
+    cleaned = [part.strip().lstrip(",").strip() for part in parts]
+    cleaned = [part for part in cleaned if part]
+    if len(cleaned) < 2:
+        return {}
+    country = _PLATINUM_COUNTRY_ALIASES.get(cleaned[0], cleaned[0])
+    region = cleaned[1] if len(cleaned) >= 3 else ""
+    grape = cleaned[-1]
+    if grape.lower() == "proprietary blend":
+        grape = ""
+    return {"platinum_country": country, "platinum_region": region, "platinum_grapes": grape}
+
+
+def extract_platinum_origin(card) -> dict[str, str]:
+    spans = card.find_elements(By.CSS_SELECTOR, ".card-body > span")
+    return parse_platinum_origin([(span.text or "") for span in spans])
+
+
 def extract_platinum_vivino_fields(card) -> dict[str, str]:
     vivino_url = ""
     for selector in PLATINUM_VIVINO_LINK_SELECTORS:
@@ -166,6 +199,15 @@ def extract_platinum_vivino_fields(card) -> dict[str, str]:
         url_match = _VIVINO_URL_RE.search(html)
         if url_match:
             vivino_url = url_match.group(0).strip()
+
+    badge = find_first_element(card, [".vivino-badge-bottom"])
+    badge_rating = parse_vivino_badge_rating(badge.text if badge is not None else "")
+    if badge_rating:
+        return {
+            "platinum_vivino_rating": badge_rating,
+            "platinum_vivino_num_ratings": "",
+            "platinum_vivino_url": vivino_url,
+        }
 
     hint_text_parts: list[str] = []
     for selector in PLATINUM_VIVINO_HINT_SELECTORS:
@@ -254,6 +296,9 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
         "platinum_vivino_rating",
         "platinum_vivino_num_ratings",
         "platinum_vivino_url",
+        "platinum_country",
+        "platinum_region",
+        "platinum_grapes",
     ]
     for field in optional_fields:
         if any(field in row for row in rows):
@@ -520,6 +565,9 @@ def scrape_platinum(
                 payload["platinum_vivino_num_ratings"] = vivino_fields["platinum_vivino_num_ratings"]
             if vivino_fields.get("platinum_vivino_url"):
                 payload["platinum_vivino_url"] = vivino_fields["platinum_vivino_url"]
+            for field, value in extract_platinum_origin(card).items():
+                if value:
+                    payload[field] = value
             rows.append(payload)
             page_new_rows += 1
 

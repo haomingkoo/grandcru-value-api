@@ -561,6 +561,34 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self.assertEqual(report["errors"], [])
         self.assertTrue(any("missing country" in warning for warning in report["warnings"]))
 
+    def test_platinum_listing_fields_fill_unmatched_offer(self) -> None:
+        name = "2023 Tenuta Perano - Chianti Classico - Red - 750 ml - Standard Bottle"
+        fields = [
+            "name_plat", "year_plat", "quantity_plat", "volume_plat", "price_plat", "cheaper_side",
+            "url_plat", "platinum_vivino_rating", "platinum_country", "platinum_region", "platinum_grapes",
+        ]
+        self._write_csv(
+            self.comparison_path,
+            fields,
+            [{
+                "name_plat": name, "year_plat": "2023", "quantity_plat": "1", "volume_plat": "750ml",
+                "price_plat": "48.00", "cheaper_side": "No Match", "url_plat": "https://example.com/p",
+                "platinum_vivino_rating": "3.9", "platinum_country": "Italy",
+                "platinum_region": "Tuscany", "platinum_grapes": "Sangiovese",
+            }],
+        )
+        self._write_csv(self.vivino_path, ["wine_name", "vivino_rating", "vivino_num_ratings", "vivino_price", "vivino_url"], [])
+        self._write_csv(self.overrides_path, ["match_name", "wine_name", "vivino_url"], [])
+
+        self._run_import(quarantine_path=self.quarantine_path)
+
+        deal = self._current_deal()
+        self.assertEqual(deal.vivino_match_method, "platinum")
+        self.assertEqual(deal.vivino_rating, 3.9)
+        self.assertIsNone(deal.vivino_price)
+        self.assertIsNotNone(deal.deal_score)
+        self.assertEqual((deal.country, deal.region, deal.grapes), ("Italy", "Tuscany", "Sangiovese"))
+
     def test_quarantine_only_hides_rows_without_platinum_price(self) -> None:
         self.assertEqual(import_wine_data_module._quarantine_reasons({"price_platinum": None}), ["missing_price_platinum"])
         self.assertEqual(import_wine_data_module._quarantine_reasons({"price_platinum": 90.0, "country": None}), [])
