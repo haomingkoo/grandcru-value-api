@@ -40,6 +40,7 @@ _ALLOWED_TABLES = {"wine_deals", "wine_deal_snapshots", "ingestion_runs", "price
 _ALLOWED_COLUMNS = {
     "volume_ml",
     "in_stock",
+    "vivino_price_held",
     "vivino_match_method",
     "platinum_in_stock",
     "grand_cru_in_stock",

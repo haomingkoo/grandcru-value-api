@@ -877,7 +877,9 @@ function compareLines(deal) {
     else if (diff < 0) lines.push(`<li class="tone-good">${money(-diff)} (${pct}%) below the Vivino market price${checked}</li>`)
     else lines.push(`<li class="tone-bad">${money(diff)} (${pct}%) above the Vivino market price${checked}</li>`)
   } else {
-    lines.push(`<li class="tone-calm">${!deal.vivino_url && deal.vivino_rating == null ? "No Vivino match yet" : "No Vivino market price yet"}</li>`)
+    lines.push(`<li class="tone-calm">${deal.vivino_price_held
+      ? `No market price (held for review: ${escapeHtml(deal.vivino_price_held)})`
+      : !deal.vivino_url && deal.vivino_rating == null ? "No Vivino match yet" : "No Vivino market price yet"}</li>`)
   }
   return lines.join("")
 }

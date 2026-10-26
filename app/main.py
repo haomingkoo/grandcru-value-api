@@ -125,6 +125,7 @@ def _ensure_runtime_columns() -> None:
     ensure_column("wine_deals", "market_retailer_url", "VARCHAR(512)")
     ensure_column("wine_deals", "volume_ml", "INTEGER")
     ensure_column("price_observations", "in_stock", "BOOLEAN")
+    ensure_column("wine_deals", "vivino_price_held", "VARCHAR(64)")
     ensure_deal_score_nullable()
     with SessionLocal() as session:
         fill_volume_ml(session)

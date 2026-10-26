@@ -51,5 +51,23 @@ class DriftTests(unittest.TestCase):
         self.assertIsNone(identity_drift("2023 Hudelot - Baillet - Chambolle Musigny les Cras - Red", {"name": "2023 Hudelot-Baillet Chambolle-Musigny 1er Cru 'Les Cras'"}))
 
 
+class MarketPriceHoldTests(unittest.TestCase):
+    def test_muse_magnum_is_held(self):
+        # Live 26 Oct: Platinum S$390 for 1.5 L; Vivino page S$458 with no bottle size; shown doubled as S$916.
+        from app.price_history import market_price_hold
+        self.assertEqual(market_price_hold(458.0, 1, "1.5l", 390.0), "bottle size of the Vivino price unclear")
+
+    def test_far_from_platinum_is_held(self):
+        from app.price_history import market_price_hold
+        self.assertIn("x Platinum", market_price_hold(700.0, 1, "750ml", 100.0))
+        self.assertIn("x Platinum", market_price_hold(20.0, 1, "750ml", 100.0))
+
+    def test_plausible_prices_pass(self):
+        from app.price_history import market_price_hold
+        self.assertIsNone(market_price_hold(165.0, 1, "1.5l", 340.0))   # Roagna Solea magnum, scaled to S$330
+        self.assertIsNone(market_price_hold(210.0, 3, "750ml", 610.0))  # bundle of 3
+        self.assertIsNone(market_price_hold(180.0, 1, "750ml", 157.0))
+
+
 if __name__ == "__main__":
     unittest.main()

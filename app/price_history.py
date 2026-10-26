@@ -48,6 +48,29 @@ def per_750(price: float | None, quantity: int | None, ml: int | None) -> float 
     return round(price / (bottles * ml / 750), 2)
 
 
+def market_price_hold(raw_price: float | None, quantity: int | None, volume: str | None,
+                      price_platinum: float | None) -> str | None:
+    """Why a Vivino price should not be shown, or None. Vivino's price carries no bottle size; we assume 750 ml.
+
+    - Far from Platinum per 750 ml (over 3x or under a third): likely another cuvee, format or a case price.
+    - Not a 750 ml listing, and the price read as already being for this size sits clearly closer to
+      Platinum than the scaled one: the size is ambiguous, so scaling could double-count.
+    """
+    ml = volume_ml(volume)
+    if raw_price is None or raw_price <= 0 or not price_platinum or not ml:
+        return None
+    plat_750 = per_750(price_platinum, quantity, ml)
+    ratio = raw_price / plat_750
+    if ratio > 3 or ratio < 1 / 3:
+        return f"{ratio:.1f}x Platinum per 750 ml"
+    bottles_750 = max(quantity or 1, 1) * ml / 750
+    if abs(bottles_750 - 1) > 0.01:
+        scaled = raw_price * bottles_750
+        if abs(raw_price - price_platinum) * 2 < abs(scaled - price_platinum):
+            return "bottle size of the Vivino price unclear"
+    return None
+
+
 def sg_day(moment: datetime) -> date:
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=UTC)
