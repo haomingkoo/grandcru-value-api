@@ -10,7 +10,7 @@ const defaultState = {
   offeringType: "",
   producer: "",
   comparableOnly: false,
-  onlyPlatinumCheaper: false,
+  cheaperSide: "",
   minVivinoRating: "",
   minVivinoNumRatings: "",
   priceMin: "",
@@ -41,6 +41,20 @@ const sortLabels = {
   "deal_score:asc": "lowest score first",
 }
 
+const QUICK_FILTERS = {
+  platinum: { isOn: () => state.cheaperSide === "Platinum Cheaper", apply: (on) => { state.cheaperSide = on ? "Platinum Cheaper" : "" } },
+  rated: { isOn: () => Number(state.minVivinoRating || 0) >= 4, apply: (on) => { state.minVivinoRating = on ? "4.0" : "" } },
+  confident: { isOn: () => Number(state.minVivinoNumRatings || 0) >= 100, apply: (on) => { state.minVivinoNumRatings = on ? "100" : "" } },
+  listed: { isOn: () => state.comparableOnly, apply: (on) => { state.comparableOnly = on } },
+}
+
+const SIDES = [
+  { value: "Platinum Cheaper", label: "cheaper on Platinum", cls: "platinum" },
+  { value: "Same Price", label: "same price", cls: "same" },
+  { value: "Grand Cru Cheaper", label: "cheaper at Grand Cru", cls: "grand-cru" },
+  { value: "No Match", label: "not at Grand Cru", cls: "none" },
+]
+
 const STYLE_ORDER = ["Red", "White", "Champagne", "Sparkling", "Rose", "Sweet / Dessert", "Orange"]
 
 const state = { ...defaultState }
@@ -53,6 +67,7 @@ let pendingHighlight = null
 let sliderDebounce = 0
 let requestSerial = 0
 let lastDeals = null
+let splitSerial = 0
 let searchDebounce = 0
 const els = {}
 
@@ -61,7 +76,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   hydrateStateFromUrl()
   bindEvents()
   renderLoadingRows()
-  loadSummary()
   loadFreshness()
   loadPriceHistory()
   setupValueMap()
@@ -78,8 +92,8 @@ function captureElements() {
   for (const id of [
     "searchInput", "sortSelect", "countrySelect", "regionSelect", "wineTypeSelect",
     "styleFamilySelect", "grapeSelect", "offeringSelect", "producerSelect",
-    "comparableOnlyToggle", "platinumOnlyToggle", "ratingToggle", "confidenceToggle",
-    "resultsMeta", "activeFilters", "dealTableBody", "tableState", "summary", "freshness", "marketNotice",
+    "splitBar", "quickFilters",
+    "resultsMeta", "activeFilters", "dealTableBody", "tableState", "freshness", "marketNotice",
     "statStrip", "priceMinRange", "priceMaxRange", "priceMinInput", "priceMaxInput", "priceFilter",
   ]) {
     els[id] = document.getElementById(id)
@@ -124,17 +138,21 @@ function bindEvents() {
     })
   })
 
-  const toggleBindings = [
-    ["comparableOnlyToggle", (checked) => { state.comparableOnly = checked }],
-    ["platinumOnlyToggle", (checked) => { state.onlyPlatinumCheaper = checked }],
-    ["ratingToggle", (checked) => { state.minVivinoRating = checked ? "4.0" : "" }],
-    ["confidenceToggle", (checked) => { state.minVivinoNumRatings = checked ? "100" : "" }],
-  ]
-  toggleBindings.forEach(([elementId, apply]) => {
-    els[elementId].addEventListener("change", (event) => {
-      apply(event.target.checked)
-      loadOffers()
-    })
+  els.quickFilters.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-quick]")
+    if (!button) return
+    const on = button.getAttribute("aria-pressed") !== "true"
+    QUICK_FILTERS[button.dataset.quick].apply(on)
+    syncControlsFromState()
+    loadOffers()
+  })
+
+  els.splitBar.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-side]")
+    if (!button) return
+    state.cheaperSide = state.cheaperSide === button.dataset.side ? "" : button.dataset.side
+    syncControlsFromState()
+    loadOffers()
   })
 
   els.activeFilters.addEventListener("click", (event) => {
@@ -182,34 +200,35 @@ function bindEvents() {
   })
 }
 
-async function loadSummary() {
+// One bar across the offers in view: how each compares with Grand Cru. Its own filter is left out.
+async function loadSplit() {
+  const params = filterParams()
+  params.delete("cheaper_side")
+  const serial = ++splitSerial
+  let stats
   try {
-    const stats = await fetchJson("/deals/stats")
-    const counts = Object.fromEntries((stats.cheaper_sides || []).map((item) => [item.value, item.count]))
-    const total = stats.total_deals || 0
-    if (!total) {
-      els.summary.textContent = "There are no Platinum Wine Club offers to compare right now."
-      return
-    }
-    const cheaperPlatinum = counts["Platinum Cheaper"] || 0
-    const cheaperGrandCru = counts["Grand Cru Cheaper"] || 0
-    const same = counts["Same Price"] || 0
-    const unlisted = counts["No Match"] || 0
-    const withMarket = stats.with_market_price || 0
-    const comparisons = [
-      `${formatInteger(cheaperPlatinum)} ${plural(cheaperPlatinum, "is", "are")} cheaper on Platinum than at Grand Cru`,
-      cheaperGrandCru ? `${formatInteger(cheaperGrandCru)} ${plural(cheaperGrandCru, "is", "are")} cheaper at Grand Cru` : "",
-      same ? `${formatInteger(same)} ${plural(same, "costs", "cost")} the same` : "",
-      unlisted ? `${formatInteger(unlisted)} ${plural(unlisted, "is", "are")} not sold at Grand Cru` : "",
-    ].filter(Boolean)
-    els.summary.innerHTML = [
-      `Platinum Wine Club lists <strong>${formatInteger(total)} ${plural(total, "offer", "offers")}</strong> in stock today.`,
-      `${capitalize(joinList(comparisons))}.`,
-      `${formatInteger(withMarket)} of ${formatInteger(total)} ${plural(withMarket, "has", "have")} a Vivino market price to compare.`,
-    ].join(" ")
+    stats = await fetchJson(`/deals/stats?${params}`)
   } catch (_) {
-    els.summary.textContent = "Today’s price summary could not load."
+    return
   }
+  if (serial !== splitSerial) return
+  const counts = Object.fromEntries((stats.cheaper_sides || []).map((item) => [item.value, item.count]))
+  const total = stats.total_deals || 0
+  if (!total) {
+    els.splitBar.hidden = true
+    return
+  }
+  const sides = SIDES.map((side) => ({ ...side, count: counts[side.value] || 0 }))
+  els.splitBar.innerHTML = `
+    <p class="split-title"><strong>${formatInteger(total)}</strong> ${plural(total, "offer", "offers")}${hasActiveFilters() && params.toString() ? " in view" : " in stock today"}, against Grand Cru</p>
+    <div class="split-bar" aria-hidden="true">
+      ${sides.filter((side) => side.count).map((side) => `<span class="split-seg seg-${side.cls}" style="flex-grow:${side.count}" data-side="${escapeHtml(side.value)}"></span>`).join("")}
+    </div>
+    <ul class="split-legend">
+      ${sides.map((side) => `<li><button type="button" class="split-key key-${side.cls}" data-side="${escapeHtml(side.value)}" aria-pressed="${state.cheaperSide === side.value}" ${side.count ? "" : "disabled"}><span class="split-swatch" aria-hidden="true"></span><strong>${formatInteger(side.count)}</strong> ${escapeHtml(side.label)}</button></li>`).join("")}
+    </ul>
+  `
+  els.splitBar.hidden = false
 }
 
 async function loadFreshness() {
@@ -271,12 +290,9 @@ function toggleStyleGroup(group) {
 }
 
 function renderStats() {
-  const cheaper = allDeals.filter((d) => d.cheaper_side === "Platinum Cheaper").length
   const rated = allDeals.filter((d) => (d.vivino_rating || 0) >= 4 && d.price_platinum_per_750 != null)
   const best = rated.sort((a, b) => a.price_platinum_per_750 - b.price_platinum_per_750)[0]
-  const items = [
-    `<li><button type="button" class="stat" data-stat="cheaper"><strong>${formatInteger(cheaper)}</strong><span>${plural(cheaper, "offer is", "offers are")} cheaper on Platinum than at Grand Cru</span></button></li>`,
-  ]
+  const items = []
   if (best) {
     items.push(`<li><button type="button" class="stat stat-feature" data-stat="best" data-deal-id="${best.id}">
       ${best.image_url ? `<img src="${escapeHtml(best.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}
@@ -299,12 +315,6 @@ function renderFreshStat(health) {
 }
 
 function applyStat(kind, dealId) {
-  if (kind === "cheaper") {
-    resetFilter("all")
-    state.onlyPlatinumCheaper = true
-    state.sortBy = defaultState.sortBy
-    state.sortOrder = defaultState.sortOrder
-  }
   if (kind === "best") {
     resetFilter("all")
     state.minVivinoRating = "4.0"
@@ -508,6 +518,7 @@ async function loadOffers() {
     renderTable(families)
     renderActiveFilters()
     if (valueMap) valueMap.setVisible(deals.map((d) => d.id), styleFilterList())
+    loadSplit()
     if (pendingHighlight) {
       const target = deals.find((d) => d.id === pendingHighlight)
       pendingHighlight = null
@@ -543,7 +554,7 @@ function filterParams() {
   if (state.offeringType) params.set("offering_type", state.offeringType)
   if (state.producer) params.set("producer", state.producer)
   if (state.comparableOnly) params.set("comparable_only", "true")
-  if (state.onlyPlatinumCheaper) params.set("only_platinum_cheaper", "true")
+  if (state.cheaperSide) params.set("cheaper_side", state.cheaperSide)
   if (state.minVivinoRating) params.set("min_vivino_rating", state.minVivinoRating)
   if (state.minVivinoNumRatings) params.set("min_vivino_num_ratings", state.minVivinoNumRatings)
   if (state.priceMin) params.set("min_price_per_750", state.priceMin)
@@ -564,7 +575,7 @@ function hydrateStateFromUrl() {
   state.sortBy = params.get("sort_by") || defaultState.sortBy
   state.sortOrder = params.get("sort_order") || defaultState.sortOrder
   state.comparableOnly = params.get("comparable_only") === "true"
-  state.onlyPlatinumCheaper = params.get("only_platinum_cheaper") === "true"
+  state.cheaperSide = params.get("cheaper_side") || (params.get("only_platinum_cheaper") === "true" ? "Platinum Cheaper" : "")
   state.minVivinoRating = params.get("min_vivino_rating") || ""
   state.minVivinoNumRatings = params.get("min_vivino_num_ratings") || ""
   state.priceMin = params.get("min_price_per_750") || ""
@@ -621,10 +632,12 @@ function syncControlsFromState() {
   els.grapeSelect.value = state.grape
   els.offeringSelect.value = state.offeringType
   els.producerSelect.value = state.producer
-  els.comparableOnlyToggle.checked = state.comparableOnly
-  els.platinumOnlyToggle.checked = state.onlyPlatinumCheaper
-  els.ratingToggle.checked = Number(state.minVivinoRating || 0) >= 4
-  els.confidenceToggle.checked = Number(state.minVivinoNumRatings || 0) >= 100
+  els.quickFilters.querySelectorAll("[data-quick]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(QUICK_FILTERS[button.dataset.quick].isOn()))
+  })
+  els.splitBar.querySelectorAll("[data-side]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(state.cheaperSide === button.dataset.side))
+  })
   syncPriceControls()
   syncSortButtons()
 }
@@ -660,7 +673,7 @@ function renderResultsMeta(deals, families) {
 function renderLoadingRows() {
   els.dealTableBody.innerHTML = Array.from({ length: 4 }, () => `
     <tr class="skeleton-row" aria-hidden="true">
-      <td colspan="7"><div class="skeleton"><span class="skeleton-block"></span><span class="skeleton-line"></span><span class="skeleton-line short"></span></div></td>
+      <td colspan="4"><div class="skeleton"><span class="skeleton-block"></span><span class="skeleton-line"></span><span class="skeleton-line short"></span></div></td>
     </tr>
   `).join("")
   els.resultsMeta.textContent = "Loading offers…"
@@ -707,7 +720,7 @@ function renderHistoryRow(deal) {
   const keep = { price_platinum: deal.price_platinum, volume: deal.volume, quantity: deal.quantity, volume_ml: deal.volume_ml }
   return `
     <tr class="history-row" id="history-${deal.id}" data-deal-id="${deal.id}" data-deal="${escapeHtml(JSON.stringify(keep))}" hidden>
-      <td colspan="7"><div class="history-panel"></div></td>
+      <td colspan="4"><div class="history-panel"></div></td>
     </tr>
   `
 }
@@ -737,36 +750,25 @@ function renderOfferRow(deal, family) {
             <p class="wine-meta">${escapeHtml(meta)}</p>
             <p class="verdict tone-${escapeHtml(verdict.tone)}">${escapeHtml(verdict.label)}</p>
             ${grouped}
-            <div class="history-slot" data-deal-id="${deal.id}"></div>
           </div>
         </div>
       </td>
-      <td class="num cell-price">
-        <span class="cell-label">Platinum</span>
-        <span class="price">${formatMoney(deal.price_platinum)}</span>
-        ${sizeNotes(deal)}
-        ${deal.platinum_in_stock === false ? `<span class="sub tone-warn">Out of stock</span>` : ""}
-        ${trendNote(deal.price_platinum_change_7d, deal.platinum_trend_7d, deal.price_platinum)}
-      </td>
-      <td class="num cell-price">
-        <span class="cell-label">Grand Cru</span>
-        ${grandCruCell(deal)}
-      </td>
-      <td class="num cell-price">
-        <span class="cell-label">Vivino</span>
-        ${vivinoCell(deal)}
+      <td class="cell-compare">
+        <div class="price-head">
+          <span class="price">${formatMoney(deal.price_platinum)}</span>
+          ${sizeNotes(deal)}
+          ${deal.platinum_in_stock === false ? `<span class="sub tone-warn">Out of stock</span>` : ""}
+        </div>
+        ${priceStrip(deal)}
+        <ul class="compare-lines">${compareLines(deal)}</ul>
+        <div class="history-slot" data-deal-id="${deal.id}"></div>
       </td>
       <td class="num cell-rating">
-        <span class="cell-label">Rating</span>
+        <span class="cell-label">Vivino rating</span>
         ${deal.vivino_rating != null
           ? `<span class="figure">${deal.vivino_rating.toFixed(1)}</span>${deal.vivino_num_ratings ? `<span class="sub">${formatInteger(deal.vivino_num_ratings)} ratings</span>` : deal.vivino_match_method === "platinum" ? `<span class="sub">As shown on Platinum</span>` : ""}${vivinoSource(deal)}`
-          : `<span class="sub">No rating</span>`}
-      </td>
-      <td class="num cell-score">
-        <span class="cell-label">Score</span>
-        ${deal.deal_score != null
-          ? `<span class="figure">${Math.round(deal.deal_score)}</span><span class="sub">of 100</span>`
-          : `<span class="sub">Not enough data to score</span>`}
+          : `<span class="sub">Not rated yet</span>`}
+        ${deal.deal_score != null ? `<span class="sub score-line">Score ${Math.round(deal.deal_score)} of 100</span>` : ""}
       </td>
       <td class="cell-links">
         <div class="wine-links">
@@ -774,49 +776,78 @@ function renderOfferRow(deal, family) {
           <span class="compare-links">
             ${textLink(deal.grand_cru_url, "Grand Cru")}
             ${textLink(deal.vivino_url, "Vivino")}
+            ${textLink(wineSearcherUrl(deal), "Wine-Searcher", "Compare Singapore prices on Wine-Searcher")}
           </span>
-          ${quietLink(wineSearcherUrl(deal), "Compare Singapore prices on Wine-Searcher")}
         </div>
       </td>
     </tr>
   `
 }
 
-function grandCruCell(deal) {
-  if (deal.price_grand_cru == null) {
-    return `<span class="sub">Not sold at Grand Cru</span>`
-  }
-  const pct = deal.price_diff_pct_abs != null ? deal.price_diff_pct_abs : Math.abs(deal.price_diff_pct || 0)
-  let diff = `<span class="sub">Same price</span>`
-  if (deal.cheaper_side === "Platinum Cheaper") diff = `<span class="sub tone-good">Platinum ${formatPct(pct)} less</span>`
-  if (deal.cheaper_side === "Grand Cru Cheaper") diff = `<span class="sub tone-bad">Platinum ${formatPct(pct)} more</span>`
+// Where Platinum sits against every other price we have for the same listing size.
+function priceStrip(deal) {
+  if (deal.price_platinum == null) return ""
+  const points = [{ key: "platinum", name: "Platinum", value: deal.price_platinum }]
+  if (deal.price_grand_cru != null) points.push({ key: "grand_cru", name: "Grand Cru", value: deal.price_grand_cru })
+  if (hasVivinoMarket(deal)) points.push({ key: "vivino", name: "Vivino market", value: deal.vivino_price })
+  if (points.length < 2) return ""
+  const values = points.map((p) => p.value)
+  const pad = Math.max((Math.max(...values) - Math.min(...values)) * 0.2, Math.max(...values) * 0.05)
+  const lo = Math.min(...values) - pad
+  const hi = Math.max(...values) + pad
+  const pos = (v) => ((v - lo) / (hi - lo)) * 100
+  const groups = []
+  points.slice().sort((a, b) => a.value - b.value).forEach((p) => {
+    const last = groups[groups.length - 1]
+    if (last && Math.abs(pos(p.value) - last.pos) < 4) last.items.push(p)
+    else groups.push({ pos: pos(p.value), items: [p] })
+  })
+  groups.forEach((g) => {
+    g.items.sort((a, b) => (a.key === "platinum" ? -1 : b.key === "platinum" ? 1 : 0))
+    g.hasPlatinum = g.items[0].key === "platinum"
+  })
+  // Platinum's label above the line, the others below; a crowded label moves to the free row.
+  const rows = { top: [], bottom: [] }
+  groups.filter((g) => g.hasPlatinum).forEach((g) => { g.row = "top"; rows.top.push(g.pos) })
+  groups.filter((g) => !g.hasPlatinum).forEach((g) => {
+    const clash = (row) => rows[row].some((x) => Math.abs(x - g.pos) < 34)
+    g.row = !clash("bottom") ? "bottom" : !clash("top") ? "top" : "bottom"
+    rows[g.row].push(g.pos)
+  })
+  const align = (p) => (p < 20 ? "start" : p > 80 ? "end" : "middle")
+  const label = (g) => `<span class="strip-label align-${align(g.pos)}${g.hasPlatinum ? " is-platinum" : ""}" style="left:${g.pos.toFixed(1)}%">${escapeHtml(g.items.map((i) => i.name).join(" = "))} ${escapeHtml(WineCharts.money(g.items[0].value))}</span>`
+  const aria = points.map((p) => `${p.name} ${WineCharts.money(p.value)}`).join(", ")
   return `
-    <span class="price">${formatMoney(deal.price_grand_cru)}</span>
-    ${diff}
-    ${deal.grand_cru_in_stock === false ? `<span class="sub">Out of stock there</span>` : ""}
-    ${trendNote(deal.price_grand_cru_change_7d, deal.grand_cru_trend_7d, deal.price_grand_cru)}
+    <div class="strip" role="img" aria-label="${escapeHtml(aria)}">
+      <div class="strip-row">${groups.filter((g) => g.row === "top").map(label).join("")}</div>
+      <div class="strip-track">${groups.map((g) => g.items.slice().reverse().map((i) => `<span class="strip-dot dot-${i.key}" style="left:${g.pos.toFixed(1)}%"></span>`).join("")).join("")}</div>
+      <div class="strip-row">${groups.filter((g) => g.row === "bottom").map(label).join("")}</div>
+    </div>
   `
 }
 
-function vivinoCell(deal) {
+function compareLines(deal) {
   const lines = []
-  if (deal.vivino_price != null && deal.vivino_price > 0) {
-    lines.push(`<span class="price" title="Vivino price for the same number of bottles">${formatMoney(deal.vivino_price)}</span>`)
-    const gap = marketGapPct(deal)
-    if (gap != null) {
-      if (Math.abs(gap) < 1) lines.push(`<span class="sub">Same as Platinum</span>`)
-      else if (gap < 0) lines.push(`<span class="sub tone-good">Platinum ${formatPct(Math.abs(gap), 0)} less</span>`)
-      else lines.push(`<span class="sub tone-bad">Platinum ${formatPct(gap, 0)} more</span>`)
-    }
-    if (deal.vivino_checked_at) lines.push(`<span class="sub">Checked ${formatDay(deal.vivino_checked_at)}</span>`)
-    lines.push(vivinoSource(deal))
-  } else if (!deal.vivino_url && deal.vivino_rating == null) {
-    lines.push(`<span class="sub">No Vivino match</span>`)
+  const money = WineCharts.money
+  if (deal.price_grand_cru == null || deal.price_platinum == null) {
+    lines.push(`<li class="tone-calm">Not at Grand Cru</li>`)
   } else {
-    lines.push(`<span class="sub">No market price</span>`)
+    const diff = deal.price_platinum - deal.price_grand_cru
+    const pct = Math.round((Math.abs(diff) / deal.price_grand_cru) * 100)
+    const stock = deal.grand_cru_in_stock === false ? " · out of stock there" : ""
+    if (Math.abs(diff) < 0.5) lines.push(`<li class="tone-calm">Same price as Grand Cru${stock}</li>`)
+    else if (diff < 0) lines.push(`<li class="tone-good">${money(-diff)} (${pct}%) less than Grand Cru${stock}</li>`)
+    else lines.push(`<li class="tone-bad">${money(diff)} (${pct}%) more than Grand Cru${stock}</li>`)
   }
-  if (deal.price_market != null) {
-    lines.push(`<span class="sub" title="Wine-Searcher average for the same number of bottles">Wine-Searcher ${formatMoney(deal.price_market)}</span>`)
+  if (hasVivinoMarket(deal)) {
+    const diff = deal.price_platinum - deal.vivino_price
+    const pct = Math.round((Math.abs(diff) / deal.vivino_price) * 100)
+    const checked = deal.vivino_checked_at ? ` · checked ${escapeHtml(formatDay(deal.vivino_checked_at))}` : ""
+    if (Math.abs(diff) < 0.5) lines.push(`<li class="tone-calm">Same as the Vivino market price${checked}</li>`)
+    else if (diff < 0) lines.push(`<li class="tone-good">${money(-diff)} (${pct}%) below the Vivino market price${checked}</li>`)
+    else lines.push(`<li class="tone-bad">${money(diff)} (${pct}%) above the Vivino market price${checked}</li>`)
+  } else {
+    lines.push(`<li class="tone-calm">${!deal.vivino_url && deal.vivino_rating == null ? "No Vivino match yet" : "No Vivino market price yet"}</li>`)
   }
   return lines.join("")
 }
@@ -836,7 +867,7 @@ function renderGroupedOffersRow(family) {
 
   return `
     <tr class="deal-group-row">
-      <td colspan="7">
+      <td colspan="4">
         <details class="offer-group">
           <summary>${formatInteger(others)} more ${plural(others, "offer", "offers")} for ${escapeHtml(family.title)}${family.priceBand ? `, ${escapeHtml(family.priceBand)}` : ""}</summary>
           <ul class="variant-list">${variants}</ul>
@@ -901,7 +932,7 @@ function renderActiveFilters() {
   if (state.offeringType) chips.push([state.offeringType, "offeringType"])
   if (state.producer) chips.push([state.producer, "producer"])
   if (state.comparableOnly) chips.push(["Listed at Grand Cru", "comparableOnly"])
-  if (state.onlyPlatinumCheaper) chips.push(["Cheaper on Platinum", "onlyPlatinumCheaper"])
+  if (state.cheaperSide) chips.push([capitalize(SIDES.find((side) => side.value === state.cheaperSide)?.label || state.cheaperSide), "cheaperSide"])
   if (state.minVivinoRating) chips.push([`Rated ${state.minVivinoRating}+`, "minVivinoRating"])
   if (state.minVivinoNumRatings) chips.push([`${state.minVivinoNumRatings}+ ratings`, "minVivinoNumRatings"])
   if (state.priceMin || state.priceMax) {
@@ -991,22 +1022,6 @@ function marketGapPct(deal) {
   return ((deal.price_platinum - deal.vivino_price) / deal.vivino_price) * 100
 }
 
-function trendNote(change, direction, currentPrice) {
-  if (direction !== "up" && direction !== "down") return ""
-  if (isLikelyTrendCorrection(change, currentPrice)) return ""
-  const amount = formatMoney(Math.abs(change || 0))
-  return direction === "down"
-    ? `<span class="sub tone-good">Down ${amount} this week</span>`
-    : `<span class="sub tone-bad">Up ${amount} this week</span>`
-}
-
-function isLikelyTrendCorrection(change, currentPrice) {
-  const absoluteChange = Math.abs(Number(change) || 0)
-  const price = Math.abs(Number(currentPrice) || 0)
-  if (!absoluteChange || !price) return false
-  return absoluteChange >= 1000 && absoluteChange >= price * 2
-}
-
 const BOTTLE_SVG = `<svg class="bottle-fallback" viewBox="0 0 24 64" aria-hidden="true"><path d="M9 2h6v14c0 3 5 6 5 12v32a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V28c0-6 5-9 5-12V2z" fill="currentColor"/></svg>`
 
 function wineImageHtml(deal) {
@@ -1035,14 +1050,9 @@ function wineSearcherUrl(deal) {
   return `https://www.wine-searcher.com/find/${encodeURIComponent(terms).replace(/%20/g, "+")}/1/singapore`
 }
 
-function quietLink(url, label) {
+function textLink(url, label, title) {
   if (!url) return ""
-  return `<a class="quiet-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}<span class="visually-hidden"> (opens in a new tab)</span></a>`
-}
-
-function textLink(url, label) {
-  if (!url) return ""
-  return `<a class="text-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}<span class="visually-hidden"> (opens in a new tab)</span></a>`
+  return `<a class="text-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"${title ? ` title="${escapeHtml(title)}"` : ""}>${escapeHtml(label)}<span class="visually-hidden"> (opens in a new tab)</span></a>`
 }
 
 function formatVolume(deal) {
@@ -1086,10 +1096,6 @@ async function fetchJson(path) {
 function formatMoney(value) {
   if (value == null) return ""
   return `S$${new Intl.NumberFormat("en-SG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`
-}
-
-function formatPct(value, digits = 1) {
-  return `${Number(value).toFixed(digits)}%`
 }
 
 function formatInteger(value) {

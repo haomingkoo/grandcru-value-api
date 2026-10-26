@@ -82,6 +82,7 @@
       <div class="hero-copy">
         <h1 id="pageTitle">Is that Platinum bottle a good price?</h1>
         <p class="lede">Every Platinum Wine Club offer, priced per 750&nbsp;ml and checked against Grand Cru Wines and Vivino.</p>
+        <div class="split" id="splitBar" hidden></div>
         <ul class="stat-strip" id="statStrip" aria-label="Today at a glance"></ul>
         <p class="freshness" id="freshness" hidden></p>
         <p class="market-notice" id="marketNotice" role="status" hidden></p>
@@ -106,7 +107,6 @@
         <h2 id="offersTitle">All offers</h2>
         <p id="resultsMeta" class="results-meta" aria-live="polite"></p>
       </div>
-      <p class="summary" id="summary" aria-live="polite">Checking today&rsquo;s prices&hellip;</p>
 
       <form id="filtersForm" class="filters" role="search">
         <label class="field field-search">
@@ -153,6 +153,13 @@
           </div>
         </fieldset>
 
+        <div class="quick-filters" id="quickFilters" role="group" aria-label="Quick filters">
+          <button type="button" class="quick" data-quick="platinum" aria-pressed="false">Cheaper on Platinum</button>
+          <button type="button" class="quick" data-quick="rated" aria-pressed="false">Rated 4.0 or higher</button>
+          <button type="button" class="quick" data-quick="confident" aria-pressed="false">100 or more ratings</button>
+          <button type="button" class="quick" data-quick="listed" aria-pressed="false">Listed at Grand Cru</button>
+        </div>
+
         <details class="more-filters">
           <summary>More filters</summary>
           <div class="more-filters-body">
@@ -176,13 +183,6 @@
               <span>Producer</span>
               <select id="producerSelect"></select>
             </label>
-            <fieldset class="checks">
-              <legend>Only show</legend>
-              <label><input id="comparableOnlyToggle" type="checkbox"> Listed at Grand Cru</label>
-              <label><input id="platinumOnlyToggle" type="checkbox"> Cheaper on Platinum</label>
-              <label><input id="ratingToggle" type="checkbox"> Rated 4.0 or higher</label>
-              <label><input id="confidenceToggle" type="checkbox"> 100 or more ratings</label>
-            </fieldset>
           </div>
         </details>
       </form>
@@ -194,12 +194,9 @@
           <thead>
             <tr>
               <th scope="col" class="col-wine"><button class="sort-button" data-sort="wine_name" type="button">Wine</button></th>
-              <th scope="col" class="num"><button class="sort-button" data-sort="price_platinum" type="button">Platinum</button></th>
-              <th scope="col" class="num"><button class="sort-button" data-sort="price_diff_pct" type="button">Grand Cru</button></th>
-              <th scope="col" class="num">Vivino</th>
-              <th scope="col" class="num"><button class="sort-button" data-sort="vivino_rating" type="button">Rating</button></th>
-              <th scope="col" class="num"><button class="sort-button" data-sort="deal_score" type="button">Score</button></th>
-              <th scope="col"><span class="visually-hidden">Links</span></th>
+              <th scope="col" class="col-compare"><button class="sort-button" data-sort="price_per_750" type="button">Platinum price, compared</button></th>
+              <th scope="col" class="num col-rating"><button class="sort-button" data-sort="vivino_rating" type="button">Vivino</button></th>
+              <th scope="col" class="col-links"><span class="visually-hidden">Links</span></th>
             </tr>
           </thead>
           <tbody id="dealTableBody"></tbody>
