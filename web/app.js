@@ -451,7 +451,7 @@ function renderOfferRow(deal, family) {
       <td class="num cell-rating">
         <span class="cell-label">Rating</span>
         ${deal.vivino_rating != null
-          ? `<span class="figure">${deal.vivino_rating.toFixed(1)}</span>${deal.vivino_num_ratings ? `<span class="sub">${formatInteger(deal.vivino_num_ratings)} ratings</span>` : ""}`
+          ? `<span class="figure">${deal.vivino_rating.toFixed(1)}</span>${deal.vivino_num_ratings ? `<span class="sub">${formatInteger(deal.vivino_num_ratings)} ratings</span>` : deal.vivino_match_method === "platinum" ? `<span class="sub">As shown on Platinum</span>` : ""}`
           : `<span class="sub">No rating</span>`}
       </td>
       <td class="num cell-score">

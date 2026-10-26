@@ -729,6 +729,26 @@ def _resolve_vivino_price_to_listing(
     return chosen
 
 
+def _fill_from_platinum_listing(metadata, row: dict[str, str]):
+    """Fill origin and grape gaps from what Platinum's own listing card states."""
+    country = (row.get("platinum_country") or "").strip()
+    region = (row.get("platinum_region") or "").strip()
+    grapes = (row.get("platinum_grapes") or "").strip()
+    fill: dict[str, str] = {}
+    if not metadata.country and country:
+        fill["country"] = country
+        if not metadata.region and region:
+            fill["region"] = region
+        fill["origin_label"] = f"{fill.get('region') or metadata.region}, {country}" if (fill.get("region") or metadata.region) else country
+        fill["origin_source"] = "platinum_listing"
+        fill["origin_confidence"] = "high"
+    if not metadata.grapes and grapes:
+        fill["grapes"] = grapes
+        fill["grape_source"] = "platinum_listing"
+        fill["grape_confidence"] = "high"
+    return replace(metadata, **fill) if fill else metadata
+
+
 def _quarantine_reasons(payload: dict[str, object]) -> list[str]:
     """Only a missing Platinum price hides an offer; other gaps are shown as gaps."""
     if payload.get("price_platinum") in (None, ""):
@@ -957,6 +977,7 @@ def import_data(
                 quantity=quantity,
                 volume=volume,
             )
+            metadata = _fill_from_platinum_listing(metadata, row)
 
             # --- Volume-aware Vivino price ---
             # Base Vivino results are raw bottle prices and must be scaled to
