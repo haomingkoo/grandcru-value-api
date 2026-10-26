@@ -1,5 +1,13 @@
 # Wine Intelligence API
 
+<p align="center">
+  <a href="https://kooexperience.com/blog/posts/minmax-wine.html"><img src="docs/media/wine-preview.webp" width="800" alt="Filtered offer list scrolls to a Rhys Chardonnay and the answer: Yes, 15% less than Grand Cru"></a>
+  <br>
+  <a href="https://wine.kooexperience.com/?tour=1">▶ 30-second tour</a> · <a href="https://wine.kooexperience.com/">Live app</a> · <a href="https://kooexperience.com/blog/posts/minmax-wine.html">kooexperience.com</a>
+  <br>
+  <sub>Music: Sascha Ende, ende.app (CC BY 4.0)</sub>
+</p>
+
 Wine price comparison engine for Singapore. Compares **Platinum Wine Club** and **Grand Cru** retailer prices with **Vivino** community ratings and market pricing to surface genuine deals with AI-powered scoring.
 
 **Live at** [wine.kooexperience.com](https://wine.kooexperience.com/)

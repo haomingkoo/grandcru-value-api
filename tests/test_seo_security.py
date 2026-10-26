@@ -23,6 +23,7 @@ def test_frontend_sets_security_headers() -> None:
     assert "connect-src 'self' https://cloudflareinsights.com;" in csp
     assert "img-src 'self' data: https://*.app.netsuite.com;" in csp
     assert "font-src 'self';" in csp
+    assert "media-src 'self';" in csp
     assert "googleapis" not in csp and "gstatic" not in csp
     assert "camera=()" in response.headers["permissions-policy"]
 
@@ -116,3 +117,18 @@ def test_unknown_api_path_keeps_json_404() -> None:
     response = client.get("/deals/no-such/thing", headers={"accept": "application/json"})
     assert response.status_code == 404
     assert response.json() == {"detail": "Not Found"}
+
+
+def test_tour_video_is_linked_and_served_with_ranges() -> None:
+    body = client.get("/").text
+    assert 'id="tourOpen"' in body
+    assert '<dialog class="tour-dialog"' in body
+    assert "autoplay" not in body
+    assert "Music: Sascha Ende, ende.app (CC BY 4.0)" in body
+
+    response = client.get("/static/media/wine.mp4", headers={"Range": "bytes=0-99"})
+    assert response.status_code == 206
+    assert response.headers["content-type"] == "video/mp4"
+    assert len(response.content) == 100
+    assert client.get("/static/media/wine.webm", headers={"Range": "bytes=0-0"}).headers["content-type"] == "video/webm"
+    assert client.get("/static/media/wine-poster.jpg").headers["content-type"] == "image/jpeg"
