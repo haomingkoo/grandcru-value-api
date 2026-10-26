@@ -7,10 +7,12 @@ from pathlib import Path
 import time
 import uuid
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
+from fastapi.exception_handlers import http_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -401,6 +403,15 @@ def privacy_page() -> HTMLResponse:
 @app.get("/terms", include_in_schema=False)
 def terms_page() -> HTMLResponse:
     return _render_page(LEGAL_PAGES["terms"])
+
+
+@app.exception_handler(StarletteHTTPException)
+async def html_not_found(request: Request, exc: StarletteHTTPException) -> Response:
+    if exc.status_code == 404 and "text/html" in request.headers.get("accept", ""):
+        page = _render_page(WEB_DIR / "404.html")
+        page.status_code = 404
+        return page
+    return await http_exception_handler(request, exc)
 
 
 @app.get("/favicon.ico", include_in_schema=False)
