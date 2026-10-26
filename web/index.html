@@ -85,6 +85,7 @@
         <div class="split" id="splitBar" hidden></div>
         <ul class="stat-strip" id="statStrip" aria-label="Today at a glance"></ul>
         <a class="button basket-cta" href="#basket">Plan a S$300 basket for S$200 back</a>
+        <p class="tour-line"><button type="button" class="text-button tour-open" id="tourOpen" aria-haspopup="dialog">&#9654; 30-second tour</button></p>
         <p class="freshness" id="freshness" hidden></p>
         <p class="market-notice" id="marketNotice" role="status" hidden></p>
       </div>
@@ -284,6 +285,19 @@
     </div>
   </footer>
 
+  <dialog class="tour-dialog" id="tourDialog" aria-labelledby="tourTitle">
+    <div class="tour-head">
+      <h2 id="tourTitle">MinMax Wine in 30 seconds</h2>
+      <button type="button" class="tour-close" id="tourClose" aria-label="Close the tour video">&times;</button>
+    </div>
+    <video class="tour-video" controls preload="none" playsinline poster="/static/media/wine-poster.jpg">
+      <source src="/static/media/wine.webm" type="video/webm">
+      <source src="/static/media/wine.mp4" type="video/mp4">
+    </video>
+    <p class="tour-credit">Music: Sascha Ende, ende.app (CC BY 4.0)</p>
+  </dialog>
+
+  <script src="/static/tour.js?v=__ASSET_VERSION__" defer></script>
   <script src="/static/charts.js?v=__ASSET_VERSION__" defer></script>
   <script src="/static/valuemap.js?v=__ASSET_VERSION__" defer></script>
   <script src="/static/app.js?v=__ASSET_VERSION__" defer></script>

@@ -88,6 +88,7 @@ CONTENT_SECURITY_POLICY = (
     "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; "
     "style-src 'self' 'unsafe-inline'; "
     "font-src 'self'; "
+    "media-src 'self'; "
     "connect-src 'self' https://cloudflareinsights.com; "
     "upgrade-insecure-requests"
 )
