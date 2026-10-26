@@ -870,7 +870,8 @@ def import_data(
             # stored as bottle prices, others already reflect the reviewed
             # listing total. For overrides, keep the interpretation that stays
             # closest to the retailer anchors instead of blindly multiplying.
-            raw_vivino_price = parse_float((vivino_fact or {}).get("price"))
+            # A match the weekly self-audit flagged keeps no market price.
+            raw_vivino_price = None if (vivino_fact or {}).get("drift") else parse_float((vivino_fact or {}).get("price"))
             vivino_price_adjusted = _resolve_vivino_price_to_listing(
                 raw_vivino_price,
                 quantity,

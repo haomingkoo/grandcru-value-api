@@ -124,6 +124,12 @@ class HealthOut(BaseModel):
     vivino_status: str = "ok"
     vivino_ok: bool = True
     vivino_last_success_at: datetime | None = None
+    vivino_resolver: dict | None = Field(
+        default=None,
+        description="Last Vivino matching run: searched, resolved, api_calls, cache_hits, unresolved, never_searched, waiting_to_retry.",
+    )
+    vivino_fetch_last_run: dict | None = Field(default=None, description="Last polite Vivino page-read run.")
+    vivino_match_audit: dict | None = Field(default=None, description="Weekly self-audit of stored Vivino matches: checked and flagged counts.")
 
 
 class LegalOut(BaseModel):

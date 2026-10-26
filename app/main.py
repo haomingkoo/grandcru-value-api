@@ -51,6 +51,7 @@ from app.service import (
     list_vivino_unresolved_export_rows,
     list_deals,
 )
+from scripts.resolve_vivino_matches import RESOLVER_STATE_KEY
 from scripts.vivino_fetch import FETCH_STATE_KEY
 
 
@@ -551,6 +552,10 @@ def health(session: Session = Depends(get_session)) -> HealthOut:
     stale = is_ingestion_stale(latest)
     try:
         vivino = summarize_vivino_status(load_state(FETCH_STATE_KEY, {}, session=session))
+        vivino["vivino_resolver"] = (load_state(RESOLVER_STATE_KEY, {}, session=session) or {}).get("last_run")
+        vivino["vivino_fetch_last_run"] = (load_state(FETCH_STATE_KEY, {}, session=session) or {}).get("last_run")
+        audit = load_state("vivino_match_audit", {}, session=session) or {}
+        vivino["vivino_match_audit"] = {"checked_at": audit.get("checked_at"), "checked": audit.get("checked", 0), "flagged": len(audit.get("drift") or [])} if audit else None
     except SQLAlchemyError:
         logger.exception("vivino_status_unavailable")
         vivino = {"vivino_status": "unknown: state unreadable", "vivino_ok": False}

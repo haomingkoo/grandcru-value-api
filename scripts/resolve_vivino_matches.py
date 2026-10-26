@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import time
+from datetime import UTC, datetime
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -127,6 +128,30 @@ def save_resolver_state(state: dict[str, object]) -> None:
     from app.durable_state import save_state
 
     save_state(RESOLVER_STATE_KEY, state)
+
+
+# Days to wait before searching an unmatched wine again, by number of tries so far.
+RETRY_AFTER_DAYS = (1, 3, 7, 30)
+
+
+def due_for_search(fingerprint: str, state: dict[str, object], now: float) -> bool:
+    """New wines are due at once; unmatched ones come back after 1, 3, 7, then every 30 days."""
+    seen = state.get("seen_unresolved") or {}
+    if fingerprint not in seen:
+        return True
+    tries = int((state.get("search_attempts") or {}).get(fingerprint, 1))
+    wait = RETRY_AFTER_DAYS[min(tries, len(RETRY_AFTER_DAYS)) - 1] * 86400
+    return now - float(seen[fingerprint]) >= wait
+
+
+def search_priority(row: dict[str, str]) -> tuple[int, float]:
+    """In-stock wines first, dearest first: that is where a market price matters most."""
+    sold_out = (row.get("platinum_in_stock") or "").strip().lower() == "false"
+    try:
+        price = float(str(row.get("price_plat") or "0").replace(",", "").replace("$", ""))
+    except ValueError:
+        price = 0.0
+    return (1 if sold_out else 0, -price)
 
 
 def unresolved_fingerprint(row: dict[str, str]) -> str:
@@ -750,15 +775,18 @@ def resolve_matches(args: argparse.Namespace) -> None:
 
     total_unresolved_before_filter = len(unresolved_rows)
     skipped_seen = 0
+    attempts = state.setdefault("search_attempts", {})
+    never_searched = sum(1 for row in unresolved_rows if unresolved_fingerprint(row) not in seen_unresolved)
     if args.only_new_unresolved:
+        now_ts = time.time()
         filtered_rows: list[dict[str, str]] = []
         for row in unresolved_rows:
-            fingerprint = unresolved_fingerprint(row)
-            if fingerprint in seen_unresolved:
+            if not due_for_search(unresolved_fingerprint(row), state, now_ts):
                 skipped_seen += 1
                 continue
             filtered_rows.append(row)
         unresolved_rows = filtered_rows
+    unresolved_rows.sort(key=search_priority)
 
     if args.limit > 0:
         unresolved_rows = unresolved_rows[: args.limit]
@@ -793,9 +821,14 @@ def resolve_matches(args: argparse.Namespace) -> None:
     unmatched_rows: list[dict[str, str]] = []
     accepted_rows: list[dict[str, str]] = []
 
+    searched = 0
     for index, row in enumerate(unresolved_rows, start=1):
+        if api_calls_state["count"] >= args.max_api_queries > 0:
+            break
         row_fingerprint = unresolved_fingerprint(row)
         seen_unresolved[row_fingerprint] = int(time.time())
+        attempts[row_fingerprint] = int(attempts.get(row_fingerprint, 0)) + 1
+        searched += 1
 
         identity = parse_identity(row)
         queries = build_queries(identity, row)
@@ -827,8 +860,11 @@ def resolve_matches(args: argparse.Namespace) -> None:
                 search_errors.extend(provider_errors)
             results_by_query.append((query, provider_used, results))
 
-            if args.sleep_seconds > 0:
+            if args.sleep_seconds > 0 and not cache_hit:
                 time.sleep(args.sleep_seconds)
+            # A confident match from the first query saves the other queries for other wines.
+            if decide(rank_candidates(identity, results_by_query), args)[0] == "auto_accept":
+                break
 
         ranked = rank_candidates(identity, results_by_query)
         best = ranked[0] if ranked else None
@@ -853,6 +889,10 @@ def resolve_matches(args: argparse.Namespace) -> None:
         capped = not ranked and any("max_api_queries_reached" in err for err in search_errors)
         if capped or PAGE_NOT_CHECKED in reason:
             seen_unresolved.pop(row_fingerprint, None)
+            attempts.pop(row_fingerprint, None)
+            searched -= 1
+        if decision == "auto_accept":
+            attempts.pop(row_fingerprint, None)
 
         query_1 = queries[0] if len(queries) > 0 else ""
         query_2 = queries[1] if len(queries) > 1 else ""
@@ -938,6 +978,16 @@ def resolve_matches(args: argparse.Namespace) -> None:
 
     save_query_cache(query_cache, args.cache_ttl_hours)
     state["last_run_at"] = int(time.time())
+    state["last_run"] = {
+        "at": datetime.now(UTC).isoformat(),
+        "searched": searched,
+        "resolved": len(accepted_rows),
+        "api_calls": api_calls_state["count"],
+        "cache_hits": cache_hits,
+        "unresolved": total_unresolved_before_filter - len(accepted_rows),
+        "never_searched": max(never_searched - searched, 0),
+        "waiting_to_retry": skipped_seen,
+    }
     save_resolver_state(state)
     if accepted_rows:
         from scripts.vivino_overrides import save_durable_overrides

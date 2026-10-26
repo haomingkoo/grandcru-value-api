@@ -30,6 +30,10 @@ CI (`.github/workflows/ci.yml`) runs the same checks plus pytest on Python 3.11.
 - The Vivino refresh runs only on Railway (`daily-ingest` daily, about 80 page fetches;
   `weekly-ingest` re-resolves everything). There is no local or launchd job; never add one
   that pushes to `main`.
+- Vivino matching: unmatched offers are searched in-stock first, dearest first, and retried
+  after 1, 3, 7, then every 30 days (`search_attempts` in resolver state). Pages with no SGD
+  price are re-read monthly. Every stored match is audited each run (`identity_drift`); a
+  flagged match keeps no market price. `/health` shows `vivino_resolver` and `vivino_match_audit`.
 - Vivino safeguards: every Vivino request goes through `scripts/vivino_fetch.py`
   (honest UA, robots.txt, wine pages only, ~80 fetches/day with 6-10 s jittered
   delay, weekly re-fetch per wine/vintage, stop and back off on 403/429); `/health`

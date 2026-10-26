@@ -25,6 +25,7 @@ from scripts.import_wine_data import (  # noqa: E402
 )
 from scripts.vivino_fetch import (  # noqa: E402
     FACTS_KEY,
+    identity_drift,
     PoliteFetcher,
     VivinoBlocked,
     canonical_wine_url,
@@ -33,12 +34,15 @@ from scripts.vivino_fetch import (  # noqa: E402
 )
 from scripts.vivino_overrides import with_durable_overrides  # noqa: E402
 
+DRIFT_KEY = "vivino_match_audit"
+
 
 def build_targets(
     comparison_rows: list[dict[str, str]],
     vivino_rows: list[dict[str, str]],
+    names: dict[str, str] | None = None,
 ) -> list[tuple[str, str]]:
-    """(Vivino wine URL, Platinum vintage) per offer, one entry per wine/vintage."""
+    """(Vivino wine URL, Platinum vintage) per offer, one entry per wine/vintage. Fills names[key] with the offer name."""
     lookup = build_vivino_lookup(vivino_rows)
     targets: dict[str, tuple[str, str]] = {}
     for row in comparison_rows:
@@ -52,6 +56,8 @@ def build_targets(
         key = fact_key(url, vintage)
         if url and key and key not in targets:
             targets[key] = (url, vintage)
+            if names is not None:
+                names[key] = name
     return list(targets.values())
 
 
@@ -72,7 +78,8 @@ def main() -> int:
     comparison_rows = read_csv_rows(args.comparison)
     vivino_rows = read_csv_rows(args.vivino) + with_durable_overrides(read_optional_csv_rows(args.vivino_overrides))
     facts: dict[str, dict] = load_state(FACTS_KEY, {}) or {}
-    targets = oldest_first(build_targets(comparison_rows, vivino_rows), facts)
+    names: dict[str, str] = {}
+    targets = oldest_first(build_targets(comparison_rows, vivino_rows, names), facts)
 
     fetcher = PoliteFetcher()
     print(
@@ -85,6 +92,19 @@ def main() -> int:
             if not fetcher.can_fetch_more():
                 break
             fetch_facts(fetcher, facts, url, vintage)
+        # Self-audit every stored match: a page that no longer looks like the offer loses its price.
+        drift = []
+        for url, vintage in targets:
+            key = fact_key(url, vintage)
+            fact = facts.get(key or "")
+            reason = identity_drift(names.get(key or "", ""), fact)
+            if fact is not None:
+                fact["drift"] = reason
+            if reason:
+                drift.append({"offer": names.get(key or ""), "url": url, "page": fact.get("name"), "reason": reason})
+        save_state(DRIFT_KEY, {"checked_at": datetime.now(UTC).isoformat(), "checked": len(targets), "drift": drift})
+        if drift:
+            print(f"[vivino] WARNING: {len(drift)} matches look wrong now; their prices are withheld: {drift[:5]}", flush=True)
     except VivinoBlocked as exc:
         print(f"[vivino] WARNING: Vivino refused a page ({exc}); backing off.", flush=True)
     finally:
