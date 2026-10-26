@@ -373,6 +373,18 @@ def _score_name_similarity(target: str, candidate: str) -> tuple[float, float, f
     return (combined, token_ratio, seq_ratio, set_ratio, overlap)
 
 
+_LISTING_COLOURS = {"red", "white", "rose", "orange"}
+
+
+def _listing_colour(name: str | None) -> str | None:
+    """Colour segment of a Platinum-style name ("... - White - 750 ml - ...")."""
+    for part in (name or "").split(" - ")[1:]:
+        key = normalize_key(part)
+        if key in _LISTING_COLOURS:
+            return key
+    return None
+
+
 def match_vivino_row(wine_name: str, lookup: VivinoLookup) -> tuple[dict[str, str], str]:
     exact_key = normalize_key(wine_name)
     if exact_key and exact_key in lookup.exact:
@@ -397,11 +409,15 @@ def match_vivino_row(wine_name: str, lookup: VivinoLookup) -> tuple[dict[str, st
     if not candidate_rows:
         candidate_rows = lookup.rows
 
+    target_colour = _listing_colour(wine_name)
     scored_candidates: list[tuple[float, float, float, float, int, dict[str, str]]] = []
     for candidate in candidate_rows:
         candidate_name = candidate.get("match_name") or candidate.get("wine_name")
         candidate_key = canonicalize_key(candidate_name)
         if not candidate_key:
+            continue
+        candidate_colour = _listing_colour(candidate_name)
+        if target_colour and candidate_colour and target_colour != candidate_colour:
             continue
 
         combined, token_ratio, seq_ratio, set_ratio, overlap = _score_name_similarity(canonical_key, candidate_key)
