@@ -76,6 +76,19 @@ def _apply_contains_filter(stmt, column, raw_value: str | None):
     return stmt.where(or_(*clauses))
 
 
+# Platinum price per 750 ml bottle: half bottles count double, magnums half, bundles per bottle.
+PRICE_PER_750 = WineDeal.price_platinum * 750.0 / func.nullif(func.coalesce(WineDeal.quantity, 1) * WineDeal.volume_ml, 0)
+
+
+def fill_volume_ml(session: Session) -> int:
+    """Rows imported before volume_ml existed get it from the volume text."""
+    deals = list(session.scalars(select(WineDeal).where(WineDeal.volume_ml.is_(None), WineDeal.volume.is_not(None))))
+    for deal in deals:
+        deal.volume_ml = volume_ml(deal.volume)
+    session.commit()
+    return len(deals)
+
+
 def _sort_with_direction(column, direction: str):
     return column.asc().nullslast() if direction == "asc" else column.desc().nullslast()
 
@@ -112,6 +125,7 @@ def _deal_sort_expressions(sort_by: str, sort_order: str) -> list:
         "vivino_rating": WineDeal.vivino_rating,
         "vivino_num_ratings": WineDeal.vivino_num_ratings,
         "price_platinum": WineDeal.price_platinum,
+        "price_per_750": PRICE_PER_750,
         "wine_name": WineDeal.wine_name,
     }
     primary_column = sort_map.get(normalized_sort_by, WineDeal.deal_score)
@@ -154,6 +168,11 @@ def _deal_sort_expressions(sort_by: str, sort_order: str) -> list:
             WineDeal.vivino_rating.desc().nullslast(),
             WineDeal.wine_name.asc(),
         ],
+        "price_per_750": [
+            WineDeal.vivino_rating.desc().nullslast(),
+            WineDeal.deal_score.desc().nullslast(),
+            WineDeal.wine_name.asc(),
+        ],
         "wine_name": [
             WineDeal.deal_score.desc().nullslast(),
             WineDeal.vivino_rating.desc().nullslast(),
@@ -169,8 +188,7 @@ def _deal_sort_expressions(sort_by: str, sort_order: str) -> list:
 
 def _apply_response_fields(deals: list[WineDeal]) -> None:
     for deal in deals:
-        ml = volume_ml(deal.volume)
-        setattr(deal, "volume_ml", ml)
+        ml = deal.volume_ml or volume_ml(deal.volume)
         setattr(deal, "price_platinum_per_750", per_750(deal.price_platinum, deal.quantity, ml))
         pct = getattr(deal, "price_diff_pct", None)
         setattr(deal, "price_diff_pct_abs", round(abs(pct), 2) if pct is not None else None)
@@ -261,6 +279,8 @@ def _build_deals_stmt(
     min_vivino_rating: float | None = None,
     min_vivino_num_ratings: int | None = None,
     max_platinum_price: float | None = None,
+    min_price_per_750: float | None = None,
+    max_price_per_750: float | None = None,
     country: str | None = None,
     region: str | None = None,
     wine_type: str | None = None,
@@ -303,6 +323,10 @@ def _build_deals_stmt(
 
     if max_platinum_price is not None:
         stmt = stmt.where(WineDeal.price_platinum <= max_platinum_price)
+    if min_price_per_750 is not None:
+        stmt = stmt.where(PRICE_PER_750 >= min_price_per_750)
+    if max_price_per_750 is not None:
+        stmt = stmt.where(PRICE_PER_750 <= max_price_per_750)
 
     stmt = _apply_exact_match_filter(stmt, WineDeal.country, country)
     stmt = _apply_exact_match_filter(stmt, WineDeal.region, region)
@@ -327,6 +351,8 @@ def list_deals(
     min_vivino_rating: float | None = None,
     min_vivino_num_ratings: int | None = None,
     max_platinum_price: float | None = None,
+    min_price_per_750: float | None = None,
+    max_price_per_750: float | None = None,
     sort_by: str = "deal_score",
     sort_order: str = "desc",
     country: str | None = None,
@@ -346,6 +372,8 @@ def list_deals(
         min_vivino_rating=min_vivino_rating,
         min_vivino_num_ratings=min_vivino_num_ratings,
         max_platinum_price=max_platinum_price,
+        min_price_per_750=min_price_per_750,
+        max_price_per_750=max_price_per_750,
         country=country,
         region=region,
         wine_type=wine_type,
@@ -354,16 +382,6 @@ def list_deals(
         offering_type=offering_type,
         producer=producer,
     )
-    if _normalize_sort_by(sort_by) == "price_per_750":
-        # Bottle size is text, so this sort runs in Python; the full list is a few hundred rows.
-        deals = list(session.scalars(stmt.order_by(*_deal_sort_expressions("deal_score", "desc"))).all())
-        _apply_response_fields(deals)
-        priced = [d for d in deals if d.price_platinum_per_750 is not None]
-        unpriced = [d for d in deals if d.price_platinum_per_750 is None]
-        priced.sort(key=lambda d: d.price_platinum_per_750, reverse=(sort_order or "").lower() == "desc")
-        deals = (priced + unpriced)[offset:offset + min(limit, 500)]
-        _apply_price_change_fields(session, deals)
-        return deals
     stmt = stmt.order_by(*_deal_sort_expressions(sort_by, sort_order))
     stmt = stmt.offset(offset).limit(min(limit, 500))
     deals = list(session.scalars(stmt).all())

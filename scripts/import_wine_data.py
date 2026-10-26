@@ -20,7 +20,7 @@ if str(ROOT) not in sys.path:
 from app.config import settings  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models import IngestionRun, WineDeal, WineDealSnapshot  # noqa: E402
-from app.price_history import observations_for_deal, record_observations  # noqa: E402
+from app.price_history import observations_for_deal, record_observations, volume_ml  # noqa: E402
 from app.scoring import compute_deal_score, parse_float, parse_int  # noqa: E402
 from app.wine_metadata import derive_wine_metadata  # noqa: E402
 from scripts.data_quality_rules import (  # noqa: E402
@@ -701,6 +701,7 @@ def import_data(
     ensure_column("wine_deals", "vivino_price", "FLOAT")
     ensure_column("wine_deals", "vivino_description", "VARCHAR(512)")
     ensure_column("wine_deals", "vivino_checked_at", "TIMESTAMP WITH TIME ZONE")
+    ensure_column("wine_deals", "volume_ml", "INTEGER")
     for column, col_type in DEAL_EXTRA_COLUMNS:
         ensure_column("wine_deals", column, col_type)
     ensure_column("wine_deals", "price_market", "FLOAT")
@@ -892,6 +893,7 @@ def import_data(
                 "vintage": parse_int(row.get("year_plat")),
                 "quantity": quantity,
                 "volume": volume,
+                "volume_ml": volume_ml(volume),
                 "price_platinum": price_platinum,
                 "price_grand_cru": price_grand_cru,
                 "price_diff": price_diff,

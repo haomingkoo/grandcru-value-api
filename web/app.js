@@ -13,6 +13,8 @@ const defaultState = {
   onlyPlatinumCheaper: false,
   minVivinoRating: "",
   minVivinoNumRatings: "",
+  priceMin: "",
+  priceMax: "",
 }
 
 const sortDefaults = {
@@ -44,7 +46,13 @@ const STYLE_ORDER = ["Red", "White", "Champagne", "Sparkling", "Rose", "Sweet / 
 const state = { ...defaultState }
 let filterOptions = null
 let priceHistory = null
+let allDeals = []
+let valueMap = null
+let priceBounds = null
+let pendingHighlight = null
+let sliderDebounce = 0
 let requestSerial = 0
+let lastDeals = null
 let searchDebounce = 0
 const els = {}
 
@@ -56,6 +64,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   loadSummary()
   loadFreshness()
   loadPriceHistory()
+  setupValueMap()
   try {
     await loadFilterOptions()
   } catch (_) {
@@ -71,6 +80,7 @@ function captureElements() {
     "styleFamilySelect", "grapeSelect", "offeringSelect", "producerSelect",
     "comparableOnlyToggle", "platinumOnlyToggle", "ratingToggle", "confidenceToggle",
     "resultsMeta", "activeFilters", "dealTableBody", "tableState", "summary", "freshness", "marketNotice",
+    "statStrip", "priceMinRange", "priceMaxRange", "priceMinInput", "priceMaxInput", "priceFilter",
   ]) {
     els[id] = document.getElementById(id)
   }
@@ -146,6 +156,12 @@ function bindEvents() {
     }
   })
 
+  bindPriceFilter()
+  els.statStrip.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-stat]")
+    if (button) applyStat(button.dataset.stat, button.dataset.dealId)
+  })
+
   els.dealTableBody.addEventListener("click", (event) => {
     const toggle = event.target.closest(".history-toggle")
     if (toggle) toggleHistory(toggle)
@@ -204,9 +220,10 @@ async function loadFreshness() {
     const ago = formatTimeAgo(new Date(finished))
     els.freshness.textContent = data.ingestion_stale
       ? `Prices in Singapore dollars, last checked ${ago}. Today’s check is late, so some prices may have changed.`
-      : `Prices in Singapore dollars, checked ${ago}.`
+      : "All prices in Singapore dollars."
     els.freshness.classList.toggle("is-stale", Boolean(data.ingestion_stale))
     els.freshness.hidden = false
+    renderFreshStat(data)
     if (data.vivino_ok === false) {
       els.marketNotice.textContent = "Market prices paused. Vivino prices are not being updated right now, so each one shows the date it was last checked."
       els.marketNotice.hidden = false
@@ -214,6 +231,183 @@ async function loadFreshness() {
   } catch (_) {
     els.freshness.hidden = true
   }
+}
+
+// --- Value map, stat strip and price filter ---
+
+async function setupValueMap() {
+  const root = document.getElementById("valueMap")
+  const stateLine = root.querySelector(".map-state")
+  try {
+    allDeals = await fetchJson("/deals?limit=500&sort_by=price_per_750&sort_order=asc")
+  } catch (_) {
+    stateLine.textContent = "The map could not load. The list below still works."
+    return
+  }
+  const prices = allDeals.map((d) => d.price_platinum_per_750).filter((v) => v != null)
+  if (!prices.length) {
+    stateLine.textContent = "No offers to plot right now."
+    return
+  }
+  stateLine.remove()
+  priceBounds = { min: Math.floor(Math.min(...prices)), max: Math.ceil(Math.max(...prices)) }
+  syncPriceControls()
+  renderStats()
+  valueMap = new ValueMap(root, { onShowInList: showDealInList, onStyleToggle: toggleStyleGroup })
+  valueMap.setDeals(allDeals)
+  if (lastDeals) valueMap.setVisible(lastDeals.map((d) => d.id), styleFilterList())
+}
+
+function styleFilterList() {
+  return state.styleFamily ? state.styleFamily.split(",") : []
+}
+
+function toggleStyleGroup(group) {
+  const value = group.members.filter((m) => allDeals.some((d) => d.style_family === m)).join(",")
+  state.styleFamily = state.styleFamily === value ? "" : value
+  renderSelectOptions()
+  syncControlsFromState()
+  loadOffers()
+}
+
+function renderStats() {
+  const cheaper = allDeals.filter((d) => d.cheaper_side === "Platinum Cheaper").length
+  const rated = allDeals.filter((d) => (d.vivino_rating || 0) >= 4 && d.price_platinum_per_750 != null)
+  const best = rated.sort((a, b) => a.price_platinum_per_750 - b.price_platinum_per_750)[0]
+  const items = [
+    `<li><button type="button" class="stat" data-stat="cheaper"><strong>${formatInteger(cheaper)}</strong><span>${plural(cheaper, "offer is", "offers are")} cheaper on Platinum than at Grand Cru</span></button></li>`,
+  ]
+  if (best) {
+    items.push(`<li><button type="button" class="stat stat-feature" data-stat="best" data-deal-id="${best.id}">
+      ${best.image_url ? `<img src="${escapeHtml(best.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}
+      <strong>${WineCharts.money(best.price_platinum_per_750)}</strong><span>per 750&nbsp;ml for ${escapeHtml(displayName(best))}, the lowest price among wines rated 4.0 or higher</span></button></li>`)
+  }
+  items.push(`<li id="statFresh" hidden></li>`)
+  els.statStrip.innerHTML = items.join("")
+  if (lastHealth) renderFreshStat(lastHealth)
+}
+
+let lastHealth = null
+function renderFreshStat(health) {
+  lastHealth = health
+  const item = document.getElementById("statFresh")
+  const finished = health.latest_ingestion?.finished_at
+  if (!item || !finished) return
+  const ago = formatTimeAgo(new Date(finished)).replace(/ ago$/, "")
+  item.innerHTML = `<a class="stat${health.ingestion_stale ? " is-stale" : ""}" href="#sources"><strong>${escapeHtml(ago === "just now" ? "Just now" : ago)}</strong><span>${ago === "just now" ? "prices were checked" : "since prices were last checked"}${health.ingestion_stale ? ", later than usual" : ""}</span></a>`
+  item.hidden = false
+}
+
+function applyStat(kind, dealId) {
+  if (kind === "cheaper") {
+    resetFilter("all")
+    state.onlyPlatinumCheaper = true
+    state.sortBy = defaultState.sortBy
+    state.sortOrder = defaultState.sortOrder
+  }
+  if (kind === "best") {
+    resetFilter("all")
+    state.minVivinoRating = "4.0"
+    state.sortBy = "price_per_750"
+    state.sortOrder = "asc"
+    pendingHighlight = Number(dealId)
+  }
+  syncControlsFromState()
+  loadOffers().then(() => document.getElementById("offers").scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth" }))
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
+}
+
+function showDealInList(deal) {
+  const row = els.dealTableBody.querySelector(`[data-offer-ids~="${deal.id}"]`)
+  if (!row) return
+  const group = row.nextElementSibling?.classList.contains("history-row") ? row.nextElementSibling.nextElementSibling : row.nextElementSibling
+  if (row.dataset.bestId !== String(deal.id) && group?.classList.contains("deal-group-row")) group.querySelector("details").open = true
+  row.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center" })
+  row.classList.remove("is-highlighted")
+  void row.offsetWidth
+  row.classList.add("is-highlighted")
+  const link = row.querySelector(".wine-title")
+  if (link) { link.setAttribute("tabindex", "-1"); link.focus({ preventScroll: true }) }
+}
+
+// Slider positions 0..1000 map onto a log scale of S$ per 750 ml.
+function priceToSlider(price) {
+  const { min, max } = priceBounds
+  return Math.round(((Math.log(price) - Math.log(min)) / (Math.log(max) - Math.log(min))) * 1000)
+}
+
+function sliderToPrice(position) {
+  const { min, max } = priceBounds
+  const raw = Math.exp(Math.log(min) + (position / 1000) * (Math.log(max) - Math.log(min)))
+  const step = raw < 100 ? 1 : raw < 500 ? 5 : 10
+  return Math.round(raw / step) * step
+}
+
+function syncPriceControls({ fromSlider = false } = {}) {
+  els.priceMinInput.value = state.priceMin
+  els.priceMaxInput.value = state.priceMax
+  if (priceBounds) {
+    // While dragging, the thumbs stay where the user put them; rounding the price must not move them.
+    if (!fromSlider) {
+      els.priceMinRange.value = state.priceMin ? Math.max(0, priceToSlider(Number(state.priceMin))) : 0
+      els.priceMaxRange.value = state.priceMax ? Math.min(1000, priceToSlider(Number(state.priceMax))) : 1000
+    }
+    els.priceMinRange.setAttribute("aria-valuetext", state.priceMin ? `S$${state.priceMin}` : "No minimum")
+    els.priceMaxRange.setAttribute("aria-valuetext", state.priceMax ? `S$${state.priceMax}` : "No maximum")
+    const fill = els.priceFilter.querySelector(".range-fill")
+    fill.style.left = `${els.priceMinRange.value / 10}%`
+    fill.style.right = `${100 - els.priceMaxRange.value / 10}%`
+  }
+  els.priceFilter.querySelectorAll(".preset").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.min === state.priceMin && b.dataset.max === state.priceMax))
+  })
+}
+
+function bindPriceFilter() {
+  const fromRange = (commit) => {
+    if (!priceBounds) return
+    let lo = Number(els.priceMinRange.value)
+    let hi = Number(els.priceMaxRange.value)
+    if (lo > hi) {
+      if (document.activeElement === els.priceMinRange) els.priceMaxRange.value = hi = lo
+      else els.priceMinRange.value = lo = hi
+    }
+    state.priceMin = lo <= 0 ? "" : String(sliderToPrice(lo))
+    state.priceMax = hi >= 1000 ? "" : String(sliderToPrice(hi))
+    syncPriceControls({ fromSlider: true })
+    if (commit) {
+      // Arrow keys fire change on every press; send one request when they stop.
+      window.clearTimeout(sliderDebounce)
+      sliderDebounce = window.setTimeout(loadOffers, 350)
+    }
+  }
+  for (const range of [els.priceMinRange, els.priceMaxRange]) {
+    range.addEventListener("input", () => fromRange(false))
+    range.addEventListener("change", () => fromRange(true))
+  }
+  for (const [input, key] of [[els.priceMinInput, "priceMin"], [els.priceMaxInput, "priceMax"]]) {
+    input.addEventListener("change", () => {
+      const value = input.value.trim()
+      state[key] = value && Number(value) >= 0 ? String(Math.round(Number(value))) : ""
+      if (state.priceMin && state.priceMax && Number(state.priceMin) > Number(state.priceMax)) {
+        [state.priceMin, state.priceMax] = [state.priceMax, state.priceMin]
+      }
+      syncPriceControls()
+      loadOffers()
+    })
+  }
+  els.priceFilter.addEventListener("click", (event) => {
+    const preset = event.target.closest(".preset")
+    if (!preset) return
+    const same = preset.getAttribute("aria-pressed") === "true"
+    state.priceMin = same ? "" : preset.dataset.min
+    state.priceMax = same ? "" : preset.dataset.max
+    syncPriceControls()
+    loadOffers()
+  })
 }
 
 async function loadPriceHistory() {
@@ -309,9 +503,16 @@ async function loadOffers() {
     const deals = await fetchJson(`/deals?${buildParams()}`)
     if (requestId !== requestSerial) return
     const families = groupDealsForShelf(deals)
+    lastDeals = deals
     renderResultsMeta(deals, families)
     renderTable(families)
     renderActiveFilters()
+    if (valueMap) valueMap.setVisible(deals.map((d) => d.id), styleFilterList())
+    if (pendingHighlight) {
+      const target = deals.find((d) => d.id === pendingHighlight)
+      pendingHighlight = null
+      if (target) window.setTimeout(() => showDealInList(target), 60)
+    }
   } catch (error) {
     if (requestId !== requestSerial) return
     console.error(error)
@@ -345,6 +546,8 @@ function filterParams() {
   if (state.onlyPlatinumCheaper) params.set("only_platinum_cheaper", "true")
   if (state.minVivinoRating) params.set("min_vivino_rating", state.minVivinoRating)
   if (state.minVivinoNumRatings) params.set("min_vivino_num_ratings", state.minVivinoNumRatings)
+  if (state.priceMin) params.set("min_price_per_750", state.priceMin)
+  if (state.priceMax) params.set("max_price_per_750", state.priceMax)
   return params
 }
 
@@ -364,6 +567,8 @@ function hydrateStateFromUrl() {
   state.onlyPlatinumCheaper = params.get("only_platinum_cheaper") === "true"
   state.minVivinoRating = params.get("min_vivino_rating") || ""
   state.minVivinoNumRatings = params.get("min_vivino_num_ratings") || ""
+  state.priceMin = params.get("min_price_per_750") || ""
+  state.priceMax = params.get("max_price_per_750") || ""
 }
 
 function writeStateToUrl() {
@@ -399,7 +604,7 @@ function populateSelect(select, options, selectedValue, placeholder) {
   select.innerHTML = [
     `<option value="">${escapeHtml(placeholder)}</option>`,
     ...items.map((item) => {
-      const label = item.count ? `${item.value} (${item.count})` : item.value
+      const label = item.count ? `${item.value} (${item.count})` : item.value.split(",").join(" and ")
       return `<option value="${escapeHtml(item.value)}">${escapeHtml(label)}</option>`
     }),
   ].join("")
@@ -420,6 +625,7 @@ function syncControlsFromState() {
   els.platinumOnlyToggle.checked = state.onlyPlatinumCheaper
   els.ratingToggle.checked = Number(state.minVivinoRating || 0) >= 4
   els.confidenceToggle.checked = Number(state.minVivinoNumRatings || 0) >= 100
+  syncPriceControls()
   syncSortButtons()
 }
 
@@ -522,7 +728,7 @@ function renderOfferRow(deal, family) {
     : ""
 
   return `
-    <tr class="deal-row">
+    <tr class="deal-row" data-best-id="${deal.id}" data-offer-ids="${escapeHtml((family ? family.offers : [deal]).map((o) => o.id).join(" "))}">
       <td class="cell-wine">
         <div class="wine-cell">
           ${wineImageHtml(deal)}
@@ -698,6 +904,10 @@ function renderActiveFilters() {
   if (state.onlyPlatinumCheaper) chips.push(["Cheaper on Platinum", "onlyPlatinumCheaper"])
   if (state.minVivinoRating) chips.push([`Rated ${state.minVivinoRating}+`, "minVivinoRating"])
   if (state.minVivinoNumRatings) chips.push([`${state.minVivinoNumRatings}+ ratings`, "minVivinoNumRatings"])
+  if (state.priceMin || state.priceMax) {
+    const range = state.priceMin && state.priceMax ? `S$${state.priceMin} to S$${state.priceMax}` : state.priceMin ? `S$${state.priceMin} and up` : `Under S$${state.priceMax}`
+    chips.push([`${range} per 750 ml`, "price"])
+  }
 
   if (!chips.length) {
     els.activeFilters.innerHTML = ""
@@ -717,6 +927,11 @@ function resetFilter(key) {
     return
   }
   if (key === "country") state.region = ""
+  if (key === "price") {
+    state.priceMin = ""
+    state.priceMax = ""
+    return
+  }
   state[key] = defaultState[key]
 }
 

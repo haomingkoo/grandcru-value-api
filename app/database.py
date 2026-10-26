@@ -38,6 +38,7 @@ def get_session() -> Generator[Session, None, None]:
 
 _ALLOWED_TABLES = {"wine_deals", "wine_deal_snapshots", "ingestion_runs"}
 _ALLOWED_COLUMNS = {
+    "volume_ml",
     "vivino_match_method",
     "platinum_in_stock",
     "grand_cru_in_stock",
