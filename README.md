@@ -212,17 +212,14 @@ Monitoring loop for the quarantine:
 
 Last production verification: 2026-04-24 refresh completed with 83 deals, 82/83 Vivino-rated, 0 `url_only` rows, 0 missing countries, and 0 missing grapes. The one remaining unrated wine is the documented La Croix de Brully Puligny-Montrachet Les Enseignères gap.
 
-### Residential Vivino Review Loop
+### Vivino refresh runs only on Railway
 
-For guarded Vivino maintenance, use `scripts/local_vivino_refresh.sh` on a Mac or other residential-IP machine.
+Vivino matching and price checks run only in the Railway cron services (`daily-ingest`, and `weekly-ingest` for a full re-resolve). There is no local or launchd job any more.
 
-- It fetches the current unresolved live rows from `GET /ops/vivino/unresolved.csv`
-- It resolves only those rows locally on your residential connection
-- It respects locked manual overrides in `seed/vivino_overrides.csv`
-- It can be paired with local AI review assistants such as Codex or Claude Code to inspect suspicious matches before you push
-- It pushes reviewed overrides, waits for deploy, then triggers `POST /ops/refresh/trigger` with `mode=daily`
-
-This is not a zero-touch claim. Scrape/import is automated; edge-case Vivino identity still benefits from a local review loop because a missing price is safer than a wrong match.
+- Daily: `refresh_pipeline.py --resolve-vivino --resolver-auto-apply` resolves new unmatched offers within the search budget, then `refresh_vivino_facts.py` reads up to about 80 Vivino wine pages, politely (see `scripts/vivino_fetch.py`).
+- Weekly: the same with `--no-resolver-only-new-unresolved`, so every unresolved offer is tried again.
+- State lives in Postgres (`app_state`: resolver state, query cache, auto overrides, dated Vivino facts, fetch budget), so redeploys lose nothing. `/health` reports `vivino_status`.
+- A missing price is safer than a wrong match: uncertain matches stay unmatched, and `seed/vivino_overrides.csv` rows without a URL block known wrong fuzzy matches.
 
 Manual or reviewed overrides should be locked by either:
 
