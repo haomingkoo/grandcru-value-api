@@ -1,4 +1,5 @@
 import csv
+from dataclasses import replace
 import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -417,6 +418,35 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self.assertFalse(deal.grand_cru_in_stock)
         self.assertTrue(snapshot.platinum_in_stock)
         self.assertFalse(snapshot.grand_cru_in_stock)
+
+    def _add_old_snapshot(self, days_ago: int) -> None:
+        Base.metadata.create_all(bind=self.engine)
+        with self.Session() as session:
+            session.add(WineDealSnapshot(
+                ingestion_run_id=0,
+                captured_at=datetime.now(UTC) - timedelta(days=days_ago),
+                wine_name="Old offer",
+                price_platinum=100.0,
+            ))
+            session.commit()
+
+    def _old_snapshot_count(self) -> int:
+        with self.Session() as session:
+            return len(session.scalars(select(WineDealSnapshot).where(WineDealSnapshot.wine_name == "Old offer")).all())
+
+    def test_import_keeps_old_snapshots_when_retention_is_zero(self) -> None:
+        self._write_seed_files("Bright cherry, cedar, graphite.")
+        self._add_old_snapshot(400)
+        with patch.object(import_wine_data_module, "settings", replace(import_wine_data_module.settings, history_retention_days=0)):
+            self._run_import()
+        self.assertEqual(self._old_snapshot_count(), 1)
+
+    def test_import_prunes_old_snapshots_when_retention_is_set(self) -> None:
+        self._write_seed_files("Bright cherry, cedar, graphite.")
+        self._add_old_snapshot(400)
+        with patch.object(import_wine_data_module, "settings", replace(import_wine_data_module.settings, history_retention_days=90)):
+            self._run_import()
+        self.assertEqual(self._old_snapshot_count(), 0)
 
     def test_import_persists_platinum_image_url(self) -> None:
         self._write_seed_files("Bright cherry, cedar, graphite.")

@@ -242,7 +242,7 @@ Copy `.env.example` to `.env`.
 | `CORS_ORIGINS` | No | kooexperience.com | Comma-separated origins |
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | No | `120` | Per-IP rate limit |
 | `INGESTION_STALE_HOURS` | No | `24` | Hours before health reports stale |
-| `HISTORY_RETENTION_DAYS` | No | `90` | Snapshot auto-prune window |
+| `HISTORY_RETENTION_DAYS` | No | `0` | Snapshot auto-prune window in days; `0` keeps price history forever |
 
 ## Data Model
 

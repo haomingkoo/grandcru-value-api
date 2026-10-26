@@ -976,9 +976,11 @@ def import_data(
         session.add_all(merged_records)
         session.add_all(snapshot_records)
 
-        cutoff = snapshot_time - timedelta(days=settings.history_retention_days)
-        prune_result = session.execute(delete(WineDealSnapshot).where(WineDealSnapshot.captured_at < cutoff))
-        deleted_snapshots = int(prune_result.rowcount or 0)
+        deleted_snapshots = 0
+        if settings.history_retention_days > 0:
+            cutoff = snapshot_time - timedelta(days=settings.history_retention_days)
+            prune_result = session.execute(delete(WineDealSnapshot).where(WineDealSnapshot.captured_at < cutoff))
+            deleted_snapshots = int(prune_result.rowcount or 0)
 
         run.status = "success"
         run.finished_at = datetime.now(UTC)
@@ -990,7 +992,7 @@ def import_data(
             f"{len(snapshot_records)} snapshots (vivino: {match_summary}); "
             f"{incomplete_count} shown with data gaps; "
             f"quarantined {len(quarantine_records)} rows without a Platinum price; "
-            f"pruned {deleted_snapshots} snapshots older than {settings.history_retention_days} days."
+            f"pruned {deleted_snapshots} snapshots (retention {settings.history_retention_days or 'unlimited'} days)."
         )
         session.commit()
         logger.info("import_success %s", run.details)

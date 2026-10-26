@@ -36,7 +36,7 @@ class Settings:
     legal_notice_path: str = os.getenv("LEGAL_NOTICE_PATH", "LEGAL_NOTICE.md")
     ingestion_stale_hours: int = int(os.getenv("INGESTION_STALE_HOURS", "24"))
     cors_origins: str = os.getenv("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
-    history_retention_days: int = int(os.getenv("HISTORY_RETENTION_DAYS", "90"))
+    history_retention_days: int = int(os.getenv("HISTORY_RETENTION_DAYS", "0"))  # 0 keeps snapshots forever
     rate_limit_enabled: bool = _as_bool(os.getenv("RATE_LIMIT_ENABLED"), True)
     rate_limit_requests_per_minute: int = int(os.getenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "120"))
     rate_limit_exempt_paths: str = os.getenv(
