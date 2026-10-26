@@ -47,7 +47,8 @@ def run_validation(*, strict: bool = False) -> dict:
     """Run completeness checks and return a structured report.
 
     Returns a dict with keys: total, errors, warnings, details.
-    errors are critical gaps; warnings are known-gap allowlist items.
+    errors are pipeline bugs (no Platinum price, no match method); warnings are
+    data gaps that the site shows as gaps rather than hiding the offer.
     """
     session = SessionLocal()
     try:
@@ -69,17 +70,17 @@ def run_validation(*, strict: bool = False) -> dict:
 
     missing_wine_type = [w.wine_name for w in wines if not w.wine_type]
     if missing_wine_type:
-        errors.append(f"{len(missing_wine_type)} wine(s) missing wine_type")
+        warnings.append(f"{len(missing_wine_type)} wine(s) missing wine_type")
         details["missing_wine_type"] = missing_wine_type
 
     missing_country = [w.wine_name for w in wines if not w.country]
     if missing_country:
-        errors.append(f"{len(missing_country)} wine(s) missing country")
+        warnings.append(f"{len(missing_country)} wine(s) missing country")
         details["missing_country"] = missing_country
 
     missing_grapes = [w.wine_name for w in wines if not w.grapes]
     if missing_grapes:
-        errors.append(f"{len(missing_grapes)} wine(s) missing grapes")
+        warnings.append(f"{len(missing_grapes)} wine(s) missing grapes")
         details["missing_grapes"] = missing_grapes
 
     missing_match = [
@@ -95,7 +96,7 @@ def run_validation(*, strict: bool = False) -> dict:
     unexpected_no_url = [n for n in missing_url if n not in WINES_MISSING_VIVINO_URL]
     known_no_url = [n for n in missing_url if n in WINES_MISSING_VIVINO_URL]
     if unexpected_no_url:
-        errors.append(
+        warnings.append(
             f"{len(unexpected_no_url)} wine(s) missing Vivino URL (not in allowlist)"
         )
         details["missing_vivino_url_unexpected"] = unexpected_no_url
@@ -109,7 +110,7 @@ def run_validation(*, strict: bool = False) -> dict:
     unexpected_no_rating = [n for n in missing_rating if n not in WINES_MISSING_VIVINO_URL]
     known_no_rating = [n for n in missing_rating if n in WINES_MISSING_VIVINO_URL]
     if unexpected_no_rating:
-        errors.append(
+        warnings.append(
             f"{len(unexpected_no_rating)} wine(s) missing Vivino rating (not in allowlist)"
         )
         details["missing_vivino_rating_unexpected"] = unexpected_no_rating
@@ -123,7 +124,7 @@ def run_validation(*, strict: bool = False) -> dict:
     unexpected_no_price = [n for n in missing_price if n not in WINES_MISSING_VIVINO_PRICE]
     known_no_price = [n for n in missing_price if n in WINES_MISSING_VIVINO_PRICE]
     if unexpected_no_price:
-        errors.append(
+        warnings.append(
             f"{len(unexpected_no_price)} wine(s) missing Vivino price (not in allowlist)"
         )
         details["missing_vivino_price_unexpected"] = unexpected_no_price

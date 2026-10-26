@@ -176,3 +176,10 @@ class MetadataAndInsightsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_deal_score_is_none_without_vivino_rating() -> None:
+    from app.scoring import compute_deal_score
+
+    assert compute_deal_score(-10.0, None, None, price_platinum=90.0, vivino_price=None) is None
+    assert compute_deal_score(-10.0, 4.0, 100, price_platinum=90.0, vivino_price=None) is not None

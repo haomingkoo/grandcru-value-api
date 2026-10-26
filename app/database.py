@@ -88,3 +88,13 @@ def ensure_column(table: str, column: str, col_type: str) -> None:
                 ))
                 logger.info("migration: added %s.%s (%s)", table, column, col_type)
         conn.commit()
+
+
+def ensure_deal_score_nullable() -> None:
+    """Postgres only: older tables were created with deal_score NOT NULL."""
+    with engine.connect() as conn:
+        if conn.dialect.name != "postgresql":
+            return
+        for table in ("wine_deals", "wine_deal_snapshots"):
+            conn.execute(text(f'ALTER TABLE "{table}" ALTER COLUMN "deal_score" DROP NOT NULL'))
+        conn.commit()

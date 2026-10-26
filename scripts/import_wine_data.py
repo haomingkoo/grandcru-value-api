@@ -730,11 +730,17 @@ def _resolve_vivino_price_to_listing(
 
 
 def _quarantine_reasons(payload: dict[str, object]) -> list[str]:
+    """Only a missing Platinum price hides an offer; other gaps are shown as gaps."""
+    if payload.get("price_platinum") in (None, ""):
+        return ["missing_price_platinum"]
+    return []
+
+
+def _data_gap_reasons(payload: dict[str, object]) -> list[str]:
     wine_name = str(payload.get("wine_name") or "")
     reasons: list[str] = []
 
     required_fields = (
-        "price_platinum",
         "wine_type",
         "country",
         "grapes",
@@ -799,7 +805,7 @@ def import_data(
 
     Base.metadata.create_all(bind=engine)
 
-    from app.database import ensure_column
+    from app.database import ensure_column, ensure_deal_score_nullable
 
     ensure_column("wine_deals", "vivino_match_method", "VARCHAR(32)")
     ensure_column("wine_deal_snapshots", "vivino_match_method", "VARCHAR(32)")
@@ -814,6 +820,7 @@ def import_data(
     ensure_column("wine_deals", "price_market", "FLOAT")
     ensure_column("wine_deals", "market_retailer_name", "VARCHAR(128)")
     ensure_column("wine_deals", "market_retailer_url", "VARCHAR(512)")
+    ensure_deal_score_nullable()
 
     comparison_rows = read_csv_rows(comparison_path)
     if not comparison_rows:
@@ -845,6 +852,7 @@ def import_data(
         merged_records: list[WineDeal] = []
         snapshot_records: list[WineDealSnapshot] = []
         quarantine_records: list[dict[str, str]] = []
+        incomplete_count = 0
         snapshot_time = datetime.now(UTC)
         existing_descriptions_by_name, existing_descriptions_by_vivino_url = _load_existing_vivino_descriptions(session)
 
@@ -1082,6 +1090,10 @@ def import_data(
                 )
                 continue
 
+            gap_reasons = _data_gap_reasons(deal_payload)
+            if gap_reasons:
+                incomplete_count += 1
+                logger.info("wine_incomplete wine=%s gaps=%s", wine_name, ",".join(gap_reasons))
             merged_records.append(WineDeal(**deal_payload))
             snapshot_payload = {key: value for key, value in deal_payload.items() if key in SNAPSHOT_FIELDS}
             snapshot_records.append(
@@ -1121,7 +1133,8 @@ def import_data(
             f"Loaded {len(comparison_rows)} comparison rows and {len(vivino_rows_base)} vivino rows "
             f"(+{len(vivino_rows_override)} overrides) into {len(merged_records)} current deals and "
             f"{len(snapshot_records)} snapshots (vivino: {match_summary}); "
-            f"quarantined {len(quarantine_records)} incomplete rows; "
+            f"{incomplete_count} shown with data gaps; "
+            f"quarantined {len(quarantine_records)} rows without a Platinum price; "
             f"pruned {deleted_snapshots} snapshots older than {settings.history_retention_days} days."
         )
         session.commit()
