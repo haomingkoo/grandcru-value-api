@@ -37,6 +37,11 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 - One authored motion: dots settle in price order, then the frontier draws left to right. Nothing moves with reduced motion.
 - Price filter: a two-handle slider on a log scale of S$ per 750 ml, exact From and To inputs, and presets. It drives the table and the map together.
 
+## Full list
+- The daily scrape keeps every Platinum listing, including sold-out ones. The page shows in-stock offers by default, with "Include sold out (N)" among the quick filters, and the line "Platinum lists 237 wines: 69 in stock, 168 sold out." from the full list.
+- A sold-out row is muted (grey Platinum dot, faded bottle). It says "Sold out since <date>" when a daily check saw it in stock before, otherwise "Sold out when we first saw it, <date>", and in both cases that the listed price is shown. Its action is a plain "View on Platinum" button, never "Buy".
+- On the value map, sold-out wines appear only when included, as faded dots, with a legend note.
+
 ## Price history
 - Each offer keeps one price per source per Singapore day (`price_observations`), never pruned. Platinum and Grand Cru come from the daily check; Vivino from the dated page reads (about weekly), drawn as dots on their check dates. A new source (a retailer feed) is a new `source` value and draws as another line with no code change.
 - All history is per 750 ml, and the chart says so. Lines are step lines; a missing day is a gap, never interpolated. Points before daily tracking began come from saved price lists (Platinum only, dated by commit) and are drawn hollow.

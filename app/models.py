@@ -136,6 +136,8 @@ class PriceObservation(Base):
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     observed_on: Mapped[date] = mapped_column(Date)
     url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Platinum rows only. Rows before sold-out listings were scraped (27 Oct 2026) are null: in stock by construction.
+    in_stock: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     origin: Mapped[str] = mapped_column(String(32), default="daily_check")
     ingestion_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 

@@ -15,6 +15,7 @@ const defaultState = {
   minVivinoNumRatings: "",
   priceMin: "",
   priceMax: "",
+  includeSoldOut: false,
 }
 
 const sortDefaults = {
@@ -46,6 +47,7 @@ const QUICK_FILTERS = {
   rated: { isOn: () => Number(state.minVivinoRating || 0) >= 4, apply: (on) => { state.minVivinoRating = on ? "4.0" : "" } },
   confident: { isOn: () => Number(state.minVivinoNumRatings || 0) >= 100, apply: (on) => { state.minVivinoNumRatings = on ? "100" : "" } },
   listed: { isOn: () => state.comparableOnly, apply: (on) => { state.comparableOnly = on } },
+  soldout: { isOn: () => state.includeSoldOut, apply: (on) => { state.includeSoldOut = on } },
 }
 
 const SIDES = [
@@ -220,7 +222,7 @@ async function loadSplit() {
   }
   const sides = SIDES.map((side) => ({ ...side, count: counts[side.value] || 0 }))
   els.splitBar.innerHTML = `
-    <p class="split-title"><strong>${formatInteger(total)}</strong> ${plural(total, "offer", "offers")}${hasActiveFilters() && params.toString() ? " in view" : " in stock today"}, against Grand Cru</p>
+    <p class="split-title"><strong>${formatInteger(total)}</strong> ${plural(total, "offer", "offers")}${hasActiveFilters() ? " in view" : state.includeSoldOut ? ", in stock and sold out" : " in stock today"}, against Grand Cru</p>
     <div class="split-bar" aria-hidden="true">
       ${sides.filter((side) => side.count).map((side) => `<span class="split-seg seg-${side.cls}" style="flex-grow:${side.count}" data-side="${escapeHtml(side.value)}"></span>`).join("")}
     </div>
@@ -274,7 +276,21 @@ async function setupValueMap() {
   renderStats()
   valueMap = new ValueMap(root, { onShowInList: showDealInList, onStyleToggle: toggleStyleGroup })
   valueMap.setDeals(allDeals)
-  if (lastDeals) valueMap.setVisible(lastDeals.map((d) => d.id), styleFilterList())
+  if (lastDeals) valueMap.setVisible(lastDeals.map((d) => d.id), styleFilterList(), state.includeSoldOut)
+  renderStockLine()
+}
+
+// Honest totals for the whole Platinum list, whatever the filters.
+function renderStockLine() {
+  const line = document.getElementById("stockLine")
+  const soldOut = allDeals.filter((d) => d.platinum_in_stock === false).length
+  const inStock = allDeals.length - soldOut
+  line.textContent = soldOut
+    ? `Platinum lists ${formatInteger(allDeals.length)} wines: ${formatInteger(inStock)} in stock, ${formatInteger(soldOut)} sold out.`
+    : `Platinum lists ${formatInteger(inStock)} ${plural(inStock, "wine", "wines")}, all in stock.`
+  const toggle = els.quickFilters.querySelector("[data-quick='soldout']")
+  toggle.textContent = `Include sold out (${formatInteger(soldOut)})`
+  toggle.hidden = !soldOut
 }
 
 function styleFilterList() {
@@ -290,7 +306,7 @@ function toggleStyleGroup(group) {
 }
 
 function renderStats() {
-  const rated = allDeals.filter((d) => (d.vivino_rating || 0) >= 4 && d.price_platinum_per_750 != null)
+  const rated = allDeals.filter((d) => d.platinum_in_stock !== false && (d.vivino_rating || 0) >= 4 && d.price_platinum_per_750 != null)
   const best = rated.sort((a, b) => a.price_platinum_per_750 - b.price_platinum_per_750)[0]
   const items = []
   if (best) {
@@ -517,7 +533,7 @@ async function loadOffers() {
     renderResultsMeta(deals, families)
     renderTable(families)
     renderActiveFilters()
-    if (valueMap) valueMap.setVisible(deals.map((d) => d.id), styleFilterList())
+    if (valueMap) valueMap.setVisible(deals.map((d) => d.id), styleFilterList(), state.includeSoldOut)
     loadSplit()
     if (pendingHighlight) {
       const target = deals.find((d) => d.id === pendingHighlight)
@@ -559,6 +575,7 @@ function filterParams() {
   if (state.minVivinoNumRatings) params.set("min_vivino_num_ratings", state.minVivinoNumRatings)
   if (state.priceMin) params.set("min_price_per_750", state.priceMin)
   if (state.priceMax) params.set("max_price_per_750", state.priceMax)
+  if (!state.includeSoldOut) params.set("availability", "in_stock")
   return params
 }
 
@@ -580,10 +597,13 @@ function hydrateStateFromUrl() {
   state.minVivinoNumRatings = params.get("min_vivino_num_ratings") || ""
   state.priceMin = params.get("min_price_per_750") || ""
   state.priceMax = params.get("max_price_per_750") || ""
+  state.includeSoldOut = params.get("sold_out") === "include"
 }
 
 function writeStateToUrl() {
   const params = filterParams()
+  params.delete("availability")
+  if (state.includeSoldOut) params.set("sold_out", "include")
   if (state.sortBy !== defaultState.sortBy) params.set("sort_by", state.sortBy)
   if (state.sortOrder !== defaultState.sortOrder) params.set("sort_order", state.sortOrder)
   const query = params.toString()
@@ -741,7 +761,7 @@ function renderOfferRow(deal, family) {
     : ""
 
   return `
-    <tr class="deal-row" data-best-id="${deal.id}" data-offer-ids="${escapeHtml((family ? family.offers : [deal]).map((o) => o.id).join(" "))}">
+    <tr class="deal-row${deal.platinum_in_stock === false ? " is-sold-out" : ""}" data-best-id="${deal.id}" data-offer-ids="${escapeHtml((family ? family.offers : [deal]).map((o) => o.id).join(" "))}">
       <td class="cell-wine">
         <div class="wine-cell">
           ${wineImageHtml(deal)}
@@ -757,8 +777,8 @@ function renderOfferRow(deal, family) {
         <div class="price-head">
           <span class="price">${formatMoney(deal.price_platinum)}</span>
           ${sizeNotes(deal)}
-          ${deal.platinum_in_stock === false ? `<span class="sub tone-warn">Out of stock</span>` : ""}
         </div>
+        ${deal.platinum_in_stock === false ? `<p class="sold-out-line">${escapeHtml(soldOutText(deal))}</p>` : ""}
         ${priceStrip(deal)}
         <ul class="compare-lines">${compareLines(deal)}</ul>
         <div class="history-slot" data-deal-id="${deal.id}"></div>
@@ -772,7 +792,11 @@ function renderOfferRow(deal, family) {
       </td>
       <td class="cell-links">
         <div class="wine-links">
-          ${deal.platinum_url ? `<a class="button button-primary" href="${escapeHtml(deal.platinum_url)}" target="_blank" rel="noopener noreferrer">Buy on Platinum</a>` : ""}
+          ${deal.platinum_url
+            ? deal.platinum_in_stock === false
+              ? `<a class="button" href="${escapeHtml(deal.platinum_url)}" target="_blank" rel="noopener noreferrer">View on Platinum<span class="visually-hidden"> (sold out, opens in a new tab)</span></a>`
+              : `<a class="button button-primary" href="${escapeHtml(deal.platinum_url)}" target="_blank" rel="noopener noreferrer">Buy on Platinum</a>`
+            : ""}
           <span class="compare-links">
             ${textLink(deal.grand_cru_url, "Grand Cru")}
             ${textLink(deal.vivino_url, "Vivino")}
@@ -782,6 +806,12 @@ function renderOfferRow(deal, family) {
       </td>
     </tr>
   `
+}
+
+function soldOutText(deal) {
+  if (deal.sold_out_since) return `Sold out since ${formatDay(deal.sold_out_since)}. Last listed price shown.`
+  if (deal.first_seen_on) return `Sold out when we first saw it, ${formatDay(deal.first_seen_on)}. Listed price shown.`
+  return "Sold out. Listed price shown."
 }
 
 // Where Platinum sits against every other price we have for the same listing size.
@@ -918,7 +948,9 @@ function fallbackLabelName(deal) {
 }
 
 function hasActiveFilters() {
-  return filterParams().toString() !== ""
+  const params = filterParams()
+  params.delete("availability")
+  return params.toString() !== ""
 }
 
 function renderActiveFilters() {
@@ -935,6 +967,7 @@ function renderActiveFilters() {
   if (state.cheaperSide) chips.push([capitalize(SIDES.find((side) => side.value === state.cheaperSide)?.label || state.cheaperSide), "cheaperSide"])
   if (state.minVivinoRating) chips.push([`Rated ${state.minVivinoRating}+`, "minVivinoRating"])
   if (state.minVivinoNumRatings) chips.push([`${state.minVivinoNumRatings}+ ratings`, "minVivinoNumRatings"])
+  if (state.includeSoldOut) chips.push(["Including sold out", "includeSoldOut"])
   if (state.priceMin || state.priceMax) {
     const range = state.priceMin && state.priceMax ? `S$${state.priceMin} to S$${state.priceMax}` : state.priceMin ? `S$${state.priceMin} and up` : `Under S$${state.priceMax}`
     chips.push([`${range} per 750 ml`, "price"])

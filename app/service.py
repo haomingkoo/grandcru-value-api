@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.deal_insights import compute_deal_insights
 from app.models import IngestionRun, WineDeal, WineDealSnapshot
-from app.price_history import per_750, volume_ml
+from app.price_history import per_750, stock_dates, volume_ml
 
 VIVINO_UNRESOLVED_EXPORT_FIELDS = (
     "name_plat",
@@ -281,6 +281,7 @@ def _build_deals_stmt(
     max_platinum_price: float | None = None,
     min_price_per_750: float | None = None,
     max_price_per_750: float | None = None,
+    availability: str = "all",
     country: str | None = None,
     region: str | None = None,
     wine_type: str | None = None,
@@ -323,6 +324,10 @@ def _build_deals_stmt(
 
     if max_platinum_price is not None:
         stmt = stmt.where(WineDeal.price_platinum <= max_platinum_price)
+    if availability == "in_stock":
+        stmt = stmt.where(WineDeal.platinum_in_stock.is_not(False))
+    elif availability == "sold_out":
+        stmt = stmt.where(WineDeal.platinum_in_stock.is_(False))
     if min_price_per_750 is not None:
         stmt = stmt.where(PRICE_PER_750 >= min_price_per_750)
     if max_price_per_750 is not None:
@@ -353,6 +358,7 @@ def list_deals(
     max_platinum_price: float | None = None,
     min_price_per_750: float | None = None,
     max_price_per_750: float | None = None,
+    availability: str = "all",
     sort_by: str = "deal_score",
     sort_order: str = "desc",
     country: str | None = None,
@@ -374,6 +380,7 @@ def list_deals(
         max_platinum_price=max_platinum_price,
         min_price_per_750=min_price_per_750,
         max_price_per_750=max_price_per_750,
+        availability=availability,
         country=country,
         region=region,
         wine_type=wine_type,
@@ -387,7 +394,16 @@ def list_deals(
     deals = list(session.scalars(stmt).all())
     _apply_price_change_fields(session, deals)
     _apply_response_fields(deals)
+    _apply_stock_dates(session, deals)
     return deals
+
+
+def _apply_stock_dates(session: Session, deals: list[WineDeal]) -> None:
+    dates = stock_dates(session, [d.wine_name for d in deals if d.platinum_in_stock is False])
+    for deal in deals:
+        info = dates.get(deal.wine_name, {})
+        setattr(deal, "first_seen_on", info.get("first_seen"))
+        setattr(deal, "sold_out_since", info.get("sold_out_since") if info.get("last_in_stock") else None)
 
 
 def list_vivino_unresolved_export_rows(
@@ -565,6 +581,7 @@ def _average(values: list[float | None]) -> float | None:
 
 def get_deal_stats(session: Session, **filters) -> dict:
     deals = _load_filtered_deals(session, **filters)
+    every_stock = _load_filtered_deals(session, **{**filters, "availability": "all"})
 
     cheaper_sides: dict[str, int] = {}
     wine_types: dict[str, int] = {}
@@ -599,6 +616,8 @@ def get_deal_stats(session: Session, **filters) -> dict:
 
     return {
         "total_deals": len(deals),
+        "in_stock_count": sum(1 for deal in every_stock if deal.platinum_in_stock is not False),
+        "sold_out_count": sum(1 for deal in every_stock if deal.platinum_in_stock is False),
         "with_vivino_match": sum(1 for deal in deals if deal.vivino_rating is not None),
         "with_market_price": sum(1 for deal in deals if deal.vivino_price and deal.vivino_price > 0),
         "cheaper_sides": _sorted_label_counts(cheaper_sides),

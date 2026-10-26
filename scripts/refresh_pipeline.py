@@ -321,6 +321,7 @@ def run_scrape_and_build(
         str(max_pages),
         "--sleep-seconds",
         str(sleep_seconds),
+        "--include-oos",
     ]
     if platinum_detail_ratings:
         scrape_cmd.append("--platinum-detail-ratings")
@@ -341,6 +342,7 @@ def run_scrape_and_build(
         str(comparison_path),
         "--match-threshold",
         str(match_threshold),
+        "--include-sold-out",
     ]
     print(f"[refresh] Building comparison summary into {comparison_path}", flush=True)
     run_step("build comparison", build_cmd, env)
