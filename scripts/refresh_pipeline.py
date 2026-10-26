@@ -118,10 +118,8 @@ def run_vivino_resolver(
     limit: int,
     max_api_queries: int,
     auto_provider_order: str,
-    query_cache: Path,
     cache_ttl_hours: float,
     only_new_unresolved: bool,
-    state_file: Path,
     output_review: Path,
     output_unmatched: Path,
     output_suggestions: Path,
@@ -153,12 +151,8 @@ def run_vivino_resolver(
         str(max_api_queries),
         "--auto-provider-order",
         auto_provider_order,
-        "--query-cache",
-        str(query_cache),
         "--cache-ttl-hours",
         str(cache_ttl_hours),
-        "--state-file",
-        str(state_file),
         "--output-review",
         str(output_review),
         "--output-unmatched",
@@ -188,19 +182,70 @@ def run_vivino_resolver(
     run_step("vivino resolver", resolver_cmd, env)
 
 
-def resolver_recent(state_file: Path, min_interval_hours: float) -> bool:
+def resolver_recent(min_interval_hours: float) -> bool:
     if min_interval_hours <= 0:
         return False
-    if not state_file.exists():
-        return False
-    try:
-        payload = json.loads(state_file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return False
+    from app.durable_state import load_state
+    from scripts.resolve_vivino_matches import RESOLVER_STATE_KEY
+
+    payload = load_state(RESOLVER_STATE_KEY, {}) or {}
     last_run = payload.get("last_run_at")
     if not isinstance(last_run, (int, float)):
         return False
     return (time.time() - float(last_run)) < (min_interval_hours * 3600)
+
+
+def restore_durable_overrides(overrides_path: Path) -> list[dict[str, str]]:
+    """Put database-kept resolver matches back into the CSV the resolvers read."""
+    from scripts.import_wine_data import read_optional_csv_rows
+    from scripts.vivino_overrides import OVERRIDE_FIELDS, with_durable_overrides
+
+    seed_rows = read_optional_csv_rows(overrides_path)
+    merged = with_durable_overrides(seed_rows)
+    if merged is not seed_rows:
+        write_override_rows(overrides_path, merged, OVERRIDE_FIELDS)
+    return seed_rows
+
+
+def write_override_rows(path: Path, rows: list[dict[str, str]], fieldnames: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def persist_new_overrides(overrides_path: Path, seed_rows: list[dict[str, str]]) -> int:
+    """Save override rows the resolvers added or changed this run to the database."""
+    from scripts.import_wine_data import read_optional_csv_rows
+    from scripts.vivino_overrides import normalize_override_row, save_durable_overrides
+
+    seed = {row.get("match_name", "").strip(): normalize_override_row(row) for row in seed_rows}
+    changed = [
+        row
+        for row in read_optional_csv_rows(overrides_path)
+        if normalize_override_row(row) != seed.get(row.get("match_name", "").strip())
+    ]
+    if changed:
+        save_durable_overrides(changed)
+    return len(changed)
+
+
+def run_vivino_facts_refresh(
+    comparison_path: Path, vivino_path: Path, vivino_overrides_path: Path, env: dict[str, str]
+) -> None:
+    cmd = [
+        sys.executable,
+        str(ROOT / "scripts" / "refresh_vivino_facts.py"),
+        "--comparison",
+        str(comparison_path),
+        "--vivino",
+        str(vivino_path),
+        "--vivino-overrides",
+        str(vivino_overrides_path),
+    ]
+    print("[refresh] Refreshing Vivino facts (polite, budgeted)", flush=True)
+    run_step("vivino facts", cmd, env)
 
 
 def run_import(comparison_path: Path, vivino_path: Path, vivino_overrides_path: Path, env: dict[str, str]) -> None:
@@ -518,22 +563,12 @@ def main() -> None:
         "--resolver-auto-provider-order",
         default=os.getenv("VIVINO_AUTO_PROVIDER_ORDER", "google_cse,brave,serper"),
     )
-    parser.add_argument(
-        "--resolver-query-cache",
-        type=Path,
-        default=ROOT / "data" / "vivino_query_cache.json",
-    )
     parser.add_argument("--resolver-cache-ttl-hours", type=float, default=168.0)
     parser.add_argument(
         "--resolver-only-new-unresolved",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Only query newly unresolved rows (default: true).",
-    )
-    parser.add_argument(
-        "--resolver-state-file",
-        type=Path,
-        default=ROOT / "data" / "vivino_resolver_state.json",
     )
     parser.add_argument(
         "--resolver-output-review",
@@ -559,13 +594,11 @@ def main() -> None:
         help="Optional DATABASE_URL override (useful for direct prod imports).",
     )
     parser.add_argument(
-        "--enrich-vivino-results",
-        action="store_true",
-        help="Fetch missing vivino ratings/counts for override URLs and update vivino_results.csv.",
+        "--refresh-vivino-facts",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Read Vivino price/rating for current offers within the polite daily budget (default: true).",
     )
-    parser.add_argument("--enrich-vivino-timeout-seconds", type=float, default=20.0)
-    parser.add_argument("--enrich-vivino-sleep-seconds", type=float, default=0.8)
-    parser.add_argument("--enrich-vivino-limit", type=int, default=0)
     parser.add_argument(
         "--ratings-coverage-min",
         type=float,
@@ -784,9 +817,10 @@ def main() -> None:
         flush=True,
     )
 
+    seed_override_rows = restore_durable_overrides(vivino_overrides_path)
+
     if args.resolve_vivino:
-        state_path = args.resolver_state_file.resolve()
-        if resolver_recent(state_path, args.resolver_min_interval_hours):
+        if resolver_recent(args.resolver_min_interval_hours):
             print(
                 f"[refresh] Skipping resolver; last run within {args.resolver_min_interval_hours}h.",
                 flush=True,
@@ -805,10 +839,8 @@ def main() -> None:
                 limit=args.resolver_limit,
                 max_api_queries=args.resolver_max_api_queries,
                 auto_provider_order=args.resolver_auto_provider_order,
-                query_cache=args.resolver_query_cache.resolve(),
                 cache_ttl_hours=args.resolver_cache_ttl_hours,
                 only_new_unresolved=args.resolver_only_new_unresolved,
-                state_file=state_path,
                 output_review=args.resolver_output_review.resolve(),
                 output_unmatched=args.resolver_output_unmatched.resolve(),
                 output_suggestions=args.resolver_output_suggestions.resolve(),
@@ -908,23 +940,11 @@ def main() -> None:
             print("[refresh] Validating market prices", flush=True)
             run_step("market price validation", validate_cmd, env)
 
-    if args.enrich_vivino_results:
-        enrich_cmd = [
-            sys.executable,
-            str(ROOT / "scripts" / "enrich_vivino_results.py"),
-            "--vivino",
-            str(vivino_path),
-            "--vivino-overrides",
-            str(vivino_overrides_path),
-            "--timeout-seconds",
-            str(args.enrich_vivino_timeout_seconds),
-            "--sleep-seconds",
-            str(args.enrich_vivino_sleep_seconds),
-        ]
-        if args.enrich_vivino_limit:
-            enrich_cmd.extend(["--limit", str(args.enrich_vivino_limit)])
-        print("[refresh] Enriching vivino_results.csv from override URLs", flush=True)
-        run_step("vivino enrichment", enrich_cmd, env)
+    persisted = persist_new_overrides(vivino_overrides_path, seed_override_rows)
+    print(f"[refresh] Saved {persisted} resolver override rows to the database", flush=True)
+
+    if args.refresh_vivino_facts:
+        run_vivino_facts_refresh(comparison_path, vivino_path, vivino_overrides_path, env)
 
     if args.validate_retailer_price_math:
         run_retailer_price_math_validation(

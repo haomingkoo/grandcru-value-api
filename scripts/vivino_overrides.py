@@ -66,3 +66,26 @@ def upsert_overrides(existing: list[dict[str, str]], new_rows: list[dict[str, st
     merged_rows = list(by_name.values())
     merged_rows.sort(key=lambda row: row.get("match_name") or "")
     return merged_rows
+
+
+DURABLE_OVERRIDES_KEY = "vivino_auto_overrides"
+
+
+def load_durable_overrides(session=None) -> list[dict[str, str]]:
+    """Resolver-accepted rows kept in the database; seed CSV edits are lost on redeploy."""
+    from app.durable_state import load_state
+
+    rows = load_state(DURABLE_OVERRIDES_KEY, [], session=session) or []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def save_durable_overrides(rows: list[dict[str, str]]) -> None:
+    from app.durable_state import save_state
+
+    save_state(DURABLE_OVERRIDES_KEY, upsert_overrides(load_durable_overrides(), rows))
+
+
+def with_durable_overrides(csv_rows: list[dict[str, str]], session=None) -> list[dict[str, str]]:
+    """Seed rows plus database rows; locked seed rows always win."""
+    durable = load_durable_overrides(session)
+    return upsert_overrides(csv_rows, durable) if durable else csv_rows

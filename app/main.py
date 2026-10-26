@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Base, engine, ensure_column, ensure_deal_score_nullable, get_session
+from app.durable_state import load_state
 from app.ops import RefreshRunner, diagnostics_payload, locked_vivino_override_names
 from app.schemas import (
     DealHistoryOut,
@@ -30,6 +31,7 @@ from app.schemas import (
     OpsRefreshStatusOut,
     OpsRefreshTriggerIn,
 )
+from app.vivino_status import summarize_vivino_status
 from app.security import InMemoryRateLimiter, is_exempt_path, parse_exempt_paths, resolve_client_ip
 from app.service import (
     count_deals,
@@ -46,6 +48,7 @@ from app.service import (
     list_vivino_unresolved_export_rows,
     list_deals,
 )
+from scripts.vivino_fetch import FETCH_STATE_KEY
 
 
 _level = getattr(logging, settings.log_level, logging.INFO)
@@ -107,6 +110,7 @@ def _ensure_runtime_columns() -> None:
     ensure_column("wine_deals", "image_url", "VARCHAR(1024)")
     ensure_column("wine_deals", "vivino_price", "FLOAT")
     ensure_column("wine_deals", "vivino_description", "VARCHAR(512)")
+    ensure_column("wine_deals", "vivino_checked_at", "TIMESTAMP WITH TIME ZONE")
     for column, col_type in DEAL_EXTRA_COLUMNS:
         ensure_column("wine_deals", column, col_type)
     ensure_column("wine_deals", "price_market", "FLOAT")
@@ -502,6 +506,11 @@ def health(session: Session = Depends(get_session)) -> HealthOut:
     total_snapshots = count_snapshots(session)
     latest = get_latest_ingestion(session)
     stale = is_ingestion_stale(latest)
+    try:
+        vivino = summarize_vivino_status(load_state(FETCH_STATE_KEY, {}, session=session))
+    except SQLAlchemyError:
+        logger.exception("vivino_status_unavailable")
+        vivino = {"vivino_status": "unknown: state unreadable", "vivino_ok": False}
     return HealthOut(
         status="ok",
         db_ok=True,
@@ -512,6 +521,7 @@ def health(session: Session = Depends(get_session)) -> HealthOut:
         history_retention_days=settings.history_retention_days,
         ingestion_stale=stale,
         latest_ingestion=latest,
+        **vivino,
     )
 
 

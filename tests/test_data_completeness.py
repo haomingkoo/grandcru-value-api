@@ -22,7 +22,6 @@ import pytest
 
 from scripts.data_quality_rules import (
     SUPPRESSION_OVERRIDES,
-    WINES_MISSING_VIVINO_PRICE,
     WINES_MISSING_VIVINO_URL,
 )
 
@@ -239,23 +238,12 @@ class TestDbCompleteness:
             + "\n".join(f"  {n}" for n in unexpected)
         )
 
-    def test_vivino_price_gaps_within_allowlist(self, db_conn) -> None:
-        """Vivino prices require a Vivino URL and an SGD price on the page.
-
-        Railway IPs are blocked, so prices must be entered manually in
-        vivino_overrides.csv. Wines in WINES_MISSING_VIVINO_PRICE are
-        documented known gaps. New missing prices (not in the allowlist)
-        indicate a regression.
-        """
+    def test_every_vivino_price_has_a_checked_date(self, db_conn) -> None:
+        """Prices come only from dated Vivino page checks, never from undated CSV values."""
         rows = db_conn.execute(
-            "SELECT wine_name FROM wine_deals WHERE vivino_price IS NULL"
+            "SELECT wine_name FROM wine_deals WHERE vivino_price IS NOT NULL AND vivino_checked_at IS NULL"
         ).fetchall()
-        unexpected = [r[0] for r in rows if r[0] not in WINES_MISSING_VIVINO_PRICE]
-        assert not unexpected, (
-            "Wines missing Vivino price that are NOT in the known-gap allowlist:\n"
-            + "\n".join(f"  {n}" for n in unexpected)
-            + "\n\nLook up the SGD price on Vivino and add to seed/vivino_overrides.csv."
-        )
+        assert not rows, "Vivino prices without a checked date:\n" + "\n".join(f"  {r[0]}" for r in rows)
 
     def test_no_empty_match_method(self, db_conn) -> None:
         rows = db_conn.execute(
@@ -366,18 +354,12 @@ class TestNamedRegressions:
             f"Roagna Derthona grapes: expected Timorasso, got '{grapes}'"
         )
 
-    def test_vivino_description_preserved_across_pipeline_rebuilds(self, db_conn) -> None:
-        """Descriptions must survive pipeline rebuilds (regression from PR #55)."""
-        # Pick a wine that definitely has a description in overrides
-        row = _fetchone_or_skip(
-            db_conn,
-            "SELECT vivino_description FROM wine_deals WHERE wine_name LIKE '%Chateau Beaucastel%'",
-            "Chateau Beaucastel not in current local DB",
-        )
-        (desc,) = row
-        assert desc and len(desc) > 20, (
-            f"Chateau Beaucastel: vivino_description is missing or too short: '{desc}'"
-        )
+    def test_no_vivino_review_text_in_db(self, db_conn) -> None:
+        """Only Vivino facts (price, rating, count) are stored; never review text."""
+        (count,) = db_conn.execute(
+            "SELECT COUNT(*) FROM wine_deals WHERE vivino_description IS NOT NULL AND vivino_description != ''"
+        ).fetchone()
+        assert count == 0
 
     def test_miraval_magnum_not_price_divided(self, db_conn) -> None:
         """Platinum price is the anchor — never divide it. Miraval magnum was

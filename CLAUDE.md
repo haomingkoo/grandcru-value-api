@@ -24,11 +24,15 @@ CI (`.github/workflows/ci.yml`) runs the same checks plus pytest on Python 3.11.
 
 ## Gotchas
 
-- Railway app storage is ephemeral: resolver writes to `seed/vivino_overrides.csv`
-  at runtime are lost on redeploy. Postgres is the only durable store.
-- `import_wine_data.py` deletes and rebuilds `wine_deals` on every import. Fields
-  missing from the CSVs (e.g. `vivino_description`) survive only via its DB-fallback
-  logic; keep that fallback when touching the importer.
+- Railway app storage is ephemeral. Resolver state, its query cache, accepted
+  overrides, Vivino facts and the fetch budget live in the `app_state` table
+  (`app/durable_state.py`); never rely on files under `data/` or `seed/` surviving.
+- Vivino safeguards: every Vivino request goes through `scripts/vivino_fetch.py`
+  (honest UA, robots.txt, wine pages only, ~80 fetches/day with 6-10 s jittered
+  delay, weekly re-fetch per wine/vintage, stop and back off on 403/429); `/health`
+  reports `vivino_status`/`vivino_ok`, and only price, rating and count are kept.
+- `import_wine_data.py` deletes and rebuilds `wine_deals` on every import. Vivino
+  prices come only from dated facts (`vivino_checked_at`); no review text is stored.
 - `DATABASE_URL` is rewritten to the psycopg 3 driver by
   `app.config.normalize_database_url`; any new engine must go through it.
 - `scripts/data_quality_rules.py` is the allowlist for accepted data gaps. Rows in

@@ -1,8 +1,9 @@
 """LLM-powered Vivino resolver using Gemini Flash.
 
 For each unmatched wine, asks Gemini to extract structured identity and
-generate the best Vivino search query. Then searches Vivino directly
-and fetches rating + review count from the wine page.
+generate the best Vivino search query. Brave finds the Vivino page; the
+polite fetcher (scripts/vivino_fetch.py) reads its rating, rating count and
+price within the shared daily budget.
 
 Results are cached with a 30-day TTL — only new or stale wines trigger
 Gemini + Vivino calls.
@@ -40,13 +41,18 @@ from scripts.import_wine_data import (  # noqa: E402
     read_optional_csv_rows,
 )
 from scripts.llm_utils import (  # noqa: E402
-    _parse_grounding_json,
     call_gemini,
-    call_gemini_with_search,
     cache_key,
     is_cache_fresh,
     load_cache,
     save_cache,
+)
+from scripts.vivino_fetch import (  # noqa: E402
+    FACTS_KEY,
+    PoliteFetcher,
+    VivinoBlocked,
+    canonical_wine_url,
+    fetch_facts,
 )
 from scripts.vivino_overrides import OVERRIDE_FIELDS, upsert_overrides  # noqa: E402
 
@@ -58,18 +64,6 @@ logger = logging.getLogger("grandcru.llm_resolver")
 
 CACHE_TTL_DAYS = 30
 
-_AGG_RATING_RE = re.compile(
-    r'"aggregateRating"\s*:\s*\{[^}]*"ratingValue"\s*:\s*"?(?P<rating>[\d.]+)"?'
-    r'[^}]*"ratingCount"\s*:\s*"?(?P<count>[\d,]+)"?',
-    re.DOTALL,
-)
-_RATING_VALUE_RE = re.compile(r'"ratingValue"\s*:\s*"?(?P<rating>[\d.]+)"?')
-_RATING_COUNT_RE = re.compile(r'"ratingCount"\s*:\s*"?(?P<count>[\d,]+)"?')
-_REVIEW_COUNT_RE = re.compile(r'"reviewCount"\s*:\s*"?(?P<count>[\d,]+)"?')
-_VIVINO_WINE_URL_RE = re.compile(r'href="(/[a-z]{2}/en/[^"]+/w/\d+[^"]*)"')
-_VIVINO_WINE_URL_FULL_RE = re.compile(
-    r"https?://(?:www\.)?vivino\.com/[^\s\"'<>]*?/w/\d+"
-)
 _SIGNATURE_MARKERS = (
     "chardonnay",
     "pinot noir",
@@ -90,83 +84,9 @@ _SIGNATURE_MARKERS = (
 )
 
 
-def resolve_vivino_via_grounding(
-    wine_name: str,
-    api_key: str,
-    *,
-    vivino_url_hint: str = "",
-) -> dict[str, str]:
-    """Use Gemini + Google Search grounding to find Vivino data for a wine.
-
-    Bypasses direct Vivino scraping — works from datacenter IPs where
-    Vivino blocks HTTP requests.
-
-    If vivino_url_hint is provided (e.g. from Brave Search), Gemini is
-    asked to look up that specific page first, which is more reliable
-    than a broad search.
-    """
-    json_schema = (
-        "vivino_url, vivino_rating (decimal), vivino_num_ratings (integer),\n"
-        "vivino_price_sgd (number or null), wine_style, grapes,\n"
-        "tasting_keywords (comma-separated string of 8 keywords),\n"
-        "top_review (one short user review under 200 chars or empty)."
-    )
-
-    # Attempt 1: If we have a URL from Brave, ask about that specific page.
-    if vivino_url_hint:
-        prompt = (
-            f'Look up this Vivino wine page: {vivino_url_hint}\n'
-            f'The wine is: "{wine_name}"\n'
-            f"Return ONLY a JSON object (no markdown) with keys:\n"
-            f"{json_schema}\n"
-            f"Only include data from Vivino. Do not fabricate."
-        )
-        raw = call_gemini_with_search(prompt, api_key)
-        data = _parse_grounding_json(raw)
-        if data.get("vivino_rating"):
-            if not data.get("vivino_url"):
-                data["vivino_url"] = vivino_url_hint
-            return data
-        logger.info(
-            "Grounding with URL hint got no rating for '%s', retrying broad search...",
-            wine_name,
-        )
-
-    # Attempt 2: Broad search by wine name.
-    prompt = (
-        f'Search Vivino.com for: "{wine_name}"\n'
-        f"Return ONLY a JSON object (no markdown) with keys:\n"
-        f"{json_schema}\n"
-        f"Only include data from Vivino. Do not fabricate."
-    )
-    raw = call_gemini_with_search(prompt, api_key)
-    data = _parse_grounding_json(raw)
-    if data.get("vivino_rating"):
-        return data
-
-    # Attempt 3: Simplified name (drop vintage, bottle size, color).
-    simple_name = re.sub(
-        r"\s*-\s*(Red|White|Rose|Sparkling)\s*-.*$", "", wine_name,
-    )
-    simple_name = re.sub(r"^\d{4}\s+", "", simple_name)  # drop year
-    simple_name = re.sub(r"^NV\s+", "", simple_name)
-    if simple_name != wine_name:
-        logger.info(
-            "Retrying grounding with simplified name: '%s'", simple_name,
-        )
-        prompt = (
-            f'Search Vivino.com for wine: "{simple_name}"\n'
-            f"Return ONLY a JSON object (no markdown) with keys:\n"
-            f"{json_schema}\n"
-            f"Only include data from Vivino. Do not fabricate."
-        )
-        raw = call_gemini_with_search(prompt, api_key)
-        data = _parse_grounding_json(raw)
-        if data.get("vivino_rating"):
-            return data
-
-    logger.warning("All grounding attempts failed for '%s'", wine_name)
-    return {}
+def vintage_hint(wine_name: str) -> str:
+    match = re.match(r"^\s*((?:19|20)\d{2})\b", wine_name or "")
+    return match.group(1) if match else ""
 
 
 def _normalize_validation_name(value: str | None) -> str:
@@ -246,181 +166,6 @@ For vivino_query, use just: producer + wine name + vintage. Drop color, bottle s
 # ── Vivino fetching ────────────────────────────────────────────────────
 
 
-_VIVINO_LOCALE = "SG/en"
-
-
-def _force_english_vivino_url(url: str) -> str:
-    """Rewrite Vivino URLs to use Singapore English locale for SGD prices."""
-    return re.sub(
-        r"(vivino\.com/)([A-Za-z]{2})/([a-z]{2})/",
-        rf"\1{_VIVINO_LOCALE}/",
-        re.sub(
-            r"(vivino\.com/)([a-z]{2})(/)",
-            rf"\1{_VIVINO_LOCALE}/",
-            url,
-        ),
-    )
-
-
-def fetch_html(url: str, timeout: int = 20) -> str:
-    """Fetch a URL and return HTML content."""
-    url = _force_english_vivino_url(url)
-    req = Request(url, headers={
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
-    })
-    with urlopen(req, timeout=timeout) as resp:
-        charset = resp.headers.get_content_charset() or "utf-8"
-        return resp.read().decode(charset, errors="replace")
-
-
-def parse_vivino_rating(html: str) -> tuple[str, str]:
-    """Extract rating and count from Vivino page HTML via JSON-LD."""
-    match = _AGG_RATING_RE.search(html)
-    if match:
-        return match.group("rating"), match.group("count").replace(",", "")
-    rating, count = "", ""
-    m_rating = _RATING_VALUE_RE.search(html)
-    if m_rating:
-        rating = m_rating.group("rating")
-    m_count = _RATING_COUNT_RE.search(html) or _REVIEW_COUNT_RE.search(html)
-    if m_count:
-        count = m_count.group("count").replace(",", "")
-    return rating, count
-
-
-def parse_vivino_extras(html: str) -> dict[str, str]:
-    """Extract description, price, grapes, and region from Vivino page.
-
-    Uses JSON-LD first, then falls back to visible page text for price
-    and metadata that JSON-LD often omits.
-    """
-    import json as _json
-    from html import unescape as _unescape
-
-    extras: dict[str, str] = {}
-
-    # Extract JSON-LD block
-    ld_match = re.search(
-        r'<script\s+type="application/ld\+json">\s*(\{.*?\})\s*</script>',
-        html,
-        re.DOTALL,
-    )
-    ld: dict = {}
-    if ld_match:
-        try:
-            ld = _json.loads(ld_match.group(1))
-        except _json.JSONDecodeError:
-            pass
-
-    # JSON-LD wine name (for match validation downstream)
-    ld_name = (ld.get("name") or "").strip()
-    if ld_name:
-        extras["vivino_wine_name"] = ld_name
-
-    # Description from JSON-LD (often empty on Vivino)
-    desc = (ld.get("description") or "").strip()
-    if len(desc) > 15:
-        extras["description"] = desc[:500]
-
-    # If no description, build one from wine style + facts in the HTML
-    if not extras.get("description"):
-        style_text = re.search(
-            r'Wine style</[^>]+>[^<]*<[^>]+>([^<]{5,80})<',
-            html,
-        )
-        if style_text:
-            extras["description"] = style_text.group(1).strip()
-
-    # --- Price ---
-    # Priority 1: visible text — "$111 ... Price is per bottle" (most reliable for SGD)
-    text = re.sub(r"<[^>]+>", "\n", html)
-    text = _unescape(text)
-    text = re.sub(r"[ \t]+", " ", text)
-    price_match = re.search(
-        r"\$(\d+(?:\.\d{2})?)\s*\n\s*Price is per bottle",
-        text,
-    )
-    if price_match:
-        pval = float(price_match.group(1))
-        if 5 <= pval <= 50000:
-            extras["price"] = price_match.group(1)
-
-    # Priority 1b: "Average online price from external shops" (no Add to cart)
-    if not extras.get("price"):
-        avg_match = re.search(
-            r"\$(\d+(?:\.\d{2})?)\s*\n\s*Average online price",
-            text,
-        )
-        if avg_match:
-            pval = float(avg_match.group(1))
-            if 5 <= pval <= 50000:
-                extras["price"] = avg_match.group(1)
-
-    if not extras.get("price"):
-        cart_pos = text.find("Add to cart")
-        if cart_pos > 0:
-            prices = re.findall(r"\$(\d+(?:\.\d{2})?)", text[:cart_pos])
-            if prices:
-                pval = float(prices[-1])
-                if 5 <= pval <= 50000:
-                    extras["price"] = prices[-1]
-
-    # Priority 2: JSON-LD offers — prefer SGD AggregateOffer
-    if not extras.get("price"):
-        offers = ld.get("offers") or []
-        if isinstance(offers, dict):
-            offers = [offers]
-        sgd_price = None
-        any_price = None
-        for offer in offers:
-            low = offer.get("lowPrice") or offer.get("price")
-            if not low:
-                continue
-            try:
-                price_val = float(low)
-            except (ValueError, TypeError):
-                continue
-            if offer.get("priceCurrency") == "SGD":
-                sgd_price = price_val
-                break
-            if any_price is None:
-                any_price = price_val
-        best_price = sgd_price or any_price
-        if best_price and 5 <= best_price <= 50000:
-            extras["price"] = str(best_price)
-
-    # --- Grapes (from rendered text) ---
-    grapes_match = re.search(r"Grapes?\s*\n\s*(.+?)(?:\n|$)", text)
-    if grapes_match:
-        grapes = grapes_match.group(1).strip()
-        if 2 < len(grapes) < 200 and "Contains" not in grapes and "sulfite" not in grapes.lower():
-            extras["grapes"] = grapes
-
-    # --- Region (from rendered text) ---
-    region_match = re.search(
-        r"Region\s*\n\s*([\w\s\u00C0-\u024F]+(?:\s*/\s*[\w\s\u00C0-\u024F]+)*)",
-        text,
-    )
-    if region_match:
-        region = region_match.group(1).strip()
-        if 3 < len(region) < 120:
-            extras["region"] = region
-
-    # --- Wine style (from rendered text) ---
-    style_match = re.search(r"Wine style\s*\n\s*(.+?)(?:\n|$)", text)
-    if style_match:
-        style = style_match.group(1).strip()
-        if 3 < len(style) < 100:
-            extras["wine_style"] = style
-
-    return extras
-
-
 def search_vivino_via_brave(query: str, brave_api_key: str) -> str | None:
     """Use Brave Search API to find the Vivino wine page URL."""
     search_query = f"{query} site:vivino.com"
@@ -440,102 +185,16 @@ def search_vivino_via_brave(query: str, brave_api_key: str) -> str | None:
     for result in (data.get("web") or {}).get("results", []):
         link = (result.get("url") or "").strip()
         if "vivino.com" in link and "/w/" in link:
-            # Clean URL: keep path up to wine ID, strip query params, force English.
-            clean = link.split("?")[0].rstrip("/")
-            return _force_english_vivino_url(clean)
+            canonical = canonical_wine_url(link)
+            if canonical:
+                return canonical
 
     return None
 
 
 def search_vivino_for_url(query: str, brave_api_key: str = "") -> str | None:
-    """Find a Vivino wine URL — uses Brave Search API if key available."""
-    if brave_api_key:
-        result = search_vivino_via_brave(query, brave_api_key)
-        if result:
-            return result
-
-    # Fallback: direct Vivino search (works only if page isn't JS-rendered).
-    search_url = f"https://www.vivino.com/en/search/wines?q={quote_plus(query)}"
-    try:
-        html = fetch_html(search_url)
-    except Exception as exc:
-        logger.warning("Vivino search failed for '%s': %s", query, exc)
-        return None
-
-    matches = _VIVINO_WINE_URL_RE.findall(html)
-    if matches:
-        return f"https://www.vivino.com{matches[0].split('?')[0]}"
-
-    full_matches = _VIVINO_WINE_URL_FULL_RE.findall(html)
-    if full_matches:
-        return full_matches[0].split("?")[0]
-
-    return None
-
-
-# ── Vivino API ─────────────────────────────────────────────────────────
-
-_WINE_ID_RE = re.compile(r"/w/(\d+)")
-
-
-def extract_wine_id(vivino_url: str) -> str | None:
-    """Extract the numeric wine ID from a Vivino URL."""
-    m = _WINE_ID_RE.search(vivino_url)
-    return m.group(1) if m else None
-
-
-def _vivino_api_get(endpoint: str, wine_id: str = "") -> dict:
-    """Call a Vivino internal API endpoint and return JSON."""
-    req = Request(
-        f"https://www.vivino.com/api/{endpoint}",
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept": "application/json",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": f"https://www.vivino.com/SG/en/w/{wine_id}" if wine_id else "https://www.vivino.com/",
-        },
-    )
-    with urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-
-def fetch_vivino_tasting_notes(wine_id: str) -> str:
-    """Build a tasting summary from Vivino's tastes + reviews APIs."""
-    parts: list[str] = []
-
-    # Flavor keywords from /api/wines/{id}/tastes
-    try:
-        tastes = _vivino_api_get(f"wines/{wine_id}/tastes", wine_id)
-        flavor_groups = (tastes.get("tastes") or {}).get("flavor") or []
-        keywords: list[str] = []
-        for group in flavor_groups[:4]:
-            for kw in (group.get("primary_keywords") or [])[:2]:
-                name = kw.get("name", "")
-                if name and name not in keywords:
-                    keywords.append(name)
-        if keywords:
-            parts.append(", ".join(keywords[:8]))
-    except Exception:
-        pass
-
-    # Top review from /api/wines/{id}/reviews
-    try:
-        reviews = _vivino_api_get(f"wines/{wine_id}/reviews?per_page=1", wine_id)
-        for review in (reviews.get("reviews") or [])[:1]:
-            note = (review.get("note") or "").strip()
-            # Clean up multi-line notes
-            note = " ".join(note.split())
-            if len(note) > 30:
-                if len(note) > 200:
-                    note = note[:197] + "..."
-                parts.append(note)
-    except Exception:
-        pass
-
-    return ". ".join(parts) if parts else ""
+    """Find a Vivino wine URL through Brave; Vivino's own search pages are not fetched."""
+    return search_vivino_via_brave(query, brave_api_key) if brave_api_key else None
 
 
 # ── Resolution ─────────────────────────────────────────────────────────
@@ -549,6 +208,8 @@ def resolve_wine(
     dry_run: bool = False,
     sleep_seconds: float = 2.0,
     known_vivino_url: str = "",
+    fetcher: PoliteFetcher | None = None,
+    vivino_facts: dict | None = None,
 ) -> dict:
     """Resolve a single wine: LLM parse -> Vivino search -> fetch metrics.
 
@@ -610,72 +271,27 @@ def resolve_wine(
         if vivino_url:
             result["vivino_url"] = vivino_url
 
-    # Step 3: Fetch the Vivino wine page for metrics + price.
-    extras: dict[str, str] = {}
-    if vivino_url:
-        time.sleep(sleep_seconds)
+    # Step 3: read rating, count and price from the wine page, politely.
+    if vivino_url and fetcher is not None:
         try:
-            page_html = fetch_html(vivino_url)
-            rating, count = parse_vivino_rating(page_html)
-            result["vivino_rating"] = rating
-            result["vivino_num_ratings"] = count
-            extras = parse_vivino_extras(page_html)
-            page_name = extras.get("vivino_wine_name", "")
-            page_context = " ".join(
-                part
-                for part in [
-                    page_name,
-                    extras.get("wine_style", ""),
-                    extras.get("grapes", ""),
-                    extras.get("region", ""),
-                ]
-                if part
-            )
-            expected_name = result.get("wine_name") or wine_name
-            if page_name and not is_confident_vivino_page_match(
-                expected_name=expected_name,
-                candidate_name=page_name,
-                candidate_context=page_context,
-            ):
-                result["notes"] += f" identity_mismatch={page_name[:120]}"
-                result["vivino_url"] = ""
-                result["vivino_rating"] = ""
-                result["vivino_num_ratings"] = ""
-                result["vivino_price"] = ""
-                extras = {}
-                return result
-            if extras.get("price"):
-                result["vivino_price"] = extras["price"]
-        except Exception as exc:
-            result["notes"] += f" metric_fetch_error={exc}"
-
-    # Step 4: Fetch tasting notes from Vivino API.
-    tasting_notes = ""
-    if vivino_url:
-        wine_id = extract_wine_id(vivino_url)
-        if wine_id:
-            time.sleep(sleep_seconds)
-            try:
-                tasting_notes = fetch_vivino_tasting_notes(wine_id)
-            except Exception as exc:
-                result["notes"] += f" taste_fetch_error={exc}"
-
-    # Step 5: Grounding fallback DISABLED — Gemini grounding returns
-    # unreliable prices (wrong vintages, wrong currencies, hallucinated
-    # values).  Rely on Brave + HTML scraping only.
-
-    # Step 6: Compose vivino_description from page facts + tasting notes.
-    desc_parts: list[str] = []
-    if extras.get("grapes"):
-        desc_parts.append(extras["grapes"])
-    if extras.get("wine_style"):
-        desc_parts.append(extras["wine_style"])
-    elif extras.get("region"):
-        desc_parts.append(extras["region"])
-    if tasting_notes:
-        desc_parts.append(tasting_notes)
-    if desc_parts:
-        result["vivino_description"] = " · ".join(desc_parts)[:500]
+            facts = fetch_facts(fetcher, vivino_facts, vivino_url, vintage_hint(wine_name))
+        except VivinoBlocked as exc:
+            result["notes"] += f" vivino_blocked={exc}"
+            facts = None
+        if facts is None:
+            result["notes"] += " page_not_checked"
+            return result
+        page_name = str(facts.get("name") or "")
+        expected_name = result.get("wine_name") or wine_name
+        if page_name and not is_confident_vivino_page_match(
+            expected_name=expected_name,
+            candidate_name=page_name,
+        ):
+            result["notes"] += f" identity_mismatch={page_name[:120]}"
+            result["vivino_url"] = ""
+            return result
+        result["vivino_rating"] = "" if facts.get("rating") is None else str(facts["rating"])
+        result["vivino_num_ratings"] = "" if facts.get("num_ratings") is None else str(facts["num_ratings"])
 
     return result
 
@@ -727,6 +343,7 @@ def main() -> None:
         print("Get a free key at: https://aistudio.google.com/apikey")
         sys.exit(1)
 
+    from app.durable_state import load_state, save_state
     from scripts.llm_utils import get_identity, load_identity_cache
 
     # Load cache and data.
@@ -782,6 +399,9 @@ def main() -> None:
         f"(from {len(comparison_rows)} total, ttl={args.cache_ttl_days}d)"
     )
 
+    fetcher = None if args.dry_run else PoliteFetcher()
+    vivino_facts: dict = {} if fetcher is None else (load_state(FACTS_KEY, {}) or {})
+
     resolved: list[dict[str, str]] = []
     for i, (row, known_url) in enumerate(wines_to_resolve, 1):
         wine_name = row["name_plat"].strip()
@@ -796,6 +416,8 @@ def main() -> None:
                 dry_run=args.dry_run,
                 known_vivino_url=known_url,
                 sleep_seconds=args.sleep,
+                fetcher=fetcher,
+                vivino_facts=vivino_facts,
             )
             status = (
                 "ok" if result.get("vivino_rating")
@@ -816,8 +438,6 @@ def main() -> None:
                     "vivino_url": result.get("vivino_url", ""),
                     "vivino_rating": result.get("vivino_rating", ""),
                     "vivino_num_ratings": result.get("vivino_num_ratings", ""),
-                    "vivino_price": result.get("vivino_price", ""),
-                    "vivino_description": result.get("vivino_description", ""),
                     "resolved_at": int(time.time()),
                     "notes": result.get("notes", ""),
                 }
@@ -840,11 +460,13 @@ def main() -> None:
                     "wine_name": cached.get("wine_name", ""),
                     "vivino_rating": cached.get("vivino_rating", ""),
                     "vivino_num_ratings": cached.get("vivino_num_ratings", ""),
-                    "vivino_price": cached.get("vivino_price", ""),
-                    "vivino_description": cached.get("vivino_description", ""),
                     "vivino_url": cached.get("vivino_url", ""),
                     "notes": f"cached resolved_at={cached.get('resolved_at', '')}",
                 })
+
+    if fetcher is not None:
+        save_state(FACTS_KEY, vivino_facts)
+        print(f"[llm_resolver] vivino page checks: {fetcher.finish()}")
 
     # Save outputs.
     write_csv(args.output, resolved, OVERRIDE_FIELDS)

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, quote_plus, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, quote_plus, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,7 +25,17 @@ from scripts.import_wine_data import (  # noqa: E402
     read_csv_rows,
     read_optional_csv_rows,
 )
+from scripts.vivino_fetch import (  # noqa: E402
+    FACTS_KEY,
+    PoliteFetcher,
+    VivinoBlocked,
+    canonical_wine_url,
+    fetch_facts,
+)
 from scripts.vivino_overrides import OVERRIDE_FIELDS, upsert_overrides  # noqa: E402
+
+RESOLVER_STATE_KEY = "vivino_resolver_state"
+QUERY_CACHE_KEY = "vivino_query_cache"
 
 _REVIEW_FIELDS = [
     "wine_name",
@@ -101,23 +111,22 @@ def vivino_row_has_metrics(row: dict[str, str] | None) -> bool:
     )
 
 
-def load_state(path: Path) -> dict[str, object]:
-    if not path.exists():
-        return {"seen_unresolved": {}}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {"seen_unresolved": {}}
+def load_resolver_state() -> dict[str, object]:
+    """Resolver memory lives in the database; the container disk is wiped on every deploy."""
+    from app.durable_state import load_state
+
+    payload = load_state(RESOLVER_STATE_KEY, {})
     if not isinstance(payload, dict):
-        return {"seen_unresolved": {}}
+        payload = {}
     if not isinstance(payload.get("seen_unresolved"), dict):
         payload["seen_unresolved"] = {}
     return payload
 
 
-def save_state(path: Path, state: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+def save_resolver_state(state: dict[str, object]) -> None:
+    from app.durable_state import save_state
+
+    save_state(RESOLVER_STATE_KEY, state)
 
 
 def unresolved_fingerprint(row: dict[str, str]) -> str:
@@ -226,16 +235,8 @@ def build_vivino_search_url(identity: WineIdentity) -> str:
 
 
 def normalize_vivino_url(url: str | None) -> str:
-    if not url:
-        return ""
-    parsed = urlparse(url.strip())
-    if "vivino.com" not in (parsed.netloc or ""):
-        return ""
-    if "/w/" not in parsed.path:
-        return ""
-    normalized_path = parsed.path.rstrip("/")
-    # Strip query/fragment to avoid Vivino pages that omit aggregateRating.
-    return urlunparse((parsed.scheme or "https", parsed.netloc, normalized_path, "", "", ""))
+    """Canonical wine URL, so /en/ and /US/en/ links to one wine count as one candidate."""
+    return canonical_wine_url(url) or ""
 
 
 def search_serper(query: str, api_key: str, max_results: int) -> list[dict[str, str]]:
@@ -351,25 +352,22 @@ def run_search(
     raise ValueError(f"Unsupported provider: {provider}")
 
 
-def load_query_cache(path: Path) -> dict[str, dict[str, object]]:
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
+def load_query_cache() -> dict[str, dict[str, object]]:
+    from app.durable_state import load_state
+
+    payload = load_state(QUERY_CACHE_KEY, {})
     if not isinstance(payload, dict):
         return {}
-    normalized: dict[str, dict[str, object]] = {}
-    for key, value in payload.items():
-        if isinstance(key, str) and isinstance(value, dict):
-            normalized[key] = value
-    return normalized
+    return {key: value for key, value in payload.items() if isinstance(key, str) and isinstance(value, dict)}
 
 
-def save_query_cache(path: Path, cache: dict[str, dict[str, object]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cache, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+def save_query_cache(cache: dict[str, dict[str, object]], ttl_hours: float) -> None:
+    from app.durable_state import save_state
+
+    if ttl_hours > 0:
+        cutoff = time.time() - ttl_hours * 3600
+        cache = {k: v for k, v in cache.items() if float(v.get("timestamp") or 0) >= cutoff}
+    save_state(QUERY_CACHE_KEY, cache)
 
 
 def _build_query_cache_key(provider: str, query: str, max_results: int) -> str:
@@ -618,6 +616,83 @@ def score_candidate(identity: WineIdentity, title: str, url: str) -> tuple[float
     return (score, producer_overlap, year_match)
 
 
+def rank_candidates(
+    identity: WineIdentity,
+    results_by_query: list[tuple[str, str, list[dict[str, str]]]],
+) -> list[Candidate]:
+    """Score search hits, one candidate per Vivino wine, best first."""
+    candidates_by_url: dict[str, Candidate] = {}
+    for query, provider, results in results_by_query:
+        for result in results:
+            normalized_url = normalize_vivino_url(result.get("url"))
+            if not normalized_url:
+                continue
+            score, producer_overlap, year_match = score_candidate(
+                identity=identity,
+                title=result.get("title", ""),
+                url=normalized_url,
+            )
+            if score <= 0:
+                continue
+            existing = candidates_by_url.get(normalized_url)
+            if existing is None or score > existing.score:
+                candidates_by_url[normalized_url] = Candidate(
+                    url=normalized_url,
+                    title=(result.get("title") or _safe_slug_text(normalized_url)).strip(),
+                    query=query,
+                    provider=provider,
+                    score=score,
+                    producer_overlap=producer_overlap,
+                    year_match=year_match,
+                )
+    return sorted(candidates_by_url.values(), key=lambda c: c.score, reverse=True)
+
+
+def decide(ranked: list[Candidate], args: argparse.Namespace) -> tuple[str, str]:
+    best = ranked[0] if ranked else None
+    margin = (best.score - ranked[1].score) if len(ranked) > 1 else (best.score if best else 0.0)
+    review_threshold = max(args.min_confidence - 0.12, 0.55)
+    if args.provider == "none":
+        return "no_provider", "provider=none; generated deterministic queries only"
+    if best is None:
+        return "unmatched", "no viable vivino candidates returned"
+    if args.auto_accept_best:
+        return "auto_accept", (
+            f"auto_accept_best enabled; score={best.score:.3f}, margin={margin:.3f}, "
+            f"producer_overlap={best.producer_overlap}"
+        )
+    if best.producer_overlap == 0:
+        return "needs_review", "top candidate missing producer token overlap"
+    if best.score >= args.min_confidence and margin >= args.min_margin:
+        return "auto_accept", f"score={best.score:.3f}, margin={margin:.3f}"
+    if best.score >= review_threshold:
+        return "needs_review", f"score={best.score:.3f}, margin={margin:.3f}"
+    return "unmatched", f"score below threshold ({best.score:.3f} < {review_threshold:.3f})"
+
+
+PAGE_NOT_CHECKED = "vivino page not checked yet"
+
+
+def gate_on_page_metrics(
+    identity: WineIdentity,
+    decision: str,
+    reason: str,
+    page_facts: dict[str, object] | None,
+    args: argparse.Namespace,
+) -> tuple[str, str]:
+    """Auto-apply only when the candidate's own Vivino page has a rating or count."""
+    if decision != "auto_accept" or not args.require_vivino_metrics:
+        return decision, reason
+    if page_facts is None:
+        return "needs_review", f"{reason}; {PAGE_NOT_CHECKED}"
+    if page_facts.get("rating") is None and page_facts.get("num_ratings") is None:
+        return "needs_review", f"{reason}; vivino page has no rating/count"
+    page_tokens = set(canonicalize_key(str(page_facts.get("name") or "")).split())
+    if page_tokens and identity.producer_tokens and not (identity.producer_tokens & page_tokens):
+        return "needs_review", f"{reason}; vivino page name {page_facts.get('name')!r} lacks the producer"
+    return decision, reason
+
+
 def resolve_matches(args: argparse.Namespace) -> None:
     if args.provider == "brave" and not args.brave_api_key:
         raise ValueError("BRAVE_API_KEY is required for --provider brave")
@@ -630,8 +705,10 @@ def resolve_matches(args: argparse.Namespace) -> None:
 
     comparison_rows = read_csv_rows(args.comparison)
     vivino_rows = read_csv_rows(args.vivino)
-    override_rows = read_optional_csv_rows(args.vivino_overrides)
-    state = load_state(args.state_file)
+    from scripts.vivino_overrides import with_durable_overrides
+
+    override_rows = with_durable_overrides(read_optional_csv_rows(args.vivino_overrides))
+    state = load_resolver_state()
     seen_unresolved = state.get("seen_unresolved")
     if not isinstance(seen_unresolved, dict):
         seen_unresolved = {}
@@ -700,7 +777,14 @@ def resolve_matches(args: argparse.Namespace) -> None:
         f"unresolved={len(unresolved_rows)}",
     )
 
-    query_cache = load_query_cache(args.query_cache)
+    query_cache = load_query_cache()
+    fetcher: PoliteFetcher | None = None
+    vivino_facts: dict[str, dict[str, object]] = {}
+    if args.require_vivino_metrics and args.provider != "none":
+        from app.durable_state import load_state as load_durable
+
+        fetcher = PoliteFetcher()
+        vivino_facts = load_durable(FACTS_KEY, {}) or {}
     api_calls_state = {"count": 0}
     cache_hits = 0
     provider_usage: dict[str, int] = {}
@@ -709,18 +793,15 @@ def resolve_matches(args: argparse.Namespace) -> None:
     unmatched_rows: list[dict[str, str]] = []
     accepted_rows: list[dict[str, str]] = []
 
-    review_threshold = max(args.min_confidence - 0.12, 0.55)
-
     for index, row in enumerate(unresolved_rows, start=1):
         row_fingerprint = unresolved_fingerprint(row)
         seen_unresolved[row_fingerprint] = int(time.time())
 
         identity = parse_identity(row)
-        existing_match_row, _ = match_vivino_row(identity.wine_name, initial_lookup)
         queries = build_queries(identity, row)
         vivino_search_url = build_vivino_search_url(identity)
 
-        candidates_by_url: dict[str, Candidate] = {}
+        results_by_query: list[tuple[str, str, list[dict[str, str]]]] = []
         search_errors: list[str] = []
 
         for query in queries:
@@ -744,84 +825,34 @@ def resolve_matches(args: argparse.Namespace) -> None:
                 cache_hits += 1
             if provider_errors:
                 search_errors.extend(provider_errors)
-
-            for result in results:
-                normalized_url = normalize_vivino_url(result.get("url"))
-                if not normalized_url:
-                    continue
-
-                score, producer_overlap, year_match = score_candidate(
-                    identity=identity,
-                    title=result.get("title", ""),
-                    url=normalized_url,
-                )
-                if score <= 0:
-                    continue
-
-                existing = candidates_by_url.get(normalized_url)
-                if existing is None or score > existing.score:
-                    candidates_by_url[normalized_url] = Candidate(
-                        url=normalized_url,
-                        title=(result.get("title") or _safe_slug_text(normalized_url)).strip(),
-                        query=query,
-                        provider=provider_used,
-                        score=score,
-                        producer_overlap=producer_overlap,
-                        year_match=year_match,
-                    )
+            results_by_query.append((query, provider_used, results))
 
             if args.sleep_seconds > 0:
                 time.sleep(args.sleep_seconds)
 
-        ranked = sorted(candidates_by_url.values(), key=lambda c: c.score, reverse=True)
+        ranked = rank_candidates(identity, results_by_query)
         best = ranked[0] if ranked else None
         second = ranked[1] if len(ranked) > 1 else None
-
         best_score = best.score if best else 0.0
         second_score = second.score if second else 0.0
         margin = best_score - second_score
 
-        if args.provider == "none":
-            decision = "no_provider"
-            reason = "provider=none; generated deterministic queries only"
-        elif best is None:
-            decision = "unmatched"
-            reason = "no viable vivino candidates returned"
-        elif args.auto_accept_best:
-            decision = "auto_accept"
-            reason = (
-                f"auto_accept_best enabled; score={best.score:.3f}, margin={margin:.3f}, "
-                f"producer_overlap={best.producer_overlap}"
-            )
-        elif best.producer_overlap == 0:
-            decision = "needs_review"
-            reason = "top candidate missing producer token overlap"
-        elif best.score >= args.min_confidence and margin >= args.min_margin:
-            decision = "auto_accept"
-            reason = f"score={best.score:.3f}, margin={margin:.3f}"
-        elif best.score >= review_threshold:
-            decision = "needs_review"
-            reason = f"score={best.score:.3f}, margin={margin:.3f}"
-        else:
-            decision = "unmatched"
-            reason = f"score below threshold ({best.score:.3f} < {review_threshold:.3f})"
-
+        decision, reason = decide(ranked, args)
         if search_errors:
             reason = f"{reason}; search_error={search_errors[0]}"
 
-        if decision == "auto_accept" and best is not None:
-            existing_rating_for_accept = (existing_match_row.get("vivino_rating") or "").strip()
-            existing_count_for_accept = (
-                (existing_match_row.get("vivino_num_ratings") or "").strip()
-                or (existing_match_row.get("vivino_raters") or "").strip()
-            )
-            if (
-                args.require_vivino_metrics
-                and not existing_rating_for_accept
-                and not existing_count_for_accept
-            ):
-                decision = "needs_review"
-                reason = f"{reason}; missing vivino rating/count for auto-apply"
+        page_facts: dict[str, object] | None = None
+        if decision == "auto_accept" and best is not None and fetcher is not None:
+            try:
+                page_facts = fetch_facts(fetcher, vivino_facts, best.url, identity.year)
+            except VivinoBlocked as exc:
+                print(f"[resolve] Vivino refused a page ({exc}); no more page checks this run.")
+        decision, reason = gate_on_page_metrics(identity, decision, reason, page_facts, args)
+
+        # Retry tomorrow instead of forgetting: API cap hit or page not checked yet.
+        capped = not ranked and any("max_api_queries_reached" in err for err in search_errors)
+        if capped or PAGE_NOT_CHECKED in reason:
+            seen_unresolved.pop(row_fingerprint, None)
 
         query_1 = queries[0] if len(queries) > 0 else ""
         query_2 = queries[1] if len(queries) > 1 else ""
@@ -851,21 +882,14 @@ def resolve_matches(args: argparse.Namespace) -> None:
         )
 
         if decision == "auto_accept" and best is not None:
-            existing_rating = (existing_match_row.get("vivino_rating") or "").strip()
-            existing_count = (
-                (existing_match_row.get("vivino_num_ratings") or "").strip()
-                or (existing_match_row.get("vivino_raters") or "").strip()
-            )
-            existing_price = (existing_match_row.get("vivino_price") or "").strip()
-            existing_name = (existing_match_row.get("wine_name") or "").strip()
-
+            page = page_facts or {}
             accepted_rows.append(
                 {
                     "match_name": identity.wine_name,
-                    "wine_name": existing_name or best.title,
-                    "vivino_rating": existing_rating,
-                    "vivino_num_ratings": existing_count,
-                    "vivino_price": existing_price,
+                    "wine_name": str(page.get("name") or best.title),
+                    "vivino_rating": "" if page.get("rating") is None else str(page["rating"]),
+                    "vivino_num_ratings": "" if page.get("num_ratings") is None else str(page["num_ratings"]),
+                    "vivino_price": "",
                     "vivino_url": best.url,
                     "notes": (
                         f"auto_resolved provider={best.provider or args.provider} "
@@ -912,9 +936,18 @@ def resolve_matches(args: argparse.Namespace) -> None:
         write_csv_rows(args.vivino_overrides, merged, OVERRIDE_FIELDS)
         applied_overrides_rows = len(merged)
 
-    save_query_cache(args.query_cache, query_cache)
+    save_query_cache(query_cache, args.cache_ttl_hours)
     state["last_run_at"] = int(time.time())
-    save_state(args.state_file, state)
+    save_resolver_state(state)
+    if accepted_rows:
+        from scripts.vivino_overrides import save_durable_overrides
+
+        save_durable_overrides(accepted_rows)
+    if fetcher is not None:
+        from app.durable_state import save_state as save_durable
+
+        save_durable(FACTS_KEY, vivino_facts)
+        print("[resolve] vivino page checks:", fetcher.finish())
 
     print(
         "[resolve] summary:",
@@ -928,8 +961,6 @@ def resolve_matches(args: argparse.Namespace) -> None:
         f"review_output={args.output_review}",
         f"unmatched_output={args.output_unmatched}",
         f"suggestions_output={args.output_suggestions}",
-        f"cache_path={args.query_cache}",
-        f"state_path={args.state_file}",
     )
 
 
@@ -954,12 +985,6 @@ def main() -> None:
         help="Comma-separated provider order used when --provider auto.",
     )
     parser.add_argument(
-        "--query-cache",
-        type=Path,
-        default=Path("data/vivino_query_cache.json"),
-        help="Local JSON cache for provider query results.",
-    )
-    parser.add_argument(
         "--cache-ttl-hours",
         type=float,
         default=168.0,
@@ -975,13 +1000,7 @@ def main() -> None:
         "--only-new-unresolved",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Only query unresolved rows never seen before in --state-file (default: true).",
-    )
-    parser.add_argument(
-        "--state-file",
-        type=Path,
-        default=Path("data/vivino_resolver_state.json"),
-        help="Persistent state for delta-only unresolved processing.",
+        help="Only query unresolved rows not seen before (state kept in the database; default: true).",
     )
     parser.add_argument("--max-results", type=int, default=8)
     parser.add_argument("--sleep-seconds", type=float, default=1.2)
@@ -996,7 +1015,7 @@ def main() -> None:
         "--require-vivino-metrics",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Block auto-apply when vivino rating/count are absent from the cache (default: true).",
+        help="Auto-apply only when the candidate's Vivino page shows a rating/count (default: true).",
     )
     # Deprecated alias — kept so old ad-hoc invocations surface a clear error.
     parser.add_argument(
@@ -1018,9 +1037,6 @@ def main() -> None:
             "Use --no-require-vivino-metrics only for an intentional one-off review run.",
             file=sys.stderr,
         )
-
-    args.query_cache = args.query_cache.resolve()
-    args.state_file = args.state_file.resolve()
 
     resolve_matches(args)
 

@@ -64,8 +64,8 @@ def browser_app_url(tmp_path):
                     vivino_price=180.0,
                     vivino_rating=4.2,
                     vivino_num_ratings=1234,
-                    # Reproduces a negative community review. The row should show the profile,
-                    # not surface the negative review text by default.
+                    vivino_checked_at=datetime(2026, 10, 24, 3, 0, tzinfo=UTC),
+                    # Legacy review text left in the column must never reach the page.
                     vivino_description="Regions · Burgundy Red · cherry, raspberry, cedar, clean fruit. Give it a pass. Butter-bomb and odd oak.",
                     deal_score=61.0,
                     country="France",
@@ -268,23 +268,60 @@ def test_summary_sentence_counts_offers_by_cheaper_side(browser_app_url, desktop
     assert "1 is not sold at Grand Cru" in summary
 
 
-def test_offer_notes_hide_negative_review_until_expanded(browser_app_url, desktop_browser) -> None:
+def test_vivino_numbers_link_to_vivino_and_show_checked_date(browser_app_url, desktop_browser) -> None:
     desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}#offers")
 
     first_row = WebDriverWait(desktop_browser, 10).until(
         lambda driver: driver.find_element(By.CSS_SELECTOR, ".deal-row")
     )
-    wine_cell = first_row.find_elements(By.TAG_NAME, "td")[0]
-    grand_cru_cell = first_row.find_elements(By.TAG_NAME, "td")[2]
+    cells = first_row.find_elements(By.TAG_NAME, "td")
+    grand_cru_cell, vivino_cell, rating_cell = cells[2], cells[3], cells[4]
 
-    assert "cherry, raspberry, cedar, clean fruit." in wine_cell.text
-    assert "Read a Vivino review" in wine_cell.text
-    assert "Butter-bomb" not in wine_cell.text
+    # No review text or tasting notes from Vivino.
+    assert "cherry" not in first_row.text
+    assert "Butter-bomb" not in first_row.text
+    assert "review" not in first_row.text.lower()
     # A 7-day change far larger than the price is a data correction, not a trend.
     assert "this week" not in grand_cru_cell.text
 
-    desktop_browser.execute_script("arguments[0].click()", wine_cell.find_element(By.TAG_NAME, "summary"))
-    assert "Butter-bomb" in wine_cell.text
+    assert "Checked 24 Oct" in vivino_cell.text
+    for cell in (vivino_cell, rating_cell):
+        link = cell.find_element(By.CSS_SELECTOR, "a.source-link")
+        assert link.text.startswith("Vivino")
+        assert link.get_attribute("href") == "https://example.com/vivino"
+
+    searcher = first_row.find_element(By.CSS_SELECTOR, "a.quiet-link")
+    assert searcher.text.startswith("Compare Singapore prices on Wine-Searcher")
+    assert searcher.get_attribute("href").startswith("https://www.wine-searcher.com/find/")
+    assert searcher.get_attribute("href").endswith("/1/singapore")
+    assert "noopener" in searcher.get_attribute("rel")
+    assert not desktop_browser.find_element(By.ID, "marketNotice").is_displayed()
+
+
+def test_blocked_vivino_shows_market_prices_paused(browser_app_url, desktop_browser) -> None:
+    from app.durable_state import save_state
+    import app.durable_state as durable_state
+
+    session = next(app.dependency_overrides[get_session]())
+    engine = session.get_bind()
+    session.close()
+    original = durable_state.SessionLocal, durable_state.engine
+    durable_state.SessionLocal = sessionmaker(bind=engine)
+    durable_state.engine = engine
+    try:
+        save_state("vivino_fetch", {"blocked_since": "2026-10-25T02:00:00+00:00"})
+    finally:
+        durable_state.SessionLocal, durable_state.engine = original
+
+    health = httpx.get(f"{browser_app_url}/health").json()
+    assert health["vivino_status"] == "blocked since 2026-10-25T02:00:00+00:00"
+    assert health["vivino_ok"] is False
+
+    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
+    notice = WebDriverWait(desktop_browser, 10).until(
+        lambda driver: driver.find_element(By.CSS_SELECTOR, "#marketNotice:not([hidden])")
+    )
+    assert notice.text.startswith("Market prices paused.")
 
 
 def test_offer_list_groups_duplicate_wine_families(browser_app_url, desktop_browser) -> None:

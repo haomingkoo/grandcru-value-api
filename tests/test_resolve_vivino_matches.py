@@ -1,13 +1,23 @@
-"""Regression tests for resolve_vivino_matches decision logic."""
+"""Regression tests for resolve_vivino_matches decision logic (real functions, no copies)."""
 
 import argparse
 import unittest
 
-from scripts.resolve_vivino_matches import Candidate, vivino_row_has_metrics
+from scripts.resolve_vivino_matches import (
+    PAGE_NOT_CHECKED,
+    Candidate,
+    decide,
+    gate_on_page_metrics,
+    normalize_vivino_url,
+    parse_identity,
+    rank_candidates,
+    vivino_row_has_metrics,
+)
 
 
-def _make_args(*, require_vivino_metrics: bool = True, auto_accept_best: bool = False) -> argparse.Namespace:
+def _args(*, require_vivino_metrics: bool = True, auto_accept_best: bool = False) -> argparse.Namespace:
     return argparse.Namespace(
+        provider="brave",
         min_confidence=0.82,
         min_margin=0.08,
         auto_accept_best=auto_accept_best,
@@ -15,144 +25,189 @@ def _make_args(*, require_vivino_metrics: bool = True, auto_accept_best: bool = 
     )
 
 
-def _decide(
-    best: Candidate,
-    second_score: float,
-    existing_match_row: dict,
-    args: argparse.Namespace,
-) -> tuple[str, str]:
-    """Inline replication of the decision block from resolve_vivino_matches.main()."""
-    best_score = best.score
-    margin = best_score - second_score
+_ROW = {"name_plat": "2021 G D Vajra - Barolo Albe - Red - 750 ml - Standard Bottle", "year_plat": "2021"}
+_IDENTITY = parse_identity(_ROW)
 
-    if args.auto_accept_best:
-        decision = "auto_accept"
-        reason = f"auto_accept_best enabled; score={best_score:.3f}, margin={margin:.3f}"
-    elif best.producer_overlap == 0:
-        decision = "needs_review"
-        reason = "top candidate missing producer token overlap"
-    elif best_score >= args.min_confidence and margin >= args.min_margin:
-        decision = "auto_accept"
-        reason = f"score={best_score:.3f}, margin={margin:.3f}"
-    elif best_score >= 0.70:
-        decision = "needs_review"
-        reason = f"score={best_score:.3f}, margin={margin:.3f}"
-    else:
-        decision = "unmatched"
-        reason = f"score below threshold ({best_score:.3f})"
 
-    if decision == "auto_accept":
-        existing_rating = (existing_match_row.get("vivino_rating") or "").strip()
-        existing_count = (
-            (existing_match_row.get("vivino_num_ratings") or "").strip()
-            or (existing_match_row.get("vivino_raters") or "").strip()
+def _candidate(score: float, overlap: int = 2, url: str = "https://www.vivino.com/en/vajra-albe/w/123456") -> Candidate:
+    return Candidate(url=url, title="G D Vajra Barolo Albe 2021", query="", provider="brave",
+                     score=score, producer_overlap=overlap, year_match=True)
+
+
+class SameWineDifferentLocaleTests(unittest.TestCase):
+    """Bug: /en/ and /US/en/ links to one wine became two candidates, so the margin was ~0."""
+
+    def test_locale_variants_normalise_to_one_url(self) -> None:
+        self.assertEqual(
+            normalize_vivino_url("https://www.vivino.com/US/en/g-d-vajra-barolo-albe/w/123456?year=2021"),
+            normalize_vivino_url("https://www.vivino.com/en/g-d-vajra-barolo-albe/w/123456"),
         )
-        if (
-            args.require_vivino_metrics
-            and not existing_rating
-            and not existing_count
-        ):
-            decision = "needs_review"
-            reason = f"{reason}; missing vivino rating/count for auto-apply"
 
-    return decision, reason
-
-
-_HIGH_CONFIDENCE_CANDIDATE = Candidate(
-    url="https://www.vivino.com/w/123456",
-    title="G D Vajra Barolo Albe 2021",
-    query="G D Vajra Barolo Albe 2021 vivino",
-    provider="serper",
-    score=0.985,
-    producer_overlap=2,
-    year_match=True,
-)
-_NO_CACHED_METRICS: dict = {"vivino_rating": "", "vivino_num_ratings": ""}
-_CACHED_METRICS: dict = {"vivino_rating": "4.2", "vivino_num_ratings": "1441"}
-
-
-class DefaultBehaviourTests(unittest.TestCase):
-    """By default, URL-only cache-miss matches must stay in review."""
-
-    def test_high_confidence_cache_miss_needs_review_by_default(self) -> None:
-        args = _make_args()
-        decision, reason = _decide(_HIGH_CONFIDENCE_CANDIDATE, 0.0, _NO_CACHED_METRICS, args)
-        self.assertEqual(decision, "needs_review")
-        self.assertIn("missing vivino rating/count", reason)
-
-    def test_high_confidence_with_cached_metrics_auto_accepts(self) -> None:
-        args = _make_args()
-        decision, _ = _decide(_HIGH_CONFIDENCE_CANDIDATE, 0.0, _CACHED_METRICS, args)
-        self.assertEqual(decision, "auto_accept")
-
-    def test_explicit_no_require_metrics_allows_cache_miss_auto_accept(self) -> None:
-        args = _make_args(require_vivino_metrics=False)
-        decision, _ = _decide(_HIGH_CONFIDENCE_CANDIDATE, 0.0, _NO_CACHED_METRICS, args)
-        self.assertEqual(decision, "auto_accept")
-
-    def test_below_confidence_threshold_needs_review(self) -> None:
-        candidate = Candidate(
-            url="https://www.vivino.com/w/999",
-            title="Some Wine",
-            query="some wine vivino",
-            provider="serper",
-            score=0.75,
-            producer_overlap=1,
-            year_match=True,
-        )
-        args = _make_args(require_vivino_metrics=False)
-        decision, _ = _decide(candidate, 0.70, _NO_CACHED_METRICS, args)
-        self.assertEqual(decision, "needs_review")
-
-
-class StrictModeTests(unittest.TestCase):
-    """--require-vivino-metrics blocks auto-accept when cache is empty."""
-
-    def test_strict_mode_blocks_cache_miss(self) -> None:
-        args = _make_args(require_vivino_metrics=True)
-        decision, reason = _decide(_HIGH_CONFIDENCE_CANDIDATE, 0.0, _NO_CACHED_METRICS, args)
-        self.assertEqual(decision, "needs_review")
-        self.assertIn("missing vivino rating/count", reason)
-
-    def test_strict_mode_allows_cached_metrics(self) -> None:
-        args = _make_args(require_vivino_metrics=True)
-        decision, _ = _decide(_HIGH_CONFIDENCE_CANDIDATE, 0.0, _CACHED_METRICS, args)
+    def test_locale_variants_rank_as_one_candidate_and_auto_accept(self) -> None:
+        hits = [
+            {"url": "https://www.vivino.com/en/g-d-vajra-barolo-albe/w/123456", "title": "G D Vajra Barolo Albe 2021"},
+            {"url": "https://www.vivino.com/US/en/g-d-vajra-barolo-albe/w/123456?year=2021",
+             "title": "G D Vajra Barolo Albe 2021"},
+        ]
+        ranked = rank_candidates(_IDENTITY, [("q", "brave", hits)])
+        self.assertEqual(len(ranked), 1)
+        decision, _ = decide(ranked, _args())
         self.assertEqual(decision, "auto_accept")
 
 
-class ProducerOverlapTests(unittest.TestCase):
-    def test_zero_producer_overlap_forces_review_regardless_of_score(self) -> None:
-        candidate = Candidate(
-            url="https://www.vivino.com/w/1",
-            title="Mystery Wine",
-            query="",
-            provider="serper",
-            score=0.99,
-            producer_overlap=0,
-            year_match=True,
-        )
-        args = _make_args(require_vivino_metrics=False)
-        decision, _ = _decide(candidate, 0.0, _CACHED_METRICS, args)
+class PageMetricsGateTests(unittest.TestCase):
+    """Bug: the metrics check read the old match's rating, which a new wine never has."""
+
+    def test_new_wine_auto_accepts_on_its_own_page_metrics(self) -> None:
+        facts = {"name": "2021 G.D. Vajra Barolo Albe", "rating": 4.2, "num_ratings": 1441, "price": 82.0}
+        decision, _ = gate_on_page_metrics(_IDENTITY, "auto_accept", "score=0.95", facts, _args())
+        self.assertEqual(decision, "auto_accept")
+
+    def test_page_not_checked_stays_in_review_for_retry(self) -> None:
+        decision, reason = gate_on_page_metrics(_IDENTITY, "auto_accept", "score=0.95", None, _args())
         self.assertEqual(decision, "needs_review")
+        self.assertIn(PAGE_NOT_CHECKED, reason)
+
+    def test_page_without_rating_or_count_stays_in_review(self) -> None:
+        facts = {"name": "2021 G.D. Vajra Barolo Albe", "rating": None, "num_ratings": None}
+        decision, _ = gate_on_page_metrics(_IDENTITY, "auto_accept", "score=0.95", facts, _args())
+        self.assertEqual(decision, "needs_review")
+
+    def test_page_for_another_producer_stays_in_review(self) -> None:
+        facts = {"name": "2021 Giacomo Conterno Barolo", "rating": 4.6, "num_ratings": 900}
+        decision, reason = gate_on_page_metrics(_IDENTITY, "auto_accept", "score=0.95", facts, _args())
+        self.assertEqual(decision, "needs_review")
+        self.assertIn("lacks the producer", reason)
+
+    def test_no_require_metrics_accepts_without_page(self) -> None:
+        decision, _ = gate_on_page_metrics(
+            _IDENTITY, "auto_accept", "score=0.95", None, _args(require_vivino_metrics=False)
+        )
+        self.assertEqual(decision, "auto_accept")
+
+
+class DecisionTests(unittest.TestCase):
+    def test_close_second_wine_needs_review(self) -> None:
+        ranked = [_candidate(0.90), _candidate(0.86, url="https://www.vivino.com/en/vajra-other/w/999")]
+        decision, _ = decide(ranked, _args())
+        self.assertEqual(decision, "needs_review")
+
+    def test_zero_producer_overlap_forces_review(self) -> None:
+        decision, reason = decide([_candidate(0.99, overlap=0)], _args())
+        self.assertEqual(decision, "needs_review")
+        self.assertIn("producer", reason)
+
+    def test_no_candidates_is_unmatched(self) -> None:
+        self.assertEqual(decide([], _args())[0], "unmatched")
 
 
 class MetricsDetectionTests(unittest.TestCase):
     def test_url_only_row_is_not_metric_complete(self) -> None:
-        self.assertFalse(
-            vivino_row_has_metrics(
-                {
-                    "vivino_url": "https://www.vivino.com/en/example/w/1",
-                    "vivino_rating": "",
-                    "vivino_num_ratings": "",
-                }
-            )
-        )
+        self.assertFalse(vivino_row_has_metrics({"vivino_url": "https://www.vivino.com/en/x/w/1", "vivino_rating": ""}))
 
     def test_rating_or_count_marks_row_metric_complete(self) -> None:
         self.assertTrue(vivino_row_has_metrics({"vivino_rating": "4.1"}))
-        self.assertTrue(vivino_row_has_metrics({"vivino_num_ratings": "120"}))
-        self.assertTrue(vivino_row_has_metrics({"vivino_raters": "120 ratings"}))
+        self.assertTrue(vivino_row_has_metrics({"vivino_num_ratings": "12"}))
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DurableResolverRunTests(unittest.TestCase):
+    """Two daily runs with the container disk wiped in between (a Railway redeploy)."""
+
+    def setUp(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.engine = create_engine(f"sqlite:///{self.root / 'state.db'}")
+        self.Session = sessionmaker(bind=self.engine)
+
+    def tearDown(self) -> None:
+        self.engine.dispose()
+        self.tmp.cleanup()
+
+    def _run(self, search_calls: list, page_fetches: list) -> None:
+        import csv
+        import shutil
+        from unittest.mock import patch
+
+        import app.durable_state as durable_state
+        import scripts.resolve_vivino_matches as resolver
+
+        work = self.root / "disk"
+        shutil.rmtree(work, ignore_errors=True)  # every run starts on a fresh disk
+        work.mkdir()
+        comparison = work / "comparison.csv"
+        with comparison.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["name_plat", "year_plat", "url_main", "url_plat"])
+            writer.writeheader()
+            writer.writerow({"name_plat": "2021 G D Vajra - Barolo Albe - Red - 750 ml - Standard Bottle",
+                             "year_plat": "2021", "url_main": "", "url_plat": ""})
+            writer.writerow({"name_plat": "2020 Obscure Estate - Mystery Cuvee - Red - 750 ml - Standard Bottle",
+                             "year_plat": "2020", "url_main": "", "url_plat": ""})
+        (work / "vivino.csv").write_text("wine_name,vivino_rating,vivino_num_ratings,vivino_price,vivino_url\n")
+
+        def fake_search(provider, query, max_results, **_):
+            search_calls.append(query)
+            if "Vajra" in query:
+                return [
+                    {"url": "https://www.vivino.com/en/g-d-vajra-barolo-albe/w/123456", "title": "G D Vajra Barolo Albe 2021"},
+                    {"url": "https://www.vivino.com/US/en/g-d-vajra-barolo-albe/w/123456", "title": "G D Vajra Barolo Albe 2021"},
+                ]
+            return [{"url": "https://www.vivino.com/en/something-else/w/42", "title": "Unrelated Bottle"}]
+
+        def fake_fetch_facts(fetcher, facts, url, vintage, force=False):
+            page_fetches.append(url)
+            return {"name": "2021 G.D. Vajra Barolo Albe", "rating": 4.2, "num_ratings": 1441, "price": 82.0}
+
+        class FakeFetcher:
+            def finish(self):
+                return {}
+
+        args = argparse.Namespace(
+            comparison=comparison, vivino=work / "vivino.csv", vivino_overrides=work / "overrides.csv",
+            provider="brave", serper_api_key="", google_api_key="", google_cse_id="", brave_api_key="k",
+            auto_provider_order="brave", cache_ttl_hours=168.0, max_api_queries=40,
+            only_new_unresolved=True, max_results=8, sleep_seconds=0, min_confidence=0.82, min_margin=0.08,
+            auto_accept_best=False, require_vivino_metrics=True, limit=0, auto_apply=True,
+            output_review=work / "review.csv", output_unmatched=work / "unmatched.csv",
+            output_suggestions=work / "suggestions.csv",
+        )
+        with (
+            patch.object(durable_state, "engine", self.engine),
+            patch.object(durable_state, "SessionLocal", self.Session),
+            patch.object(resolver, "run_search", side_effect=fake_search),
+            patch.object(resolver, "fetch_facts", side_effect=fake_fetch_facts),
+            patch.object(resolver, "PoliteFetcher", FakeFetcher),
+            patch("scripts.llm_utils.load_identity_cache", return_value={}),
+        ):
+            resolver.resolve_matches(args)
+
+    def test_state_and_matches_survive_redeploy(self) -> None:
+        from unittest.mock import patch
+
+        import app.durable_state as durable_state
+        from scripts.vivino_overrides import load_durable_overrides
+
+        first_search, first_pages = [], []
+        self._run(first_search, first_pages)
+        self.assertTrue(first_search)
+        self.assertEqual(first_pages, ["https://www.vivino.com/en/g-d-vajra-barolo-albe/w/123456"])
+
+        with patch.object(durable_state, "engine", self.engine), patch.object(durable_state, "SessionLocal", self.Session):
+            saved = load_durable_overrides()
+        self.assertEqual([row["vivino_url"] for row in saved],
+                         ["https://www.vivino.com/en/g-d-vajra-barolo-albe/w/123456"])
+        self.assertEqual(saved[0]["vivino_rating"], "4.2")
+
+        second_search, second_pages = [], []
+        self._run(second_search, second_pages)
+        self.assertEqual(second_search, [], "resolved and already-seen wines must not be searched again")
+        self.assertEqual(second_pages, [])

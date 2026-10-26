@@ -44,6 +44,7 @@ _ALLOWED_COLUMNS = {
     "image_url",
     "vivino_price",
     "vivino_description",
+    "vivino_checked_at",
     "producer",
     "label_name",
     "country",

@@ -291,7 +291,8 @@ scripts/
   data_quality_rules.py  Documented allowlists for accepted data gaps
   validate_market_prices.py  URL + price sanity validator
   build_identity_cache.py  Seed identity cache from existing data
-  enrich_vivino_results.py
+  vivino_fetch.py      Polite, budgeted Vivino page fetcher (every Vivino request goes here)
+  refresh_vivino_facts.py  Weekly Vivino price/rating/count refresh for current offers
   import_wine_data.py
   llm_utils.py         Shared cache, identity cache, Gemini helpers
 web/

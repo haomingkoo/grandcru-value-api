@@ -20,7 +20,8 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 - Every number on screen comes from the API for the current data: offer counts in the summary from `/deals/stats`, prices, ratings and scores from `/deals`, the check time from `/health`. No hard-coded counts anywhere, including the social card.
 - Price differences are written as sentences ("Platinum 12.0% less"), not badges. A 7-day trend shows only when the price moved; jumps far larger than the price itself are data corrections and stay hidden.
 - One primary action per offer: "Buy on Platinum". Grand Cru and Vivino are plain text links.
-- Vivino reviews are hidden behind "Read a Vivino review"; only the tasting descriptors show by default.
+- No Vivino review text or images. Every Vivino figure has a "Vivino" link to that wine's page, and each Vivino price shows its "Checked" date. A "Market prices paused" notice appears under the summary when `/health` reports `vivino_ok: false`.
+- "Compare Singapore prices on Wine-Searcher" is a quiet secondary text link (no Wine-Searcher data is fetched).
 - Bottle photos are hotlinked from the shop. A drawn bottle silhouette replaces a missing or broken image.
 - Phones (900px and below): each offer becomes a card with Platinum, Grand Cru and Vivino side by side above the Buy button. Sort by the select, not the table headers.
 
