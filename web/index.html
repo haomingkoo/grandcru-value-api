@@ -78,12 +78,27 @@
   </header>
 
   <main>
-    <section class="shell intro" aria-labelledby="pageTitle">
-      <h1 id="pageTitle">Is that Platinum bottle a good price?</h1>
-      <p class="lede">Every Platinum Wine Club offer, checked against Grand Cru Wines and Vivino.</p>
-      <p class="summary" id="summary" aria-live="polite">Checking today&rsquo;s prices&hellip;</p>
-      <p class="freshness" id="freshness" hidden></p>
-      <p class="market-notice" id="marketNotice" role="status" hidden></p>
+    <section class="shell hero" aria-labelledby="pageTitle">
+      <div class="hero-copy">
+        <h1 id="pageTitle">Is that Platinum bottle a good price?</h1>
+        <p class="lede">Every Platinum Wine Club offer, priced per 750&nbsp;ml and checked against Grand Cru Wines and Vivino.</p>
+        <ul class="stat-strip" id="statStrip" aria-label="Today at a glance"></ul>
+        <p class="freshness" id="freshness" hidden></p>
+        <p class="market-notice" id="marketNotice" role="status" hidden></p>
+      </div>
+
+      <figure class="value-map" id="valueMap" aria-labelledby="mapTitle">
+        <figcaption class="map-head">
+          <h2 id="mapTitle">Price against rating</h2>
+          <p>Further left is cheaper per 750&nbsp;ml, higher is rated better on Vivino. Dots on the line are the best-rated bottles for their price.</p>
+        </figcaption>
+        <div class="map-legend"></div>
+        <div class="map-canvas" tabindex="0" role="group" aria-label="Value map loading">
+          <div class="map-card" role="dialog" aria-label="Offer details" hidden></div>
+          <p class="map-state">Plotting today&rsquo;s offers&hellip;</p>
+        </div>
+        <p class="map-live visually-hidden" aria-live="polite"></p>
+      </figure>
     </section>
 
     <section id="offers" class="shell offers" aria-labelledby="offersTitle">
@@ -91,6 +106,7 @@
         <h2 id="offersTitle">All offers</h2>
         <p id="resultsMeta" class="results-meta" aria-live="polite"></p>
       </div>
+      <p class="summary" id="summary" aria-live="polite">Checking today&rsquo;s prices&hellip;</p>
 
       <form id="filtersForm" class="filters" role="search">
         <label class="field field-search">
@@ -117,6 +133,25 @@
             <option value="wine_name:asc">Name, A to Z</option>
           </select>
         </label>
+
+        <fieldset class="price-filter" id="priceFilter">
+          <legend>Price per 750&nbsp;ml</legend>
+          <div class="price-range">
+            <div class="range-track" aria-hidden="true"><span class="range-fill"></span></div>
+            <input id="priceMinRange" type="range" min="0" max="1000" step="1" value="0" aria-label="Lowest price per 750 ml">
+            <input id="priceMaxRange" type="range" min="0" max="1000" step="1" value="1000" aria-label="Highest price per 750 ml">
+          </div>
+          <div class="price-inputs">
+            <label><span>From S$</span><input id="priceMinInput" type="number" inputmode="decimal" min="0" step="1" placeholder="Any"></label>
+            <label><span>to S$</span><input id="priceMaxInput" type="number" inputmode="decimal" min="0" step="1" placeholder="Any"></label>
+          </div>
+          <div class="price-presets" role="group" aria-label="Price presets">
+            <button type="button" class="preset" data-min="" data-max="50">Under S$50</button>
+            <button type="button" class="preset" data-min="50" data-max="100">S$50 to 100</button>
+            <button type="button" class="preset" data-min="100" data-max="200">S$100 to 200</button>
+            <button type="button" class="preset" data-min="200" data-max="">S$200 and up</button>
+          </div>
+        </fieldset>
 
         <details class="more-filters">
           <summary>More filters</summary>
@@ -205,6 +240,7 @@
   </footer>
 
   <script src="/static/charts.js?v=__ASSET_VERSION__" defer></script>
+  <script src="/static/valuemap.js?v=__ASSET_VERSION__" defer></script>
   <script src="/static/app.js?v=__ASSET_VERSION__" defer></script>
 </body>
 </html>

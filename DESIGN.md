@@ -13,7 +13,7 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 - Ink `#2a1a1e`; secondary `#6b5b5f` (5.4:1 or better on every surface).
 - One accent, wine red `#8e2340`: the Buy button, links, focus ring, the lead number in the summary. Nothing else.
 - Status: good `#2e6b3f` (Platinum cheaper), bad `#a6361b` (Platinum dearer), warn `#8a5a00` (stale, out of stock). Used as text colour only, never as fills or pills.
-- Type: Lora 600 for the page title, section titles, wine names and the wordmark. Figtree for everything else. Sizes 13 / 15 / 18 / 24 / 40 (32 on phones). Tabular numerals on prices, ratings and scores.
+- Type: Lora 600 for the page title, section titles, wine names and the wordmark. Figtree for everything else. Sizes 13 / 15 / 18 / 24 / 40, plus the hero headline at 50 (34 on phones). Tabular numerals on prices, ratings and scores in tables and axes; stat figures use proportional numerals.
 - Radius 6 controls, 10 table and panels. No shadows on content.
 
 ## Rules for this app
@@ -24,6 +24,15 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 - "Compare Singapore prices on Wine-Searcher" is a quiet secondary text link (no Wine-Searcher data is fetched).
 - Bottle photos are hotlinked from the shop. A drawn bottle silhouette replaces a missing or broken image.
 - Phones (900px and below): each offer becomes a card with Platinum, Grand Cru and Vivino side by side above the Buy button. Sort by the select, not the table headers.
+
+## First screen
+- Left: the headline, one line under it, and three stats that each set a filter: offers cheaper on Platinum, the lowest price per 750 ml among wines rated 4.0 or higher (with its bottle), and how long since prices were checked. Right (below on tablets and phones): the value map.
+- Value map: x is Platinum price per 750 ml on a doubling scale, y is the Vivino rating (3.4 to 4.6, widened if a rating falls outside). Dot size follows the number of Vivino ratings; a hollow dot is a rating shown by Platinum without a count. Wines with no rating sit in a "Not rated yet" strip at their true price, never at a made-up height.
+- The frontier is the highest rating at or below each price among the offers in view, drawn as an ink step line; its wines get an ink ring and a direct label where one fits. Filters dim the other dots, and the frontier is redrawn for what is in view.
+- Hover or focus previews a wine; click, tap or Enter pins a card with "Show in list", Platinum and Vivino links. Arrow keys move through offers by price. The style legend doubles as a style filter.
+- Style colours (validated as a set, all pairs): Red `#8a2846`, White and Orange `#9a7608`, Rosé `#d4587a`, Sparkling and Champagne `#3268b8`. Six styles would fail the all-pairs check, so styles are grouped into four.
+- One authored motion: dots settle in price order, then the frontier draws left to right. Nothing moves with reduced motion.
+- Price filter: a two-handle slider on a log scale of S$ per 750 ml, exact From and To inputs, and presets. It drives the table and the map together.
 
 ## Price history
 - Each offer keeps one price per source per Singapore day (`price_observations`), never pruned. Platinum and Grand Cru come from the daily check; Vivino from the dated page reads (about weekly), drawn as dots on their check dates. A new source (a retailer feed) is a new `source` value and draws as another line with no code change.

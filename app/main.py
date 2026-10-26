@@ -35,6 +35,7 @@ from app.schemas import (
 from app.vivino_status import summarize_vivino_status
 from app.security import InMemoryRateLimiter, is_exempt_path, parse_exempt_paths, resolve_client_ip
 from app.service import (
+    fill_volume_ml,
     count_deals,
     count_offer_gaps,
     count_snapshots,
@@ -69,6 +70,7 @@ FRONTEND_ASSET_PATHS = (
     WEB_DIR / "styles.css",
     WEB_DIR / "app.js",
     WEB_DIR / "charts.js",
+    WEB_DIR / "valuemap.js",
 )
 LEGAL_PAGES = {"privacy": WEB_DIR / "privacy.html", "terms": WEB_DIR / "terms.html"}
 CANONICAL_BASE_URL = "https://wine.kooexperience.com"
@@ -118,7 +120,10 @@ def _ensure_runtime_columns() -> None:
     ensure_column("wine_deals", "price_market", "FLOAT")
     ensure_column("wine_deals", "market_retailer_name", "VARCHAR(128)")
     ensure_column("wine_deals", "market_retailer_url", "VARCHAR(512)")
+    ensure_column("wine_deals", "volume_ml", "INTEGER")
     ensure_deal_score_nullable()
+    with SessionLocal() as session:
+        fill_volume_ml(session)
 
 
 def deal_filter_params(
@@ -155,6 +160,16 @@ def deal_filter_params(
         default=None,
         ge=0.0,
         description="Maximum Platinum price.",
+    ),
+    min_price_per_750: float | None = Query(
+        default=None,
+        ge=0.0,
+        description="Minimum Platinum price per 750 ml.",
+    ),
+    max_price_per_750: float | None = Query(
+        default=None,
+        ge=0.0,
+        description="Maximum Platinum price per 750 ml.",
     ),
     search: str | None = Query(
         default=None,
@@ -197,6 +212,8 @@ def deal_filter_params(
         "min_vivino_rating": min_vivino_rating,
         "min_vivino_num_ratings": min_vivino_num_ratings,
         "max_platinum_price": max_platinum_price,
+        "min_price_per_750": min_price_per_750,
+        "max_price_per_750": max_price_per_750,
         "search": search,
         "country": country,
         "region": region,

@@ -17,6 +17,7 @@ class WineDeal(Base):
     vintage: Mapped[int | None] = mapped_column(Integer, nullable=True)
     quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     volume: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    volume_ml: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     price_platinum: Mapped[float | None] = mapped_column(Float, nullable=True)
     price_grand_cru: Mapped[float | None] = mapped_column(Float, nullable=True)
