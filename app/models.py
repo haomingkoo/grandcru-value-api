@@ -36,6 +36,7 @@ class WineDeal(Base):
     vivino_match_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     vivino_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     vivino_description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    vivino_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     price_market: Mapped[float | None] = mapped_column(Float, nullable=True)
     market_retailer_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     market_retailer_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -114,3 +115,17 @@ class WineDealSnapshot(Base):
     vivino_num_ratings: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vivino_match_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     deal_score: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+
+
+class AppState(Base):
+    """Small JSON documents that must survive redeploys (Railway disk is ephemeral)."""
+
+    __tablename__ = "app_state"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="{}")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )

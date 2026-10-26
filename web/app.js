@@ -65,7 +65,7 @@ function captureElements() {
     "searchInput", "sortSelect", "countrySelect", "regionSelect", "wineTypeSelect",
     "styleFamilySelect", "grapeSelect", "offeringSelect", "producerSelect",
     "comparableOnlyToggle", "platinumOnlyToggle", "ratingToggle", "confidenceToggle",
-    "resultsMeta", "activeFilters", "dealTableBody", "tableState", "summary", "freshness",
+    "resultsMeta", "activeFilters", "dealTableBody", "tableState", "summary", "freshness", "marketNotice",
   ]) {
     els[id] = document.getElementById(id)
   }
@@ -197,6 +197,10 @@ async function loadFreshness() {
       : `Prices in Singapore dollars, checked ${ago}.`
     els.freshness.classList.toggle("is-stale", Boolean(data.ingestion_stale))
     els.freshness.hidden = false
+    if (data.vivino_ok === false) {
+      els.marketNotice.textContent = "Market prices paused. Vivino prices are not being updated right now, so each one shows the date it was last checked."
+      els.marketNotice.hidden = false
+    }
   } catch (_) {
     els.freshness.hidden = true
   }
@@ -414,7 +418,6 @@ function renderOfferRow(deal, family) {
   const style = deal.style_family || deal.wine_type || ""
   const origin = deal.country ? [deal.region, deal.country].filter(Boolean).join(", ") : "Country not listed"
   const meta = [deal.producer, origin, style, formatVolume(deal)].filter(Boolean).join(" · ")
-  const notes = formatVivinoNotes(deal.vivino_description)
   const grouped = family && family.offers.length > 1
     ? `<p class="group-summary-line">${formatInteger(family.offers.length)} offers for this wine${family.vintageLabel ? ` (${escapeHtml(family.vintageLabel)})` : ""}</p>`
     : ""
@@ -429,7 +432,6 @@ function renderOfferRow(deal, family) {
             <p class="wine-meta">${escapeHtml(meta)}</p>
             <p class="verdict tone-${escapeHtml(verdict.tone)}">${escapeHtml(verdict.label)}</p>
             ${grouped}
-            ${notes}
           </div>
         </div>
       </td>
@@ -451,7 +453,7 @@ function renderOfferRow(deal, family) {
       <td class="num cell-rating">
         <span class="cell-label">Rating</span>
         ${deal.vivino_rating != null
-          ? `<span class="figure">${deal.vivino_rating.toFixed(1)}</span>${deal.vivino_num_ratings ? `<span class="sub">${formatInteger(deal.vivino_num_ratings)} ratings</span>` : deal.vivino_match_method === "platinum" ? `<span class="sub">As shown on Platinum</span>` : ""}`
+          ? `<span class="figure">${deal.vivino_rating.toFixed(1)}</span>${deal.vivino_num_ratings ? `<span class="sub">${formatInteger(deal.vivino_num_ratings)} ratings</span>` : deal.vivino_match_method === "platinum" ? `<span class="sub">As shown on Platinum</span>` : ""}${vivinoSource(deal)}`
           : `<span class="sub">No rating</span>`}
       </td>
       <td class="num cell-score">
@@ -467,6 +469,7 @@ function renderOfferRow(deal, family) {
             ${textLink(deal.grand_cru_url, "Grand Cru")}
             ${textLink(deal.vivino_url, "Vivino")}
           </span>
+          ${quietLink(wineSearcherUrl(deal), "Compare Singapore prices on Wine-Searcher")}
         </div>
       </td>
     </tr>
@@ -499,6 +502,8 @@ function vivinoCell(deal) {
       else if (gap < 0) lines.push(`<span class="sub tone-good">Platinum ${formatPct(Math.abs(gap), 0)} less</span>`)
       else lines.push(`<span class="sub tone-bad">Platinum ${formatPct(gap, 0)} more</span>`)
     }
+    if (deal.vivino_checked_at) lines.push(`<span class="sub">Checked ${formatDay(deal.vivino_checked_at)}</span>`)
+    lines.push(vivinoSource(deal))
   } else if (!deal.vivino_url && deal.vivino_rating == null) {
     lines.push(`<span class="sub">No Vivino match</span>`)
   } else {
@@ -696,6 +701,30 @@ function wineImageHtml(deal) {
   return `<div class="wine-thumb${deal.image_url ? "" : " is-empty"}">${image}${BOTTLE_SVG}</div>`
 }
 
+function vivinoSource(deal) {
+  if (!deal.vivino_url) return ""
+  return `<a class="source-link" href="${escapeHtml(deal.vivino_url)}" target="_blank" rel="noopener noreferrer">Vivino<span class="visually-hidden"> page for this wine (opens in a new tab)</span></a>`
+}
+
+function formatDay(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  const sameYear = date.getFullYear() === new Date().getFullYear()
+  return date.toLocaleDateString("en-SG", { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) })
+}
+
+function wineSearcherUrl(deal) {
+  const name = displayName(deal).replace(/^(\d{4}|NV|MV)\s+/i, "").replace(/\s+-\s+/g, " ")
+  const terms = [name, deal.vintage].filter(Boolean).join(" ").trim()
+  if (!terms) return ""
+  return `https://www.wine-searcher.com/find/${encodeURIComponent(terms).replace(/%20/g, "+")}/1/singapore`
+}
+
+function quietLink(url, label) {
+  if (!url) return ""
+  return `<a class="quiet-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}<span class="visually-hidden"> (opens in a new tab)</span></a>`
+}
+
 function textLink(url, label) {
   if (!url) return ""
   return `<a class="text-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}<span class="visually-hidden"> (opens in a new tab)</span></a>`
@@ -766,52 +795,6 @@ function capitalize(text) {
 function joinList(items) {
   if (items.length <= 1) return items.join("")
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`
-}
-
-function cleanVivinoDescription(desc) {
-  if (!desc) return ""
-  const garbage = [
-    "underage", "forbidden", "page is forbidden", "yikes", "alternative great wines", "Try searching",
-    "minderårig", "förbjuden", "fantastisk", "sidan är", "minderjährig", "verboten", "mineur", "interdit",
-  ]
-  if (garbage.some((word) => desc.toLowerCase().includes(word.toLowerCase()))) return ""
-  if (desc.length < 20) return ""
-  return desc
-}
-
-function formatVivinoNotes(desc) {
-  const clean = cleanVivinoDescription(desc)
-  if (!clean) return ""
-  const parts = clean.split(" · ")
-  const notes = parts.length >= 2 ? parts[parts.length - 1] : clean
-  const split = splitVivinoNote(notes)
-  if (!split.profile && !split.community) return ""
-  return `
-    <div class="wine-notes">
-      ${split.profile ? `<p class="notes-profile"><span class="notes-label">Tastes of</span> ${escapeHtml(split.profile)}</p>` : ""}
-      ${split.community ? `
-        <details class="notes-details">
-          <summary>Read a Vivino review</summary>
-          <p class="notes-community">${escapeHtml(split.community)}</p>
-        </details>` : ""}
-    </div>
-  `
-}
-
-function splitVivinoNote(text) {
-  const clean = String(text || "").replace(/\s+/g, " ").trim()
-  if (!clean) return { profile: "", community: "" }
-  const firstSentence = (clean.match(/^[^.!?]+[.!?]?/) || [clean])[0].trim()
-  const candidate = firstSentence.replace(/[.!?]+$/, "")
-  const lower = candidate.toLowerCase()
-  const blocked = ["pass", "reminded", "bathroom", "cough", "soap", "tasted", "vintage", "wow"]
-  const descriptors = candidate.split(",").map((item) => item.trim()).filter((item) => item.length >= 3 && item.length <= 28)
-  const hasProfile = descriptors.length >= 4 && !blocked.some((word) => lower.includes(word))
-  if (!hasProfile) return { profile: "", community: clean }
-  return {
-    profile: `${descriptors.slice(0, 8).join(", ")}.`,
-    community: clean.slice(firstSentence.length).replace(/^[\s.]+/, "").trim(),
-  }
 }
 
 function escapeHtml(value) {

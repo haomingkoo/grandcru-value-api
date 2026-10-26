@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 import app.database as database_module
+import app.durable_state as durable_state_module
 import scripts.import_wine_data as import_wine_data_module
 import scripts.validate_wine_completeness as validate_module
 from app.database import Base
@@ -330,25 +331,77 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
             session.expunge(deal)
             return deal
 
-    def test_import_preserves_existing_description_when_csv_loses_it(self) -> None:
-        self._write_seed_files("Bright cherry, cedar, graphite.")
-        self._run_import()
-        self.assertEqual(self._current_description(), "Bright cherry, cedar, graphite.")
+    def _save_state(self, key: str, value) -> None:
+        with patch.object(database_module, "engine", self.engine), patch.object(
+            durable_state_module, "SessionLocal", self.Session
+        ), patch.object(durable_state_module, "engine", self.engine):
+            durable_state_module.save_state(key, value)
 
+    def test_vivino_review_text_is_never_stored(self) -> None:
+        self._write_seed_files("Bright cherry. Reminded me of my uncle's cellar, loved it!")
+        self._run_import()
+        self.assertIsNone(self._current_description())
+
+    def test_csv_price_without_a_checked_date_is_not_shown(self) -> None:
         self._write_seed_files(None)
         self._run_import()
+        deal = self._current_deal()
+        self.assertIsNone(deal.vivino_price)
+        self.assertIsNone(deal.vivino_checked_at)
+        self.assertEqual(deal.vivino_rating, 4.2)
 
-        self.assertEqual(self._current_description(), "Bright cherry, cedar, graphite.")
-
-    def test_csv_description_overrides_preserved_database_value(self) -> None:
-        self._write_seed_files("Older cellar note.")
+    def test_checked_vivino_facts_supply_price_rating_and_date(self) -> None:
+        wine_name = "2020 Test Producer - Test Cuvee - Red - 750 ml - Standard Bottle"
+        self._write_seed_files_for_name(wine_name, None)
+        self._write_csv(
+            self.vivino_path,
+            ["wine_name", "vivino_rating", "vivino_num_ratings", "vivino_price", "vivino_url"],
+            [{"wine_name": wine_name, "vivino_rating": "", "vivino_num_ratings": "", "vivino_price": "",
+              "vivino_url": "https://www.vivino.com/US/en/test-cuvee/w/12345"}],
+        )
+        checked = datetime.now(UTC) - timedelta(days=2)
+        self._save_state("vivino_facts", {
+            "12345|2020": {"url": "https://www.vivino.com/en/test-cuvee/w/12345", "rating": 4.4,
+                           "num_ratings": 321, "price": 60.0, "currency": "SGD",
+                           "checked_at": checked.isoformat()},
+        })
         self._run_import()
-        self.assertEqual(self._current_description(), "Older cellar note.")
+        deal = self._current_deal()
+        self.assertEqual(deal.vivino_rating, 4.4)
+        self.assertEqual(deal.vivino_num_ratings, 321)
+        self.assertEqual(deal.vivino_price, 60.0)
+        self.assertEqual(deal.vivino_url, "https://www.vivino.com/en/test-cuvee/w/12345?year=2020")
+        self.assertEqual(deal.vivino_match_method, "exact")
+        self.assertIsNotNone(deal.vivino_checked_at)
 
-        self._write_seed_files("Fresh override note.")
+    def test_facts_older_than_a_month_are_not_shown(self) -> None:
+        self._write_seed_files(None)
+        old = datetime.now(UTC) - timedelta(days=45)
+        self._save_state("vivino_facts", {
+            "12345|2020": {"price": 99.0, "rating": 3.1, "num_ratings": 5, "checked_at": old.isoformat()},
+        })
         self._run_import()
+        deal = self._current_deal()
+        self.assertIsNone(deal.vivino_price)
+        self.assertEqual(deal.vivino_rating, 4.2)
 
-        self.assertEqual(self._current_description(), "Fresh override note.")
+    def test_resolver_overrides_in_database_survive_a_fresh_seed(self) -> None:
+        wine_name = "2020 Fresh Estate - New Wine - Red - 750 ml - Standard Bottle"
+        self._write_seed_files_for_name(wine_name, None)
+        self._write_csv(
+            self.vivino_path,
+            ["wine_name", "vivino_rating", "vivino_num_ratings", "vivino_price", "vivino_url"],
+            [],
+        )
+        self._save_state("vivino_auto_overrides", [{
+            "match_name": wine_name, "wine_name": wine_name, "vivino_rating": "4.0",
+            "vivino_num_ratings": "88", "vivino_url": "https://www.vivino.com/en/fresh-new-wine/w/777",
+            "notes": "auto_resolved",
+        }])
+        self._run_import()
+        deal = self._current_deal()
+        self.assertEqual(deal.vivino_url, "https://www.vivino.com/en/fresh-new-wine/w/777")
+        self.assertEqual(deal.vivino_rating, 4.0)
 
     def test_import_persists_availability_to_current_deal_and_snapshot(self) -> None:
         self._write_seed_files("Bright cherry, cedar, graphite.")
@@ -398,20 +451,7 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "zero rows"):
             self._run_import()
 
-        self.assertEqual(self._current_description(), "Keep this row.")
-
-    def test_import_preserves_description_by_vivino_url_when_name_changes(self) -> None:
-        self._write_seed_files("Mineral citrus, chalk, saline finish.")
-        self._run_import()
-        self.assertEqual(self._current_description(), "Mineral citrus, chalk, saline finish.")
-
-        self._write_seed_files_for_name(
-            "2020 Test Producer Test Cuvee Rouge 750ml",
-            None,
-        )
-        self._run_import()
-
-        self.assertEqual(self._current_description(), "Mineral citrus, chalk, saline finish.")
+        self.assertEqual(self._current_deal().price_platinum, 120.0)
 
     def test_url_only_match_is_tracked_separately_from_exact_match(self) -> None:
         wine_name = "2020 Test Producer - Url Only Cuvee - Red - 750 ml - Standard Bottle"
@@ -443,22 +483,6 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self.assertEqual(deal.vivino_url, "https://www.vivino.com/en/example/w/12345")
         self.assertIsNone(deal.vivino_rating)
         self.assertIsNone(deal.vivino_num_ratings)
-
-    def test_vivino_description_fills_missing_country_and_grapes(self) -> None:
-        wine_name = "2020 Unknown Estate - Mystery Blend - Red - 750 ml - Standard Bottle"
-        self._write_seed_files_for_name(
-            wine_name,
-            "Regions · Portuguese Red · Touriga Nacional, Baga",
-        )
-
-        self._run_import(quarantine_path=self.quarantine_path)
-
-        deal = self._current_deal()
-        self.assertEqual(deal.country, "Portugal")
-        self.assertEqual(deal.grapes, "Touriga Nacional, Baga")
-
-        quarantine_rows = list(csv.DictReader(self.quarantine_path.open(encoding="utf-8")))
-        self.assertEqual(quarantine_rows, [])
 
     def test_offer_without_vivino_match_is_shown_unscored(self) -> None:
         good_name = "2022 Lapis Luna - Cabernet Sauvignon - Red - 750 ml - Standard Bottle"

@@ -284,7 +284,6 @@ def _build_deals_stmt(
         pattern = f"%{escaped}%"
         stmt = stmt.where(
             WineDeal.wine_name.ilike(pattern, escape="\\")
-            | WineDeal.vivino_description.ilike(pattern, escape="\\")
             | WineDeal.grapes.ilike(pattern, escape="\\")
             | WineDeal.region.ilike(pattern, escape="\\")
             | WineDeal.producer.ilike(pattern, escape="\\")

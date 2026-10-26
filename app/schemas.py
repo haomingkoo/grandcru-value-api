@@ -45,7 +45,10 @@ class DealOut(BaseModel):
     vivino_rating: float | None = None
     vivino_num_ratings: int | None = None
     vivino_price: float | None = None
-    vivino_description: str | None = None
+    vivino_checked_at: datetime | None = Field(
+        default=None,
+        description="When MinMax Wine last read this wine's Vivino page; null for numbers not checked by us.",
+    )
     price_market: float | None = None
     market_retailer_name: str | None = None
     market_retailer_url: str | None = None
@@ -108,6 +111,9 @@ class HealthOut(BaseModel):
     history_retention_days: int = 0
     ingestion_stale: bool | None = None
     latest_ingestion: IngestionRunOut | None = None
+    vivino_status: str = "ok"
+    vivino_ok: bool = True
+    vivino_last_success_at: datetime | None = None
 
 
 class LegalOut(BaseModel):

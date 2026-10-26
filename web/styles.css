@@ -270,6 +270,17 @@ a:hover {
   color: var(--warn);
 }
 
+.market-notice {
+  margin-top: 12px;
+  max-width: 70ch;
+  padding: 10px 14px;
+  border-left: 3px solid var(--warn);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
 /* Offers */
 .offers {
   padding-bottom: 64px;
@@ -632,30 +643,6 @@ input[type="checkbox"] {
   font-weight: 600;
 }
 
-.wine-notes {
-  margin-top: 4px;
-  font-size: var(--fs-small);
-  color: var(--text-2);
-}
-
-.notes-label {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.notes-details summary {
-  margin-top: 4px;
-  color: var(--accent);
-  font-weight: 500;
-  cursor: pointer;
-  width: fit-content;
-}
-
-.notes-community {
-  margin-top: 4px;
-  max-width: 60ch;
-}
-
 .cell-price,
 .cell-rating,
 .cell-score {
@@ -706,6 +693,23 @@ input[type="checkbox"] {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
+}
+
+.source-link {
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
+.quiet-link {
+  color: var(--text-2);
+  font-size: var(--fs-small);
+  text-decoration: underline;
+  text-decoration-color: var(--hairline);
+  text-underline-offset: 3px;
+}
+
+.quiet-link:hover {
+  color: var(--accent);
 }
 
 /* Grouped offers */
