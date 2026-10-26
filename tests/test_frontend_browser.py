@@ -258,10 +258,12 @@ def test_summary_sentence_counts_offers_by_cheaper_side(browser_app_url, desktop
     desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
 
     WebDriverWait(desktop_browser, 10).until(
-        lambda driver: "of 3" in driver.find_element(By.ID, "summary").text
+        lambda driver: "lists 3 offers" in driver.find_element(By.ID, "summary").text
     )
     summary = desktop_browser.find_element(By.ID, "summary").text
-    assert summary.startswith("1 of 3 offers are cheaper on Platinum than at Grand Cru.")
+    assert summary.startswith("Platinum Wine Club lists 3 offers in stock today.")
+    assert "1 is cheaper on Platinum than at Grand Cru" in summary
+    assert "3 of 3 have a Vivino market price to compare." in summary
     assert "1 costs the same" in summary
     assert "1 is not sold at Grand Cru" in summary
 

@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import Base, engine, ensure_column, get_session
+from app.database import Base, engine, ensure_column, ensure_deal_score_nullable, get_session
 from app.ops import RefreshRunner, diagnostics_payload, locked_vivino_override_names
 from app.schemas import (
     DealHistoryOut,
@@ -33,6 +33,7 @@ from app.schemas import (
 from app.security import InMemoryRateLimiter, is_exempt_path, parse_exempt_paths, resolve_client_ip
 from app.service import (
     count_deals,
+    count_offer_gaps,
     count_snapshots,
     get_deal_filters,
     get_deal_by_id,
@@ -111,6 +112,7 @@ def _ensure_runtime_columns() -> None:
     ensure_column("wine_deals", "price_market", "FLOAT")
     ensure_column("wine_deals", "market_retailer_name", "VARCHAR(128)")
     ensure_column("wine_deals", "market_retailer_url", "VARCHAR(512)")
+    ensure_deal_score_nullable()
 
 
 def deal_filter_params(
@@ -479,7 +481,7 @@ def llms_full_txt(session: Session = Depends(get_session)) -> PlainTextResponse:
             "- "
             f"{deal.wine_name}: Platinum {_money(deal.price_platinum)}, "
             f"Grand Cru {_money(deal.price_grand_cru)}, "
-            f"Vivino rating {deal.vivino_rating or '-'}, score {deal.deal_score:.1f}."
+            f"Vivino rating {deal.vivino_rating or '-'}, score {'-' if deal.deal_score is None else f'{deal.deal_score:.1f}'}."
         )
     lines.append("")
     return PlainTextResponse("\n".join(lines), headers={"Cache-Control": "public, max-age=3600"})
@@ -496,6 +498,7 @@ def root() -> dict[str, str]:
 @app.get("/health", response_model=HealthOut)
 def health(session: Session = Depends(get_session)) -> HealthOut:
     total = count_deals(session)
+    no_match, no_price = count_offer_gaps(session)
     total_snapshots = count_snapshots(session)
     latest = get_latest_ingestion(session)
     stale = is_ingestion_stale(latest)
@@ -503,6 +506,8 @@ def health(session: Session = Depends(get_session)) -> HealthOut:
         status="ok",
         db_ok=True,
         total_deals=total,
+        offers_without_vivino_match=no_match,
+        offers_without_market_price=no_price,
         total_snapshots=total_snapshots,
         history_retention_days=settings.history_retention_days,
         ingestion_stale=stale,

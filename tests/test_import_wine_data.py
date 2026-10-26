@@ -460,7 +460,7 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         quarantine_rows = list(csv.DictReader(self.quarantine_path.open(encoding="utf-8")))
         self.assertEqual(quarantine_rows, [])
 
-    def test_quarantine_skips_rows_that_would_fail_completeness(self) -> None:
+    def test_offer_without_vivino_match_is_shown_unscored(self) -> None:
         good_name = "2022 Lapis Luna - Cabernet Sauvignon - Red - 750 ml - Standard Bottle"
         bad_name = "2020 Unknown Estate - Missing Metadata - Red - 750 ml - Standard Bottle"
         comparison_fields = [
@@ -545,18 +545,25 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self._run_import(quarantine_path=self.quarantine_path)
 
         with self.Session() as session:
-            deals = session.scalars(select(WineDeal)).all()
-        self.assertEqual([deal.wine_name for deal in deals], [good_name])
+            deals = {deal.wine_name: deal for deal in session.scalars(select(WineDeal)).all()}
+        self.assertEqual(set(deals), {good_name, bad_name})
+        self.assertIsNotNone(deals[good_name].deal_score)
+        unmatched = deals[bad_name]
+        self.assertEqual(unmatched.price_platinum, 90.0)
+        self.assertIsNone(unmatched.vivino_price)
+        self.assertIsNone(unmatched.deal_score)
 
         quarantine_rows = list(csv.DictReader(self.quarantine_path.open(encoding="utf-8")))
-        self.assertEqual(len(quarantine_rows), 1)
-        self.assertEqual(quarantine_rows[0]["wine_name"], bad_name)
-        self.assertIn("missing_country", quarantine_rows[0]["reasons"])
-        self.assertIn("missing_vivino_url_unexpected", quarantine_rows[0]["reasons"])
+        self.assertEqual(quarantine_rows, [])
 
         with patch.object(validate_module, "SessionLocal", self.Session):
             report = validate_module.run_validation()
         self.assertEqual(report["errors"], [])
+        self.assertTrue(any("missing country" in warning for warning in report["warnings"]))
+
+    def test_quarantine_only_hides_rows_without_platinum_price(self) -> None:
+        self.assertEqual(import_wine_data_module._quarantine_reasons({"price_platinum": None}), ["missing_price_platinum"])
+        self.assertEqual(import_wine_data_module._quarantine_reasons({"price_platinum": 90.0, "country": None}), [])
 
 
 if __name__ == "__main__":

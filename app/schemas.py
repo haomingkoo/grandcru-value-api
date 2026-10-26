@@ -53,8 +53,9 @@ class DealOut(BaseModel):
         default=None,
         description="How Vivino metadata was attached: exact, canonical, fuzzy, platinum, url_only, or none.",
     )
-    deal_score: float = Field(
-        description="0-100 ranking score. Retailer discount (vs Grand Cru) up to 30 pts, market discount (vs Vivino) up to 30 pts, rating quality up to 25 pts, confidence up to 10 pts, bonus for beating both up to 5 pts.",
+    deal_score: float | None = Field(
+        default=None,
+        description="0-100 ranking score, null when there is no Vivino match to score against. Retailer discount (vs Grand Cru) up to 30 pts, market discount (vs Vivino) up to 30 pts, rating quality up to 25 pts, confidence up to 10 pts, bonus for beating both up to 5 pts.",
     )
     price_platinum_7d_ago: float | None = None
     price_platinum_change_7d: float | None = None
@@ -101,6 +102,8 @@ class HealthOut(BaseModel):
     status: str
     db_ok: bool
     total_deals: int
+    offers_without_vivino_match: int = 0
+    offers_without_market_price: int = 0
     total_snapshots: int = 0
     history_retention_days: int = 0
     ingestion_stale: bool | None = None
@@ -129,8 +132,9 @@ class DealHistoryOut(BaseModel):
     )
     platinum_in_stock: bool | None = None
     grand_cru_in_stock: bool | None = None
-    deal_score: float = Field(
-        description="0-100 ranking score using discount, Vivino rating, and rating-count confidence.",
+    deal_score: float | None = Field(
+        default=None,
+        description="0-100 ranking score (null without a Vivino match) using discount, Vivino rating, and rating-count confidence.",
     )
     vivino_rating: float | None = None
     vivino_num_ratings: int | None = None
@@ -209,6 +213,8 @@ class DealFiltersOut(BaseModel):
 
 class DealStatsOut(BaseModel):
     total_deals: int
+    with_vivino_match: int = 0
+    with_market_price: int = 0
     cheaper_sides: list[LabelCountOut]
     wine_types: list[LabelCountOut]
     style_families: list[LabelCountOut]
