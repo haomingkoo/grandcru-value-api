@@ -220,6 +220,19 @@ def prepare_rows(rows: list[dict[str, str]], *, enforce_in_stock: bool = False) 
     return prepared
 
 
+_FILLER_WORDS = {"the", "and", "de", "du", "des", "la", "le", "les", "di", "del", "et", "bottle", "bundle", "of", "nv", "premier", "1er", "cru"}
+
+
+def has_extra_label_word(plat: dict[str, object], main: dict[str, object]) -> bool:
+    """A Grand Cru title with a word the Platinum name lacks is a different cuvée (Rosé vs Rosé Muse, VGW vs EGW)."""
+    plat_words = set(str(plat["name_clean"]).split())
+    extra = [
+        word for word in str(main["name_clean"]).split()
+        if word not in plat_words and len(word) >= 3 and not word.isdigit() and word not in _FILLER_WORDS
+    ]
+    return bool(extra)
+
+
 def build_matches(
     grandcru: list[dict[str, object]],
     platinum: list[dict[str, object]],
@@ -239,6 +252,8 @@ def build_matches(
             if plat["volume"] != main["volume"]:
                 continue
             if plat["package_type"] != main["package_type"]:
+                continue
+            if has_extra_label_word(plat, main):
                 continue
 
             score = match_similarity(plat, main)
@@ -429,10 +444,15 @@ def main() -> None:
     parser.add_argument("--output-comparison", required=True, type=Path)
     parser.add_argument("--output-matched", default=None, type=Path)
     parser.add_argument("--match-threshold", type=float, default=0.6)
+    parser.add_argument(
+        "--include-sold-out",
+        action="store_true",
+        help="Keep sold-out Platinum listings (marked platinum_in_stock=false).",
+    )
     args = parser.parse_args()
 
     grandcru_rows = prepare_rows(read_rows(args.grandcru_csv), enforce_in_stock=False)
-    platinum_rows = prepare_rows(read_rows(args.platinum_csv), enforce_in_stock=True)
+    platinum_rows = prepare_rows(read_rows(args.platinum_csv), enforce_in_stock=not args.include_sold_out)
     matched = build_matches(grandcru_rows, platinum_rows, threshold=args.match_threshold)
     summary = build_summary(matched)
 

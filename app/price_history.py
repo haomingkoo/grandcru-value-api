@@ -68,7 +68,8 @@ def observations_for_deal(payload: dict[str, Any], *, checked_at: datetime, run_
     rows = []
     if payload.get("price_platinum") is not None:
         rows.append({**base, "source": "platinum", "price": payload["price_platinum"],
-                     "url": payload.get("platinum_url"), "checked_at": checked_at})
+                     "url": payload.get("platinum_url"), "checked_at": checked_at,
+                     "in_stock": payload.get("platinum_in_stock")})
     if payload.get("price_grand_cru") is not None:
         rows.append({**base, "source": "grand_cru", "price": payload["price_grand_cru"],
                      "url": payload.get("grand_cru_url"), "checked_at": checked_at})
@@ -116,6 +117,7 @@ def record_observations(session: Session, rows: Iterable[dict]) -> int:
         obs.quantity = row.get("quantity")
         obs.checked_at = row["checked_at"]
         obs.url = row.get("url")
+        obs.in_stock = row.get("in_stock")
         obs.origin = row.get("origin") or "daily_check"
         obs.ingestion_run_id = row.get("ingestion_run_id")
         written += 1
@@ -386,6 +388,29 @@ def _cross_source_verdict(deal, series: dict[str, list[dict]], today: date) -> d
     if source == "vivino":
         return {"kind": "cross_above", "tone": "bad", "text": f"The Vivino market price is {money} lower"}
     return {"kind": "cross_above", "tone": "bad", "text": f"{money} cheaper at {name}"}
+
+
+def stock_dates(session: Session, wine_names: Iterable[str]) -> dict[str, dict]:
+    """When each offer was first seen, last seen in stock, and first seen sold out after that."""
+    names = set(wine_names)
+    out: dict[str, dict] = {}
+    if not names:
+        return out
+    rows = session.execute(
+        select(PriceObservation.wine_name, PriceObservation.observed_on, PriceObservation.in_stock)
+        .where(PriceObservation.wine_name.in_(names), PriceObservation.source == "platinum",
+               PriceObservation.origin == "daily_check")
+        .order_by(PriceObservation.observed_on)
+    ).all()
+    for name, day, in_stock in rows:
+        info = out.setdefault(name, {"first_seen": day, "last_in_stock": None, "sold_out_since": None})
+        if in_stock is False:
+            if info["sold_out_since"] is None:
+                info["sold_out_since"] = day
+        else:  # null rows predate sold-out scraping, so they were in stock
+            info["last_in_stock"] = day
+            info["sold_out_since"] = None
+    return out
 
 
 def build_price_history(session: Session, deals: list, *, now: datetime | None = None) -> dict:

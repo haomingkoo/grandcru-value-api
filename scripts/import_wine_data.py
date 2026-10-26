@@ -702,6 +702,7 @@ def import_data(
     ensure_column("wine_deals", "vivino_description", "VARCHAR(512)")
     ensure_column("wine_deals", "vivino_checked_at", "TIMESTAMP WITH TIME ZONE")
     ensure_column("wine_deals", "volume_ml", "INTEGER")
+    ensure_column("price_observations", "in_stock", "BOOLEAN")
     for column, col_type in DEAL_EXTRA_COLUMNS:
         ensure_column("wine_deals", column, col_type)
     ensure_column("wine_deals", "price_market", "FLOAT")

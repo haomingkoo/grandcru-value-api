@@ -489,6 +489,8 @@ def scrape_platinum(
     wait = WebDriverWait(driver, 20)
     time.sleep(sleep_seconds)
 
+    # The shop opens with its "In stock" filter on; this click turns it off so every listing loads.
+    # Sold-out cards are then kept or skipped below.
     click_in_stock_filter(driver, wait)
 
     page = 1

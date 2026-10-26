@@ -106,22 +106,23 @@ class ValueMap {
   setDeals(deals) {
     this.points = deals
       .filter((d) => d.price_platinum_per_750 != null)
-      .map((d) => ({ deal: d, id: d.id, price: d.price_platinum_per_750, rating: d.vivino_rating, group: styleGroup(d), r: dotRadius(d), badgeOnly: d.vivino_rating != null && !d.vivino_num_ratings }))
+      .map((d) => ({ deal: d, id: d.id, price: d.price_platinum_per_750, rating: d.vivino_rating, group: styleGroup(d), r: dotRadius(d), badgeOnly: d.vivino_rating != null && !d.vivino_num_ratings, soldOut: d.platinum_in_stock === false }))
     this.visible = new Set(this.points.map((p) => p.id))
     this.renderLegend()
     this.draw(true)
   }
 
-  setVisible(ids, activeStyles) {
+  setVisible(ids, activeStyles, includeSoldOut) {
     this.visible = new Set(ids)
     this.activeStyles = activeStyles || []
+    this.includeSoldOut = Boolean(includeSoldOut)
     this.renderLegend()
     this.draw(false)
   }
 
   renderLegend() {
     const counts = new Map()
-    this.points.forEach((p) => counts.set(p.group.key, (counts.get(p.group.key) || 0) + 1))
+    this.drawable().forEach((p) => counts.set(p.group.key, (counts.get(p.group.key) || 0) + 1))
     const styles = STYLE_GROUPS.filter((g) => counts.get(g.key)).map((g) => {
       const pressed = this.activeStyles.length ? g.members.every((m) => this.activeStyles.includes(m)) : false
       return `<li><button type="button" class="legend-style" data-style-group="${g.key}" aria-pressed="${pressed}" style="--dot:${g.color}"><span class="legend-dot" aria-hidden="true"></span>${g.label}<span class="legend-count">${counts.get(g.key)}</span></button></li>`
@@ -132,15 +133,21 @@ class ValueMap {
         <li><span class="key-size" aria-hidden="true"><i></i><i></i></span>Bigger dot, more Vivino ratings</li>
         <li><span class="key-hollow" aria-hidden="true"></span>Rating as shown on Platinum, count not given</li>
         <li><span class="key-frontier" aria-hidden="true"></span>Best rating at or below each price</li>
+        ${this.includeSoldOut ? `<li><span class="key-soldout" aria-hidden="true"></span>Faded: sold out</li>` : ""}
       </ul>
     `
+  }
+
+  // Sold-out offers are left off the map unless the visitor includes them.
+  drawable() {
+    return this.points.filter((p) => this.includeSoldOut || !p.soldOut)
   }
 
   layout() {
     const width = Math.max(300, Math.round(this.canvas.clientWidth))
     const narrow = width < 560
     const rated = this.points.filter((p) => p.rating != null)
-    const unrated = this.points.filter((p) => p.rating == null)
+    const unrated = this.drawable().filter((p) => p.rating == null)
     const height = narrow ? 380 : Math.min(520, Math.max(420, Math.round(width * 0.58)))
     const margin = { top: 14, right: narrow ? 14 : 24, bottom: 46, left: narrow ? 40 : 52 }
     const strip = unrated.length ? 58 : 0
@@ -190,7 +197,7 @@ class ValueMap {
     }
 
     // Frontier over the offers currently in view.
-    const inView = this.points.filter((p) => this.visible.has(p.id))
+    const inView = this.drawable().filter((p) => this.visible.has(p.id))
     const frontier = computeFrontier(inView)
     this.frontierIds = new Set(frontier.map((p) => p.id))
     if (frontier.length) {
@@ -209,7 +216,7 @@ class ValueMap {
     }
 
     const dots = vmEl("g", { class: "map-dots" }, svg)
-    const order = this.points.slice().sort((a, b) => b.r - a.r)
+    const order = this.drawable().sort((a, b) => b.r - a.r)
     const prices = this.points.map((p) => p.price)
     const minPrice = Math.min(...prices)
     const maxPrice = Math.max(...prices)
@@ -219,7 +226,7 @@ class ValueMap {
       p.cy = cy
       const shown = this.visible.has(p.id)
       const onFrontier = this.frontierIds.has(p.id)
-      const g = vmEl("g", { class: `map-dot${shown ? "" : " is-dim"}${onFrontier ? " is-frontier" : ""}`, "data-id": p.id }, dots)
+      const g = vmEl("g", { class: `map-dot${shown ? "" : " is-dim"}${onFrontier ? " is-frontier" : ""}${p.soldOut ? " is-sold-out" : ""}`, "data-id": p.id }, dots)
       if (animate && !reduce) {
         const delay = Math.round(((Math.log(p.price) - Math.log(minPrice)) / (Math.log(maxPrice) - Math.log(minPrice) || 1)) * 380)
         g.style.animation = `dot-in 420ms cubic-bezier(0.22, 1, 0.36, 1) ${delay}ms both`
@@ -252,7 +259,7 @@ class ValueMap {
     if (L.narrow) return
     const maxLabels = L.width < 760 ? 2 : 3
     const layer = vmEl("g", { class: "map-labels" }, this.svg)
-    const dots = this.points.filter((q) => this.visible.has(q.id)).map((q) => ({ l: q.cx - q.r - 7, r: q.cx + q.r + 7, t: q.cy - q.r - 7, b: q.cy + q.r + 7 }))
+    const dots = this.drawable().filter((q) => this.visible.has(q.id)).map((q) => ({ l: q.cx - q.r - 7, r: q.cx + q.r + 7, t: q.cy - q.r - 7, b: q.cy + q.r + 7 }))
     const placed = []
     const hits = (box) => placed.some((o) => box.l < o.r && box.r > o.l && box.t < o.b && box.b > o.t)
       || dots.some((o) => box.l < o.r && box.r > o.l && box.t < o.b && box.b > o.t)
@@ -302,7 +309,7 @@ class ValueMap {
     const py = ((e.clientY - rect.top) / rect.height) * this.L.height
     let best = null
     let bestDist = radius
-    for (const p of this.points) {
+    for (const p of this.drawable()) {
       if (!this.visible.has(p.id)) continue
       const dist = Math.hypot(p.cx - px, p.cy - py) - p.r
       if (dist < bestDist) { best = p; bestDist = dist }
@@ -325,7 +332,7 @@ class ValueMap {
   }
 
   ordered() {
-    return this.points.filter((p) => this.visible.has(p.id)).sort((a, b) => a.price - b.price || (b.rating || 0) - (a.rating || 0))
+    return this.drawable().filter((p) => this.visible.has(p.id)).sort((a, b) => a.price - b.price || (b.rating || 0) - (a.rating || 0))
   }
 
   focusFirst() {
@@ -371,6 +378,7 @@ class ValueMap {
       <p class="card-price"><strong>${money(d.price_platinum_per_750)}</strong> per 750 ml</p>
       <p class="card-sub">${sized ? `${money(d.price_platinum)} for ${vmEscape(sizeLabel(d))} · ` : ""}${per100 ? `${per100}/100 ml` : ""}</p>
       <p class="card-rating">${vmEscape(rating)}</p>
+      ${p.soldOut ? `<p class="card-sold-out">Sold out on Platinum</p>` : ""}
       ${frontierLine}
       ${pin ? `
         <div class="card-actions">
@@ -399,7 +407,7 @@ class ValueMap {
       this.card.style.left = ""
       this.card.style.top = ""
     }
-    this.live.textContent = `${fullName(d)}, ${money(d.price_platinum_per_750)} per 750 ml, ${rating}.`
+    this.live.textContent = `${p.soldOut ? "Sold out. " : ""}${fullName(d)}, ${money(d.price_platinum_per_750)} per 750 ml, ${rating}.`
   }
 
   hideCard() {

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -85,6 +85,11 @@ class DealOut(BaseModel):
     platinum_trend_30d: str = "unknown"
     grand_cru_trend_30d: str = "unknown"
     volume_ml: int | None = Field(default=None, description="Bottle size in ml, parsed from volume.")
+    first_seen_on: date | None = Field(default=None, description="Sold-out offers: first day a daily check saw this listing.")
+    sold_out_since: date | None = Field(
+        default=None,
+        description="Sold-out offers: first day seen sold out after being seen in stock; null when it was sold out when first seen.",
+    )
     price_platinum_per_750: float | None = Field(
         default=None,
         description="Platinum price divided by the number of 750 ml bottles in the listing.",
@@ -224,6 +229,8 @@ class DealFiltersOut(BaseModel):
 
 class DealStatsOut(BaseModel):
     total_deals: int
+    in_stock_count: int = 0
+    sold_out_count: int = 0
     with_vivino_match: int = 0
     with_market_price: int = 0
     cheaper_sides: list[LabelCountOut]

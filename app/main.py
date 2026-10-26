@@ -121,6 +121,7 @@ def _ensure_runtime_columns() -> None:
     ensure_column("wine_deals", "market_retailer_name", "VARCHAR(128)")
     ensure_column("wine_deals", "market_retailer_url", "VARCHAR(512)")
     ensure_column("wine_deals", "volume_ml", "INTEGER")
+    ensure_column("price_observations", "in_stock", "BOOLEAN")
     ensure_deal_score_nullable()
     with SessionLocal() as session:
         fill_volume_ml(session)
@@ -165,6 +166,11 @@ def deal_filter_params(
         default=None,
         ge=0.0,
         description="Minimum Platinum price per 750 ml.",
+    ),
+    availability: str = Query(
+        default="all",
+        pattern="^(all|in_stock|sold_out)$",
+        description="Platinum stock: all, in_stock or sold_out.",
     ),
     max_price_per_750: float | None = Query(
         default=None,
@@ -213,6 +219,7 @@ def deal_filter_params(
         "min_vivino_num_ratings": min_vivino_num_ratings,
         "max_platinum_price": max_platinum_price,
         "min_price_per_750": min_price_per_750,
+        "availability": availability,
         "max_price_per_750": max_price_per_750,
         "search": search,
         "country": country,

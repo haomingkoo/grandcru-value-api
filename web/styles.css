@@ -531,6 +531,42 @@ a:hover {
   opacity: 0.13;
 }
 
+.map-dot.is-sold-out:not(.is-dim) {
+  opacity: 0.42;
+}
+
+.key-soldout {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-2);
+  opacity: 0.42;
+}
+
+.card-sold-out,
+.sold-out-line {
+  color: var(--warn);
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.sold-out-line {
+  margin-top: 2px;
+}
+
+.stock-line {
+  margin-top: 4px;
+  color: var(--text-2);
+}
+
+.deal-row.is-sold-out .wine-thumb img {
+  opacity: 0.55;
+}
+
+.deal-row.is-sold-out .dot-platinum {
+  background: var(--control-border);
+}
+
 .map-label {
   fill: var(--text);
   font: 600 var(--fs-small) / 1 var(--ui);
@@ -1495,6 +1531,10 @@ input[type="checkbox"] {
 
 .quick:hover {
   border-color: var(--text);
+}
+
+.quick[hidden] {
+  display: none;
 }
 
 .quick[aria-pressed="true"] {

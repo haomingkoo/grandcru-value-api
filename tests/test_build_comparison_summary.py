@@ -124,3 +124,16 @@ def test_brut_reserve_does_not_match_rose_reserve() -> None:
 
     assert summary[0]["cheaper_side"] == "No Match"
     assert summary[0]["url_main"] == ""
+
+
+def test_extra_cuvee_word_blocks_a_match() -> None:
+    from scripts.build_comparison_summary import has_extra_label_word, normalize_name
+
+    plat = {"name_clean": normalize_name("2021 Miraval - Cotes de Provence Rose - Rose - 1.5 L - Magnum")}
+    muse = {"name_clean": normalize_name("2021 Miraval - Cotes de Provence Rose Muse (1.5 L - Magnum)")}
+    same = {"name_clean": normalize_name("2021 Miraval - Cotes de Provence Rose (1.5 L - Magnum)")}
+    premier = {"name_clean": normalize_name("2018 Domaine Xavier Monnot - Volnay Clos des Chenes Premier Cru")}
+    monnot = {"name_clean": normalize_name("2018 Domaine Xavier Monnot - Volnay Clos des Chenes - Red - 750 ml - Standard Bottle")}
+    assert has_extra_label_word(plat, muse)
+    assert not has_extra_label_word(plat, same)
+    assert not has_extra_label_word(monnot, premier)

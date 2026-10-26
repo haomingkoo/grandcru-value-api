@@ -240,7 +240,8 @@ def resolve_rows(
     unresolved_seen = 0
 
     for row in comparison_rows:
-        if (row.get("url_main") or "").strip():
+        # Sold-out listings keep the deterministic match only; Gemini calls are for wines people can buy.
+        if (row.get("url_main") or "").strip() or (row.get("platinum_in_stock") or "").strip().lower() == "false":
             updated_rows.append(row)
             continue
 
