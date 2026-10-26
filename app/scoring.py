@@ -47,8 +47,8 @@ def compute_deal_score(
     *,
     price_platinum: float | None = None,
     vivino_price: float | None = None,
-) -> float:
-    """Score a wine deal from 0-100.
+) -> float | None:
+    """Score a wine deal from 0-100, or None without a Vivino rating to score against.
 
     Components:
     - Retailer discount (Platinum vs Grand Cru): up to 30 points
@@ -57,6 +57,9 @@ def compute_deal_score(
     - Rating confidence (sample size): up to 10 points
     - Bonus for beating both Grand Cru AND market: up to 5 points
     """
+    if vivino_rating is None:
+        return None
+
     # Retailer discount: Platinum vs Grand Cru (up to 30 pts)
     gc_discount_pct = max(-(price_diff_pct or 0.0), 0.0)
     retailer_component = min(gc_discount_pct, 30.0)

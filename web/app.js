@@ -169,14 +169,18 @@ async function loadSummary() {
     const cheaperGrandCru = counts["Grand Cru Cheaper"] || 0
     const same = counts["Same Price"] || 0
     const unlisted = counts["No Match"] || 0
-    const parts = [
-      `<strong>${formatInteger(cheaperPlatinum)} of ${formatInteger(total)}</strong> ${plural(total, "offer is", "offers are")} cheaper on Platinum than at Grand Cru.`,
+    const withMarket = stats.with_market_price || 0
+    const comparisons = [
+      `${formatInteger(cheaperPlatinum)} ${plural(cheaperPlatinum, "is", "are")} cheaper on Platinum than at Grand Cru`,
       cheaperGrandCru ? `${formatInteger(cheaperGrandCru)} ${plural(cheaperGrandCru, "is", "are")} cheaper at Grand Cru` : "",
       same ? `${formatInteger(same)} ${plural(same, "costs", "cost")} the same` : "",
       unlisted ? `${formatInteger(unlisted)} ${plural(unlisted, "is", "are")} not sold at Grand Cru` : "",
-    ]
-    const rest = parts.slice(1).filter(Boolean)
-    els.summary.innerHTML = rest.length ? `${parts[0]} ${capitalize(joinList(rest))}.` : parts[0]
+    ].filter(Boolean)
+    els.summary.innerHTML = [
+      `Platinum Wine Club lists <strong>${formatInteger(total)} ${plural(total, "offer", "offers")}</strong> in stock today.`,
+      `${capitalize(joinList(comparisons))}.`,
+      `${formatInteger(withMarket)} of ${formatInteger(total)} ${plural(withMarket, "has", "have")} a Vivino market price to compare.`,
+    ].join(" ")
   } catch (_) {
     els.summary.textContent = "Today’s price summary could not load."
   }
@@ -408,7 +412,7 @@ function displayName(deal) {
 function renderOfferRow(deal, family) {
   const verdict = resolveVerdict(deal)
   const style = deal.style_family || deal.wine_type || ""
-  const origin = [deal.region, deal.country].filter(Boolean).join(", ")
+  const origin = deal.country ? [deal.region, deal.country].filter(Boolean).join(", ") : "Country not listed"
   const meta = [deal.producer, origin, style, formatVolume(deal)].filter(Boolean).join(" · ")
   const notes = formatVivinoNotes(deal.vivino_description)
   const grouped = family && family.offers.length > 1
@@ -452,7 +456,9 @@ function renderOfferRow(deal, family) {
       </td>
       <td class="num cell-score">
         <span class="cell-label">Score</span>
-        <span class="figure">${Math.round(deal.deal_score)}</span><span class="sub">of 100</span>
+        ${deal.deal_score != null
+          ? `<span class="figure">${Math.round(deal.deal_score)}</span><span class="sub">of 100</span>`
+          : `<span class="sub">Not enough data to score</span>`}
       </td>
       <td class="cell-links">
         <div class="wine-links">
@@ -493,6 +499,8 @@ function vivinoCell(deal) {
       else if (gap < 0) lines.push(`<span class="sub tone-good">Platinum ${formatPct(Math.abs(gap), 0)} less</span>`)
       else lines.push(`<span class="sub tone-bad">Platinum ${formatPct(gap, 0)} more</span>`)
     }
+  } else if (!deal.vivino_url && deal.vivino_rating == null) {
+    lines.push(`<span class="sub">No Vivino match</span>`)
   } else {
     lines.push(`<span class="sub">No market price</span>`)
   }

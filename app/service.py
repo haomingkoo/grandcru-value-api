@@ -263,7 +263,9 @@ def _build_deals_stmt(
     offering_type: str | None = None,
     producer: str | None = None,
 ):
-    stmt = select(WineDeal).where(WineDeal.deal_score >= min_score)
+    stmt = select(WineDeal)
+    if min_score > 0:
+        stmt = stmt.where(WineDeal.deal_score >= min_score)
 
     effective_cheaper_side = cheaper_side
     if only_platinum_cheaper and not effective_cheaper_side:
@@ -413,6 +415,17 @@ def count_deals(session: Session) -> int:
     return int(session.scalar(select(func.count(WineDeal.id))) or 0)
 
 
+def count_offer_gaps(session: Session) -> tuple[int, int]:
+    """(offers without a Vivino match, offers without a Vivino market price)."""
+    no_match = session.scalar(select(func.count(WineDeal.id)).where(WineDeal.vivino_rating.is_(None)))
+    no_price = session.scalar(
+        select(func.count(WineDeal.id)).where(
+            (WineDeal.vivino_price.is_(None)) | (WineDeal.vivino_price <= 0)
+        )
+    )
+    return int(no_match or 0), int(no_price or 0)
+
+
 def count_snapshots(session: Session) -> int:
     return int(session.scalar(select(func.count(WineDealSnapshot.id))) or 0)
 
@@ -553,6 +566,8 @@ def get_deal_stats(session: Session, **filters) -> dict:
 
     return {
         "total_deals": len(deals),
+        "with_vivino_match": sum(1 for deal in deals if deal.vivino_rating is not None),
+        "with_market_price": sum(1 for deal in deals if deal.vivino_price and deal.vivino_price > 0),
         "cheaper_sides": _sorted_label_counts(cheaper_sides),
         "wine_types": _sorted_label_counts(wine_types),
         "style_families": _sorted_label_counts(style_families),
