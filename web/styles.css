@@ -534,11 +534,19 @@ a:hover {
 .map-label {
   fill: var(--text);
   font: 600 var(--fs-small) / 1 var(--ui);
-  paint-order: stroke;
-  stroke: var(--surface);
-  stroke-width: 4px;
-  stroke-linejoin: round;
   pointer-events: none;
+}
+
+.map-label-bg {
+  fill: var(--surface);
+  fill-opacity: 0.92;
+  stroke: var(--hairline);
+  stroke-width: 1;
+}
+
+.map-leader {
+  stroke: var(--text-2);
+  stroke-width: 1;
 }
 
 .map-cursor {
@@ -911,8 +919,7 @@ input[type="number"]:focus-visible {
   min-width: 0;
 }
 
-.field > span,
-.checks legend {
+.field > span {
   color: var(--text-2);
   font-size: var(--fs-small);
   font-weight: 500;
@@ -1000,29 +1007,6 @@ input[type="checkbox"] {
   border-radius: var(--r-card);
 }
 
-.checks {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.checks legend {
-  margin-bottom: 8px;
-  padding: 0;
-}
-
-.checks label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  cursor: pointer;
-}
-
 .active-filters {
   display: flex;
   flex-wrap: wrap;
@@ -1095,11 +1079,15 @@ input[type="checkbox"] {
 
 .offer-table thead th:last-child {
   border-top-right-radius: var(--r-card);
-  width: 15%;
+  width: 16%;
 }
 
 .offer-table th.col-wine {
-  width: 33%;
+  width: 32%;
+}
+
+.offer-table th.col-compare {
+  width: 40%;
 }
 
 .offer-table th.num,
@@ -1138,7 +1126,7 @@ input[type="checkbox"] {
 }
 
 .offer-table td {
-  padding: 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--hairline);
   vertical-align: top;
 }
@@ -1234,16 +1222,114 @@ input[type="checkbox"] {
   font-weight: 600;
 }
 
-.cell-price,
-.cell-rating,
-.cell-score {
-  display: table-cell;
+.cell-rating > * {
+  display: block;
 }
 
-.cell-price > *,
-.cell-rating > *,
-.cell-score > * {
-  display: block;
+.score-line {
+  margin-top: 6px;
+}
+
+/* Price strip: Platinum against every other price we have */
+.price-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+
+.price-head .sub {
+  display: inline;
+}
+
+.strip {
+  max-width: 380px;
+  margin-top: 6px;
+  font-size: var(--fs-small);
+}
+
+.strip-row {
+  position: relative;
+  height: 18px;
+}
+
+.strip-label {
+  position: absolute;
+  top: 1px;
+  color: var(--text-2);
+  line-height: 1.2;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+}
+
+.strip-label.align-start {
+  transform: translateX(-7px);
+}
+
+.strip-label.align-end {
+  transform: translateX(calc(-100% + 7px));
+}
+
+.strip-label.is-platinum {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.strip-track {
+  position: relative;
+  height: 16px;
+}
+
+.strip-track::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--chart-rule);
+}
+
+.strip-dot {
+  position: absolute;
+  top: 8px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: content-box;
+}
+
+.dot-platinum {
+  width: 13px;
+  height: 13px;
+  background: var(--src-platinum);
+}
+
+.dot-grand_cru {
+  background: var(--src-grand-cru);
+}
+
+.dot-vivino {
+  background: var(--src-vivino);
+}
+
+.compare-lines {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-small);
+  line-height: 1.4;
+}
+
+.compare-lines .tone-good,
+.compare-lines .tone-bad {
+  font-weight: 600;
 }
 
 .offer-table .cell-label {
@@ -1284,6 +1370,138 @@ input[type="checkbox"] {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
+}
+
+/* Split bar: offers against Grand Cru */
+.split {
+  margin-top: 28px;
+}
+
+.split[hidden] {
+  display: none;
+}
+
+.split-title strong {
+  font-weight: 650;
+}
+
+.split-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  margin-top: 10px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.split-seg {
+  min-width: 6px;
+  cursor: pointer;
+}
+
+.seg-platinum,
+.key-platinum .split-swatch {
+  background: var(--src-platinum);
+}
+
+.seg-same,
+.key-same .split-swatch {
+  background: var(--control-border);
+}
+
+.seg-grand-cru,
+.key-grand-cru .split-swatch {
+  background: var(--src-grand-cru);
+}
+
+.seg-none,
+.key-none .split-swatch {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--control-border);
+}
+
+.split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.split-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--text-2);
+  font: 400 var(--fs-body) / 1.3 var(--ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.split-key strong {
+  color: var(--text);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.split-key:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.split-key[aria-pressed="true"] {
+  border-color: var(--control-border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.split-key:disabled {
+  cursor: default;
+}
+
+.split-swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* Quick filters */
+.quick-filters {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--text);
+  font: 500 var(--fs-small) / 1.2 var(--ui);
+  cursor: pointer;
+}
+
+.quick:hover {
+  border-color: var(--text);
+}
+
+.quick[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  font-weight: 600;
 }
 
 .source-link {
@@ -1807,7 +2025,7 @@ input[type="checkbox"] {
 
   .deal-row {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px 16px;
     padding: 16px;
     border-bottom: 1px solid var(--hairline);
@@ -1825,8 +2043,23 @@ input[type="checkbox"] {
   }
 
   .offer-table .deal-row .cell-wine,
-  .offer-table .deal-row .cell-links {
+  .offer-table .deal-row .cell-compare {
     grid-column: 1 / -1;
+  }
+
+  .offer-table .deal-row .cell-rating {
+    grid-column: 2;
+    grid-row: 3;
+    text-align: right;
+  }
+
+  .offer-table .deal-row .cell-links {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .strip {
+    max-width: none;
   }
 
   .offer-table .cell-label {
@@ -1867,9 +2100,8 @@ input[type="checkbox"] {
   }
 
   .wine-links {
-    grid-template-columns: auto 1fr;
-    align-items: center;
-    gap: 16px;
+    justify-items: start;
+    gap: 8px;
   }
 
   .wine-links .button {

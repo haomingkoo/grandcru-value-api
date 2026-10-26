@@ -232,39 +232,11 @@ class ValueMap {
       }
     })
 
-    // Direct labels on frontier wines, skipped where they would collide.
-    if (!L.narrow) {
-      const labels = vmEl("g", { class: "map-labels" }, svg)
-      const boxes = []
-      frontier.forEach((p) => {
-        const text = shortName(p.deal)
-        const w = text.length * 6.6 + 4
-        const candidates = [
-          { x: p.cx + p.r + 6, y: p.cy - p.r - 4, anchor: "start" },
-          { x: p.cx - p.r - 6, y: p.cy - p.r - 4, anchor: "end" },
-          { x: p.cx + p.r + 6, y: p.cy + p.r + 14, anchor: "start" },
-          { x: p.cx - p.r - 6, y: p.cy + p.r + 14, anchor: "end" },
-        ]
-        for (const c of candidates) {
-          const left = c.anchor === "start" ? c.x : c.x - w
-          const box = { l: left, r: left + w, t: c.y - 12, b: c.y + 3 }
-          const fits = box.l > L.margin.left && box.r < L.width - L.margin.right && box.t > 0
-          const clear = !boxes.some((o) => box.l < o.r && box.r > o.l && box.t < o.b && box.b > o.t)
-          const overFrontier = frontier.some((q) => q !== p && q.cx > box.l - q.r && q.cx < box.r + q.r && q.cy > box.t - q.r && q.cy < box.b + q.r)
-          if (fits && clear && !overFrontier) {
-            boxes.push(box)
-            const t = vmEl("text", { x: c.x, y: c.y, "text-anchor": c.anchor, class: "map-label" }, labels)
-            t.textContent = text
-            break
-          }
-        }
-      })
-    }
-
     this.cursorRing = vmEl("circle", { class: "map-cursor", r: 0, cx: -20, cy: -20 }, svg)
     this.canvas.querySelector("svg")?.remove()
     this.canvas.prepend(svg)
     this.svg = svg
+    this.placeLabels(frontier, L)
     this.canvas.setAttribute("aria-label", `Value map of ${inView.length} offers. ${frontier.length} sit on the best-rating-for-price line. Use the arrow keys to move between offers and Enter to open one.`)
     if (this.current) {
       const again = this.points.find((p) => p.id === this.current.id)
@@ -272,6 +244,56 @@ class ValueMap {
       else { this.pinned = false; this.hideCard() }
     }
     this.drawnOnce = true
+  }
+
+  // Direct labels for frontier wines: measured text, offset with a leader line when needed,
+  // never over another dot or label. Wines that cannot be labelled cleanly show on hover.
+  placeLabels(frontier, L) {
+    if (L.narrow) return
+    const maxLabels = L.width < 760 ? 2 : 3
+    const layer = vmEl("g", { class: "map-labels" }, this.svg)
+    const dots = this.points.filter((q) => this.visible.has(q.id)).map((q) => ({ l: q.cx - q.r - 7, r: q.cx + q.r + 7, t: q.cy - q.r - 7, b: q.cy + q.r + 7 }))
+    const placed = []
+    const hits = (box) => placed.some((o) => box.l < o.r && box.r > o.l && box.t < o.b && box.b > o.t)
+      || dots.some((o) => box.l < o.r && box.r > o.l && box.t < o.b && box.b > o.t)
+    // Most useful first: the cheapest and the best-rated ends of the frontier, then the middle.
+    const order = frontier.slice().sort((a, b) => b.rating - a.rating).slice(0, 1)
+      .concat(frontier.slice(0, 1), frontier.slice(1, -1).reverse())
+      .filter((p, i, list) => list.indexOf(p) === i)
+    let count = 0
+    for (const p of order) {
+      if (count >= maxLabels) break
+      const text = vmEl("text", { class: "map-label", x: 0, y: 0 }, layer)
+      text.textContent = shortName(p.deal)
+      const w = text.getComputedTextLength() + 8
+      const h = 18
+      let done = false
+      for (const dist of [8, 24, 42, 64, 90]) {
+        for (const [dx, dy] of [[1, -1], [-1, -1], [1, 1], [-1, 1], [0, -1], [0, 1]]) {
+          const ax = p.cx + dx * (p.r + dist)
+          const ay = p.cy + dy * (p.r + dist * 0.7)
+          const left = dx > 0 ? ax : dx < 0 ? ax - w : ax - w / 2
+          const box = { l: left, r: left + w, t: ay - h / 2, b: ay + h / 2 }
+          if (box.l < L.margin.left || box.r > L.width - L.margin.right || box.t < 2 || box.b > L.plotBottom) continue
+          if (hits(box)) continue
+          placed.push(box)
+          if (dist > 8) {
+            const ex = dx > 0 ? box.l : dx < 0 ? box.r : ax
+            const ey = dx === 0 ? (dy < 0 ? box.b : box.t) : ay
+            const angle = Math.atan2(ey - p.cy, ex - p.cx)
+            vmEl("line", { class: "map-leader", x1: p.cx + Math.cos(angle) * (p.r + 4.5), y1: p.cy + Math.sin(angle) * (p.r + 4.5), x2: ex, y2: ey }, layer)
+          }
+          layer.insertBefore(vmEl("rect", { class: "map-label-bg", x: box.l, y: box.t, width: w, height: h, rx: 4 }), text)
+          text.setAttribute("x", box.l + 4)
+          text.setAttribute("y", ay + 4.5)
+          done = true
+          break
+        }
+        if (done) break
+      }
+      if (done) count += 1
+      else text.remove()
+    }
   }
 
   nearest(e, radius) {

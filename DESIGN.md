@@ -18,17 +18,20 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 
 ## Rules for this app
 - Every number on screen comes from the API for the current data: offer counts in the summary from `/deals/stats`, prices, ratings and scores from `/deals`, the check time from `/health`. No hard-coded counts anywhere, including the social card.
-- Price differences are written as sentences ("Platinum 12.0% less"), not badges. A 7-day trend shows only when the price moved; jumps far larger than the price itself are data corrections and stay hidden.
-- One primary action per offer: "Buy on Platinum". Grand Cru and Vivino are plain text links.
+- Each row has four columns: the wine; Platinum's price with a price strip (one line, a dot per source: Platinum larger, Grand Cru, Vivino market, each labelled with its price) and one plain line per comparison ("S$18 (13%) more than Grand Cru", "S$22 (12%) below the Vivino market price · checked 26 Oct", or "Not at Grand Cru" / "No Vivino market price yet"); the Vivino rating with a quiet "Score 57 of 100"; and the links. No strip when only Platinum has a price.
+- The score has no column and no "good/poor" label: it is mostly the rating when no discount is known, so a label would mislead.
+- One primary action per offer: "Buy on Platinum". Grand Cru, Vivino and Wine-Searcher are plain text links on one line.
 - No Vivino review text or images. Every Vivino figure has a "Vivino" link to that wine's page, and each Vivino price shows its "Checked" date. A "Market prices paused" notice appears under the summary when `/health` reports `vivino_ok: false`.
-- "Compare Singapore prices on Wine-Searcher" is a quiet secondary text link (no Wine-Searcher data is fetched).
+- The Wine-Searcher link opens a Singapore search; no Wine-Searcher data is fetched.
 - Bottle photos are hotlinked from the shop. A drawn bottle silhouette replaces a missing or broken image.
-- Phones (900px and below): each offer becomes a card with Platinum, Grand Cru and Vivino side by side above the Buy button. Sort by the select, not the table headers.
+- Phones (900px and below): each offer becomes a card: the wine, then the price and strip, then Buy and links beside the rating. Sort by the select, not the table headers.
+- Split bar (first screen): offers in view against Grand Cru: cheaper on Platinum (claret), same price (control grey), cheaper at Grand Cru (blue), not at Grand Cru (outlined). Its legend buttons filter by that outcome. Counts come from `/deals/stats` with the other filters applied.
+- Quick filters sit above the table as toggle buttons (cheaper on Platinum, rated 4.0+, 100+ ratings, listed at Grand Cru). Region, type, grape, format and producer stay under More filters.
 
 ## First screen
-- Left: the headline, one line under it, and three stats that each set a filter: offers cheaper on Platinum, the lowest price per 750 ml among wines rated 4.0 or higher (with its bottle), and how long since prices were checked. Right (below on tablets and phones): the value map.
+- Left: the headline, one line under it, the split bar, and two stats that set a filter or link: the lowest price per 750 ml among wines rated 4.0 or higher (with its bottle), and how long since prices were checked. Right (below on tablets and phones): the value map.
 - Value map: x is Platinum price per 750 ml on a doubling scale, y is the Vivino rating (3.4 to 4.6, widened if a rating falls outside). Dot size follows the number of Vivino ratings; a hollow dot is a rating shown by Platinum without a count. Wines with no rating sit in a "Not rated yet" strip at their true price, never at a made-up height.
-- The frontier is the highest rating at or below each price among the offers in view, drawn as an ink step line; its wines get an ink ring and a direct label where one fits. Filters dim the other dots, and the frontier is redrawn for what is in view.
+- The frontier is the highest rating at or below each price among the offers in view, drawn as an ink step line; its wines get an ink ring. At most three get a direct label (two on tablets, none on phones), on a light plate, offset with a leader line when needed, and never over another dot or label; the rest show on hover. Filters dim the other dots, and the frontier is redrawn for what is in view.
 - Hover or focus previews a wine; click, tap or Enter pins a card with "Show in list", Platinum and Vivino links. Arrow keys move through offers by price. The style legend doubles as a style filter.
 - Style colours (validated as a set, all pairs): Red `#8a2846`, White and Orange `#9a7608`, Rosé `#d4587a`, Sparkling and Champagne `#3268b8`. Six styles would fail the all-pairs check, so styles are grouped into four.
 - One authored motion: dots settle in price order, then the frontier draws left to right. Nothing moves with reduced motion.

@@ -221,14 +221,12 @@ def test_mobile_offer_card_shows_prices_before_actions(browser_app_url, mobile_b
         lambda driver: driver.find_element(By.CSS_SELECTOR, ".deal-row")
     )
     cells = first_row.find_elements(By.TAG_NAME, "td")
-    platinum_cell, grand_cru_cell = cells[1], cells[2]
+    platinum_cell = cells[1]
     links = first_row.find_element(By.CSS_SELECTOR, ".wine-links")
 
-    assert "Platinum" in platinum_cell.text
-    assert "$120.00" in platinum_cell.text
-    assert "Grand Cru" in grand_cru_cell.text
-    assert "$150.00" in grand_cru_cell.text
-    assert "Platinum 20.0% less" in grand_cru_cell.text
+    assert "S$120.00" in platinum_cell.text
+    assert "Grand Cru S$150" in platinum_cell.text
+    assert "S$30 (20%) less than Grand Cru" in platinum_cell.text
     row_text = first_row.text
     assert "Butter-bomb" not in row_text
     assert "stable" not in row_text
@@ -254,18 +252,16 @@ def test_mobile_offer_card_shows_prices_before_actions(browser_app_url, mobile_b
     assert metrics["scrollWidth"] <= metrics["innerWidth"]
 
 
-def test_summary_sentence_counts_offers_by_cheaper_side(browser_app_url, desktop_browser) -> None:
+def test_split_bar_counts_offers_by_cheaper_side(browser_app_url, desktop_browser) -> None:
     desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
 
     WebDriverWait(desktop_browser, 10).until(
-        lambda driver: "lists 3 offers" in driver.find_element(By.ID, "summary").text
+        lambda driver: "3 offers in stock today" in driver.find_element(By.ID, "splitBar").text
     )
-    summary = desktop_browser.find_element(By.ID, "summary").text
-    assert summary.startswith("Platinum Wine Club lists 3 offers in stock today.")
-    assert "1 is cheaper on Platinum than at Grand Cru" in summary
-    assert "3 of 3 have a Vivino market price to compare." in summary
-    assert "1 costs the same" in summary
-    assert "1 is not sold at Grand Cru" in summary
+    split = " ".join(desktop_browser.find_element(By.ID, "splitBar").text.split())
+    assert "1 cheaper on Platinum" in split
+    assert "1 same price" in split
+    assert "1 not at Grand Cru" in split
 
 
 def test_vivino_numbers_link_to_vivino_and_show_checked_date(browser_app_url, desktop_browser) -> None:
@@ -275,23 +271,21 @@ def test_vivino_numbers_link_to_vivino_and_show_checked_date(browser_app_url, de
         lambda driver: driver.find_element(By.CSS_SELECTOR, ".deal-row")
     )
     cells = first_row.find_elements(By.TAG_NAME, "td")
-    grand_cru_cell, vivino_cell, rating_cell = cells[2], cells[3], cells[4]
+    compare_cell, rating_cell = cells[1], cells[2]
 
     # No review text or tasting notes from Vivino.
     assert "cherry" not in first_row.text
     assert "Butter-bomb" not in first_row.text
     assert "review" not in first_row.text.lower()
-    # A 7-day change far larger than the price is a data correction, not a trend.
-    assert "this week" not in grand_cru_cell.text
+    assert "this week" not in compare_cell.text
 
-    assert "Checked 24 Oct" in vivino_cell.text
-    for cell in (vivino_cell, rating_cell):
-        link = cell.find_element(By.CSS_SELECTOR, "a.source-link")
-        assert link.text.startswith("Vivino")
-        assert link.get_attribute("href") == "https://example.com/vivino"
+    assert "checked 24 Oct" in compare_cell.text
+    link = rating_cell.find_element(By.CSS_SELECTOR, "a.source-link")
+    assert link.text.startswith("Vivino")
+    assert link.get_attribute("href") == "https://example.com/vivino"
 
-    searcher = first_row.find_element(By.CSS_SELECTOR, "a.quiet-link")
-    assert searcher.text.startswith("Compare Singapore prices on Wine-Searcher")
+    searcher = first_row.find_element(By.CSS_SELECTOR, "a[title='Compare Singapore prices on Wine-Searcher']")
+    assert searcher.text.startswith("Wine-Searcher")
     assert searcher.get_attribute("href").startswith("https://www.wine-searcher.com/find/")
     assert searcher.get_attribute("href").endswith("/1/singapore")
     assert "noopener" in searcher.get_attribute("rel")
