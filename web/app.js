@@ -18,6 +18,7 @@ const defaultState = {
 const sortDefaults = {
   wine_name: "asc",
   price_platinum: "asc",
+  price_per_750: "asc",
   price_diff_pct: "asc",
   vivino_rating: "desc",
   deal_score: "desc",
@@ -31,6 +32,8 @@ const sortLabels = {
   "vivino_rating:asc": "lowest rating first",
   "price_platinum:asc": "lowest price first",
   "price_platinum:desc": "highest price first",
+  "price_per_750:asc": "best price per 750 ml first",
+  "price_per_750:desc": "highest price per 750 ml first",
   "wine_name:asc": "name, A to Z",
   "wine_name:desc": "name, Z to A",
   "deal_score:asc": "lowest score first",
@@ -40,6 +43,7 @@ const STYLE_ORDER = ["Red", "White", "Champagne", "Sparkling", "Rose", "Sweet / 
 
 const state = { ...defaultState }
 let filterOptions = null
+let priceHistory = null
 let requestSerial = 0
 let searchDebounce = 0
 const els = {}
@@ -51,6 +55,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderLoadingRows()
   loadSummary()
   loadFreshness()
+  loadPriceHistory()
   try {
     await loadFilterOptions()
   } catch (_) {
@@ -141,6 +146,11 @@ function bindEvents() {
     }
   })
 
+  els.dealTableBody.addEventListener("click", (event) => {
+    const toggle = event.target.closest(".history-toggle")
+    if (toggle) toggleHistory(toggle)
+  })
+
   els.sortButtons.forEach((button) => {
     button.addEventListener("click", () => {
       const sortBy = button.dataset.sort
@@ -204,6 +214,85 @@ async function loadFreshness() {
   } catch (_) {
     els.freshness.hidden = true
   }
+}
+
+async function loadPriceHistory() {
+  try {
+    const data = await fetchJson("/deals/price-history")
+    priceHistory = { today: data.today, firstDate: data.first_date, byId: new Map(data.offers.map((offer) => [offer.deal_id, offer])) }
+    fillHistorySlots()
+  } catch (_) {
+    // Rows simply show no history line.
+  }
+}
+
+function fillHistorySlots() {
+  if (!priceHistory) return
+  els.dealTableBody.querySelectorAll(".history-slot:empty").forEach((slot) => {
+    const offer = priceHistory.byId.get(Number(slot.dataset.dealId))
+    if (offer && offer.sources.length) slot.innerHTML = historyLineHtml(offer)
+  })
+}
+
+function historyLineHtml(offer) {
+  const spark = WineCharts.sparkline(offer, priceHistory.today)
+  const verdict = offer.verdicts.find((v) => !v.kind.startsWith("cross"))
+  const text = verdict
+    ? `<span class="history-verdict tone-${escapeHtml(verdict.tone)}">${escapeHtml(verdict.text)}</span>`
+    : `<span class="history-verdict tone-calm">Tracked since ${escapeHtml(formatDay(offer.first_date))}</span>`
+  return `
+    <div class="history-line">
+      ${spark}
+      ${text}
+      <button class="text-button history-toggle" type="button" aria-expanded="false" aria-controls="history-${offer.deal_id}">Price history</button>
+    </div>
+  `
+}
+
+function toggleHistory(button) {
+  const row = document.getElementById(button.getAttribute("aria-controls"))
+  if (!row) return
+  const open = row.hidden
+  row.hidden = !open
+  button.setAttribute("aria-expanded", String(open))
+  button.textContent = open ? "Hide price history" : "Price history"
+  if (open && !row.dataset.drawn) {
+    const offer = priceHistory.byId.get(Number(row.dataset.dealId))
+    const deal = JSON.parse(row.dataset.deal)
+    row.querySelector(".history-panel").innerHTML = historyPanelHtml(offer, deal)
+    WineCharts.history(row.querySelector(".history-chart"), offer, priceHistory.today)
+    row.dataset.drawn = "true"
+  }
+}
+
+const SOURCE_NOTES = { vivino: "dated checks" }
+
+function historyPanelHtml(offer, deal) {
+  const sizeNote = isStandardBottle(deal)
+    ? ""
+    : ` This offer is ${escapeHtml(formatVolume(deal))} at ${escapeHtml(formatMoney(deal.price_platinum))}.`
+  const verdicts = offer.verdicts.length
+    ? `<ul class="history-verdicts">${offer.verdicts.map((v) => `<li class="tone-${escapeHtml(v.tone)}">${escapeHtml(v.text)}</li>`).join("")}</ul>`
+    : ""
+  const legend = offer.sources.map((s) => `
+    <li class="legend-item legend-${escapeHtml(s.source)}"><span class="legend-mark" aria-hidden="true"></span>${escapeHtml(s.label)}${SOURCE_NOTES[s.source] ? `<span class="sub"> ${SOURCE_NOTES[s.source]}</span>` : ""}</li>
+  `).join("")
+  const daily = offer.sources.flatMap((s) => (s.segments || []).filter((g) => g.origin !== "saved_list").map((g) => g.start)).sort()
+  const notes = ["A break in a line is a day we have no price from that shop."]
+  if (offer.saved_list_dates.length) {
+    notes.push(`Hollow dots${daily.length ? ` before ${escapeHtml(formatDay(daily[0]))}` : ""} come from saved price lists, dated the day each list was saved.`)
+  }
+  if (offer.sources.some((s) => s.source === "vivino")) notes.push("Vivino dots are the days we read the wine’s Vivino page.")
+  return `
+    <div class="history-head">
+      <h3 class="history-title">Price history</h3>
+      <p class="sub">Prices per 750 ml.${sizeNote} Tracking began ${escapeHtml(formatDay(offer.first_date, true))}.</p>
+    </div>
+    ${verdicts}
+    <ul class="history-legend">${legend}</ul>
+    <div class="history-chart"></div>
+    <p class="history-notes">${notes.join(" ")}</p>
+  `
 }
 
 async function loadFilterOptions() {
@@ -391,6 +480,7 @@ function renderTable(families) {
     return
   }
   els.dealTableBody.innerHTML = families.map(renderFamily).join("")
+  fillHistorySlots()
 }
 
 function renderErrorState() {
@@ -403,8 +493,17 @@ function renderErrorState() {
 }
 
 function renderFamily(family) {
-  const row = renderOfferRow(family.bestOffer, family)
+  const row = renderOfferRow(family.bestOffer, family) + renderHistoryRow(family.bestOffer)
   return family.offers.length > 1 ? `${row}${renderGroupedOffersRow(family)}` : row
+}
+
+function renderHistoryRow(deal) {
+  const keep = { price_platinum: deal.price_platinum, volume: deal.volume, quantity: deal.quantity, volume_ml: deal.volume_ml }
+  return `
+    <tr class="history-row" id="history-${deal.id}" data-deal-id="${deal.id}" data-deal="${escapeHtml(JSON.stringify(keep))}" hidden>
+      <td colspan="7"><div class="history-panel"></div></td>
+    </tr>
+  `
 }
 
 function displayName(deal) {
@@ -432,13 +531,14 @@ function renderOfferRow(deal, family) {
             <p class="wine-meta">${escapeHtml(meta)}</p>
             <p class="verdict tone-${escapeHtml(verdict.tone)}">${escapeHtml(verdict.label)}</p>
             ${grouped}
+            <div class="history-slot" data-deal-id="${deal.id}"></div>
           </div>
         </div>
       </td>
       <td class="num cell-price">
         <span class="cell-label">Platinum</span>
         <span class="price">${formatMoney(deal.price_platinum)}</span>
-        ${perUnitNote(deal.price_platinum, deal)}
+        ${sizeNotes(deal)}
         ${deal.platinum_in_stock === false ? `<span class="sub tone-warn">Out of stock</span>` : ""}
         ${trendNote(deal.price_platinum_change_7d, deal.platinum_trend_7d, deal.price_platinum)}
       </td>
@@ -706,11 +806,11 @@ function vivinoSource(deal) {
   return `<a class="source-link" href="${escapeHtml(deal.vivino_url)}" target="_blank" rel="noopener noreferrer">Vivino<span class="visually-hidden"> page for this wine (opens in a new tab)</span></a>`
 }
 
-function formatDay(value) {
+function formatDay(value, withYear = false) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ""
   const sameYear = date.getFullYear() === new Date().getFullYear()
-  return date.toLocaleDateString("en-SG", { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) })
+  return date.toLocaleDateString("en-SG", { day: "numeric", month: "short", ...(sameYear && !withYear ? {} : { year: "numeric" }) })
 }
 
 function wineSearcherUrl(deal) {
@@ -746,13 +846,20 @@ function formatVintage(vintage) {
   return vintage || "NV"
 }
 
-function perUnitNote(total, deal) {
-  if (total == null) return ""
-  const vol = (deal.volume || "").toLowerCase()
-  const volFactor = ["3l", "3000ml", "double magnum", "jeroboam"].includes(vol) ? 4 : ["1.5l", "1500ml", "magnum"].includes(vol) ? 2 : 1
-  const divisor = volFactor * Math.max(deal.quantity || 1, 1)
-  if (divisor <= 1) return ""
-  return `<span class="sub">${formatMoney(total / divisor)} per 750\u00a0ml</span>`
+function isStandardBottle(deal) {
+  return (deal.volume_ml == null || deal.volume_ml === 750) && Math.max(deal.quantity || 1, 1) === 1
+}
+
+function sizeNotes(deal) {
+  if (deal.price_platinum == null || !deal.volume_ml) return ""
+  const totalMl = deal.volume_ml * Math.max(deal.quantity || 1, 1)
+  const per100 = `${WineCharts.money((deal.price_platinum / totalMl) * 100)}/100\u00a0ml`
+  if (isStandardBottle(deal)) return `<span class="sub">${per100}</span>`
+  return `
+    <span class="sub size-note">for ${escapeHtml(formatVolume(deal))}</span>
+    <span class="sub per-750">${WineCharts.money(deal.price_platinum_per_750)} per 750\u00a0ml</span>
+    <span class="sub">${per100}</span>
+  `
 }
 
 async function fetchJson(path) {
@@ -763,7 +870,7 @@ async function fetchJson(path) {
 
 function formatMoney(value) {
   if (value == null) return ""
-  return `$${new Intl.NumberFormat("en-SG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`
+  return `S$${new Intl.NumberFormat("en-SG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`
 }
 
 function formatPct(value, digits = 1) {

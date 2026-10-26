@@ -84,6 +84,11 @@ class DealOut(BaseModel):
     grand_cru_trend_7d: str = "unknown"
     platinum_trend_30d: str = "unknown"
     grand_cru_trend_30d: str = "unknown"
+    volume_ml: int | None = Field(default=None, description="Bottle size in ml, parsed from volume.")
+    price_platinum_per_750: float | None = Field(
+        default=None,
+        description="Platinum price divided by the number of 750 ml bottles in the listing.",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

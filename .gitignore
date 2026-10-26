@@ -17,6 +17,7 @@ seed/*
 !seed/vivino_results.csv
 !seed/vivino_overrides.csv
 !seed/market_prices.csv
+!seed/price_history_saved_lists.csv
 requirements.md
 tasks.md
 design.md

@@ -13,6 +13,12 @@
   --warn: #8a5a00;
   --bad: #a6361b;
 
+  /* Chart series. Validated as a set (dataviz validate_palette.js, all pairs, on --surface). */
+  --src-platinum: #8e2340;
+  --src-grand-cru: #2f6db5;
+  --src-vivino: #9a7608;
+  --chart-rule: #d9ccbc;
+
   --display: "Lora", Georgia, "Times New Roman", serif;
   --ui: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
@@ -712,6 +718,232 @@ input[type="checkbox"] {
   color: var(--accent);
 }
 
+/* Price history */
+.per-750 {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.history-slot:empty {
+  display: none;
+}
+
+.history-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
+.sparkline {
+  flex: none;
+  display: block;
+}
+
+.history-verdict {
+  font-size: var(--fs-small);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.history-verdict.tone-calm {
+  font-weight: 500;
+}
+
+.history-toggle {
+  min-height: 32px;
+}
+
+.history-row[hidden] {
+  display: none;
+}
+
+.offer-table .history-row td {
+  padding: 0 16px 24px;
+}
+
+.deal-row:has(+ .history-row:not([hidden])) td,
+.deal-row:has(+ .history-row + .deal-group-row) td {
+  border-bottom: 0;
+}
+
+.history-panel {
+  display: grid;
+  gap: 12px;
+  margin-left: 52px;
+  padding: 20px 24px;
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+}
+
+.history-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+
+.history-title {
+  font-size: var(--fs-heading);
+}
+
+.history-verdicts,
+.history-legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-verdicts {
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.history-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-mark {
+  width: 20px;
+  height: 0;
+  border-top: 2.5px solid var(--text);
+}
+
+.legend-platinum .legend-mark {
+  border-top-color: var(--src-platinum);
+}
+
+.legend-grand_cru .legend-mark {
+  border-top: 2px dashed var(--src-grand-cru);
+}
+
+.legend-vivino .legend-mark {
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--src-vivino);
+}
+
+.history-frame {
+  position: relative;
+  border-radius: var(--r-control);
+  touch-action: pan-y;
+}
+
+.history-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart-grid line {
+  stroke: var(--hairline);
+  stroke-width: 1;
+}
+
+.chart-grid .chart-baseline,
+.chart-grid .chart-tick {
+  stroke: var(--chart-rule);
+}
+
+.chart-axis {
+  fill: var(--text-2);
+  font: 500 var(--fs-small) / 1 var(--ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-cursor {
+  stroke: var(--text-2);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.chart-tip {
+  position: absolute;
+  top: 4px;
+  z-index: 2;
+  min-width: 190px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-control);
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-small);
+  pointer-events: none;
+}
+
+.chart-tip.is-below {
+  position: static;
+  margin-top: 8px;
+  box-shadow: none;
+}
+
+.chart-tip[hidden] {
+  display: none;
+}
+
+.chart-tip ul {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chart-tip li {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  column-gap: 8px;
+}
+
+.chart-tip li em {
+  grid-column: 2 / -1;
+  color: var(--text-2);
+  font-style: normal;
+}
+
+.chart-tip strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.tip-date {
+  font-weight: 600;
+}
+
+.tip-unit {
+  margin-top: 6px;
+  color: var(--text-2);
+}
+
+.tip-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--swatch);
+}
+
+.history-notes {
+  max-width: 75ch;
+  color: var(--text-2);
+  font-size: var(--fs-small);
+}
+
 /* Grouped offers */
 .deal-group-row td {
   padding-top: 0;
@@ -1004,6 +1236,21 @@ input[type="checkbox"] {
     border-bottom: 1px solid var(--hairline);
   }
 
+  .history-row:not([hidden]) {
+    display: block;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .offer-table .history-row td {
+    display: block;
+    padding: 0 16px 16px;
+  }
+
+  .history-panel {
+    margin-left: 0;
+    padding: 16px;
+  }
+
   .deal-group-row td {
     display: block;
     padding: 0 16px 16px;
@@ -1112,6 +1359,13 @@ input[type="checkbox"] {
 
   .deal-group-row td {
     padding-inline: 12px;
+  }
+}
+
+@media (pointer: coarse) {
+  .history-toggle,
+  .text-button {
+    min-height: 44px;
   }
 }
 
