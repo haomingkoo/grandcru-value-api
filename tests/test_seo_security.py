@@ -100,3 +100,19 @@ def test_llms_txt_discovery_files_are_available() -> None:
     assert "MinMax Wine is a Singapore wine price comparison" in response.text
     assert "Platinum Wine Club" in full_response.text
     assert "/ops/" not in response.text
+
+
+def test_unknown_page_renders_styled_404_for_browsers() -> None:
+    response = client.get("/no-such-page", headers={"accept": "text/html,application/xhtml+xml"})
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("text/html")
+    assert "<h1>Page not found</h1>" in response.text
+    assert 'href="/"' in response.text
+    assert 'href="https://kooexperience.com/"' in response.text
+    assert "__ASSET_VERSION__" not in response.text
+
+
+def test_unknown_api_path_keeps_json_404() -> None:
+    response = client.get("/deals/no-such/thing", headers={"accept": "application/json"})
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Not Found"}
