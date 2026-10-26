@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine, ensure_column, ensure_deal_score_nullable, get_session
+from app.basket import MODES as BASKET_MODES, RULES as BASKET_RULES, STYLE_GROUPS as BASKET_STYLES, candidate_items, suggest
 from app.price_history import build_price_history, run_backfills
 from app.durable_state import load_state
 from app.ops import RefreshRunner, diagnostics_payload, locked_vivino_override_names
@@ -71,6 +72,7 @@ FRONTEND_ASSET_PATHS = (
     WEB_DIR / "app.js",
     WEB_DIR / "charts.js",
     WEB_DIR / "valuemap.js",
+    WEB_DIR / "basket.js",
 )
 LEGAL_PAGES = {"privacy": WEB_DIR / "privacy.html", "terms": WEB_DIR / "terms.html"}
 CANONICAL_BASE_URL = "https://wine.kooexperience.com"
@@ -614,6 +616,38 @@ def get_deal_map(
     session: Session = Depends(get_session),
 ) -> list[DealMapPointOut]:
     return [DealMapPointOut(**point) for point in get_deal_map_points(session, **filters)]
+
+
+@app.get("/basket")
+def get_basket(
+    mode: str = Query(default="credit", pattern="^(credit|delivery|promo|custom)$"),
+    target: float | None = Query(default=None, ge=20, le=5000, description="Custom spend to reach, in S$ (mode=custom)."),
+    styles: str | None = Query(default=None, description="Comma-separated style groups: red, white, rose, sparkling."),
+    max_bottles: int | None = Query(default=None, ge=1, le=36),
+    prefer: str = Query(default="value", pattern="^(value|rating)$"),
+    include_unrated: bool = Query(default=False),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Up to three baskets of in-stock wines that reach a spend threshold with the least overspend."""
+    if mode == "custom":
+        if target is None:
+            raise HTTPException(status_code=400, detail="target is required for mode=custom")
+        goal, strict = target, False
+    else:
+        goal, strict = BASKET_MODES[mode]["target"], BASKET_MODES[mode]["strict"]
+    wanted = set()
+    for key in (styles or "").split(","):
+        wanted |= BASKET_STYLES.get(key.strip().lower(), set())
+    deals = list_deals(session, limit=500, availability="in_stock")
+    items = candidate_items(deals, styles=wanted or None, include_unrated=include_unrated)
+    return {
+        "mode": mode,
+        "target": goal,
+        "strict": strict,
+        "candidates": len(items),
+        "rules": BASKET_RULES,
+        "baskets": suggest(items, target=goal, strict=strict, max_bottles=max_bottles, prefer=prefer),
+    }
 
 
 @app.get("/deals/price-history")

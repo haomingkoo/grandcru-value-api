@@ -84,6 +84,7 @@
         <p class="lede">Every Platinum Wine Club offer, priced per 750&nbsp;ml and checked against Grand Cru Wines and Vivino.</p>
         <div class="split" id="splitBar" hidden></div>
         <ul class="stat-strip" id="statStrip" aria-label="Today at a glance"></ul>
+        <a class="button basket-cta" href="#basket">Plan a S$300 basket for S$200 back</a>
         <p class="freshness" id="freshness" hidden></p>
         <p class="market-notice" id="marketNotice" role="status" hidden></p>
       </div>
@@ -100,6 +101,51 @@
         </div>
         <p class="map-live visually-hidden" aria-live="polite"></p>
       </figure>
+    </section>
+
+    <section id="basket" class="shell basket" aria-labelledby="basketTitle">
+      <div class="basket-head">
+        <h2 id="basketTitle">Build a basket</h2>
+        <p>Amex Platinum gives S$200 back on one Platinum Wine Club purchase of S$300 or more, each half-year. These baskets reach a spend level with as little extra as possible, from wines in stock today.</p>
+      </div>
+      <form class="basket-controls" id="basketForm">
+        <fieldset class="basket-modes">
+          <legend>Spend to reach</legend>
+          <label class="mode"><input type="radio" name="mode" value="credit" checked><span><strong>S$300 or more</strong>S$200 back</span></label>
+          <label class="mode"><input type="radio" name="mode" value="delivery"><span><strong>Over S$350</strong>S$200 back and free delivery</span></label>
+          <label class="mode"><input type="radio" name="mode" value="promo"><span><strong>S$600 or more</strong>Shop&rsquo;s S$50 off, check at checkout</span></label>
+          <label class="mode mode-custom"><input type="radio" name="mode" value="custom"><span><strong>Your amount</strong><span class="custom-field">S$ <input type="number" name="target" min="20" max="5000" step="10" value="400" aria-label="Amount to reach in Singapore dollars"></span></span></label>
+        </fieldset>
+        <div class="basket-options">
+          <fieldset class="basket-styles">
+            <legend>Styles</legend>
+            <label class="chip"><input type="checkbox" name="style" value="red"><span>Red</span></label>
+            <label class="chip"><input type="checkbox" name="style" value="white"><span>White</span></label>
+            <label class="chip"><input type="checkbox" name="style" value="rose"><span>Rosé</span></label>
+            <label class="chip"><input type="checkbox" name="style" value="sparkling"><span>Sparkling</span></label>
+          </fieldset>
+          <label class="field basket-bottles">
+            <span>Most bottles</span>
+            <select name="max_bottles">
+              <option value="">Any</option>
+              <option value="3">3</option>
+              <option value="6">6</option>
+              <option value="9">9</option>
+              <option value="12">12</option>
+            </select>
+          </label>
+          <fieldset class="basket-prefer">
+            <legend>Put first</legend>
+            <label class="chip"><input type="radio" name="prefer" value="value" checked><span>Best value</span></label>
+            <label class="chip"><input type="radio" name="prefer" value="rating"><span>Best rated</span></label>
+          </fieldset>
+          <label class="basket-unrated"><input type="checkbox" name="include_unrated"> Include wines not rated yet</label>
+        </div>
+      </form>
+      <div class="basket-results" id="basketResults" aria-live="polite">
+        <p class="basket-loading">Working out baskets&hellip;</p>
+      </div>
+      <p class="basket-rules" id="basketRules"></p>
     </section>
 
     <section id="offers" class="shell offers" aria-labelledby="offersTitle">
@@ -241,5 +287,6 @@
   <script src="/static/charts.js?v=__ASSET_VERSION__" defer></script>
   <script src="/static/valuemap.js?v=__ASSET_VERSION__" defer></script>
   <script src="/static/app.js?v=__ASSET_VERSION__" defer></script>
+  <script src="/static/basket.js?v=__ASSET_VERSION__" defer></script>
 </body>
 </html>

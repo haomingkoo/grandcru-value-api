@@ -37,6 +37,12 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 - One authored motion: dots settle in price order, then the frontier draws left to right. Nothing moves with reduced motion.
 - Price filter: a two-handle slider on a log scale of S$ per 750 ml, exact From and To inputs, and presets. It drives the table and the map together.
 
+## Basket builder
+- Purpose: reach a Platinum spend level with as little extra as possible. Modes are thresholds, not caps: "S$300 or more" (S$200 back on the Amex statement), "Over S$350" (also free delivery), "S$600 or more" (the shop's S$50 off, check at checkout), or your own amount.
+- The S$200 is always written as money back on the Amex statement after payment, never as a discount, with its conditions in one line and each rule linked to its source (Amex 2026 Platinum terms, Platinum Wine Club terms and home page).
+- Up to three baskets: closest to the threshold, most rating for the money, highest rated. Each shows the total, how far over, pay at checkout, money back, cost after the credit, delivery, and the difference against Grand Cru only for wines also sold there. Each wine has one plain line on why it is there and links to its row.
+- In-stock wines only, live listed prices only; unrated wines only when the visitor includes them.
+
 ## Full list
 - The daily scrape keeps every Platinum listing, including sold-out ones. The page shows in-stock offers by default, with "Include sold out (N)" among the quick filters, and the line "Platinum lists 237 wines: 69 in stock, 168 sold out." from the full list.
 - A sold-out row is muted (grey Platinum dot, faded bottle). It says "Sold out since <date>" when a daily check saw it in stock before, otherwise "Sold out when we first saw it, <date>", and in both cases that the listed price is shown. Its action is a plain "View on Platinum" button, never "Buy".
