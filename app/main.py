@@ -15,7 +15,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import Base, engine, ensure_column, ensure_deal_score_nullable, get_session
+from app.database import Base, SessionLocal, engine, ensure_column, ensure_deal_score_nullable, get_session
+from app.price_history import build_price_history, run_backfills
 from app.durable_state import load_state
 from app.ops import RefreshRunner, diagnostics_payload, locked_vivino_override_names
 from app.schemas import (
@@ -67,6 +68,7 @@ FRONTEND_ASSET_PATHS = (
     WEB_DIR / "index.html",
     WEB_DIR / "styles.css",
     WEB_DIR / "app.js",
+    WEB_DIR / "charts.js",
 )
 LEGAL_PAGES = {"privacy": WEB_DIR / "privacy.html", "terms": WEB_DIR / "terms.html"}
 CANONICAL_BASE_URL = "https://wine.kooexperience.com"
@@ -212,7 +214,22 @@ async def lifespan(_: FastAPI):
         Path("data").mkdir(exist_ok=True)
     Base.metadata.create_all(bind=engine)
     _ensure_runtime_columns()
+    _backfill_price_history()
     yield
+
+
+def _backfill_price_history() -> None:
+    try:
+        with SessionLocal() as session:
+            result = run_backfills(
+                session,
+                seed_comparison=ROOT_DIR / "seed" / "comparison_summary.csv",
+                seed_history=ROOT_DIR / "seed" / "price_history_saved_lists.csv",
+            )
+        if result:
+            logger.info("price_history_backfill %s", result)
+    except SQLAlchemyError:
+        logger.exception("price_history_backfill_failed")
 
 
 app = FastAPI(
@@ -531,7 +548,7 @@ def get_deals(
     offset: int = Query(default=0, ge=0, description="Pagination offset."),
     sort_by: str = Query(
         default="deal_score",
-        description="Sort field: deal_score, price_diff_pct, price_diff_pct_abs, vivino_rating, vivino_num_ratings, price_platinum, or wine_name.",
+        description="Sort field: deal_score, price_diff_pct, price_diff_pct_abs, vivino_rating, vivino_num_ratings, price_platinum, price_per_750, or wine_name.",
     ),
     sort_order: str = Query(
         default="desc",
@@ -573,6 +590,13 @@ def get_deal_map(
     session: Session = Depends(get_session),
 ) -> list[DealMapPointOut]:
     return [DealMapPointOut(**point) for point in get_deal_map_points(session, **filters)]
+
+
+@app.get("/deals/price-history")
+def get_price_history(session: Session = Depends(get_session)) -> dict:
+    """Daily prices per current offer and source, merged into same-price runs, plus plain-language lines."""
+    deals = list_deals(session, limit=500)
+    return build_price_history(session, deals)
 
 
 @app.get("/deals/{deal_id}", response_model=DealOut)

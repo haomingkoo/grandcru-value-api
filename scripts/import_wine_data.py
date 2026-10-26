@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
 from app.config import settings  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models import IngestionRun, WineDeal, WineDealSnapshot  # noqa: E402
+from app.price_history import observations_for_deal, record_observations  # noqa: E402
 from app.scoring import compute_deal_score, parse_float, parse_int  # noqa: E402
 from app.wine_metadata import derive_wine_metadata  # noqa: E402
 from scripts.data_quality_rules import (  # noqa: E402
@@ -679,7 +680,9 @@ def import_data(
     *,
     market_prices_path: Path | None = None,
     quarantine_path: Path | None = None,
+    record_prices: bool = False,
 ) -> None:
+    """record_prices: only fresh scrapes pass it; a startup re-import of the committed seed must not."""
     if not comparison_path.exists():
         raise FileNotFoundError(f"comparison_summary missing: {comparison_path}")
     if not vivino_path.exists():
@@ -739,6 +742,7 @@ def import_data(
     try:
         merged_records: list[WineDeal] = []
         snapshot_records: list[WineDealSnapshot] = []
+        price_rows: list[dict] = []
         quarantine_records: list[dict[str, str]] = []
         incomplete_count = 0
         snapshot_time = datetime.now(UTC)
@@ -950,6 +954,8 @@ def import_data(
                 incomplete_count += 1
                 logger.info("wine_incomplete wine=%s gaps=%s", wine_name, ",".join(gap_reasons))
             merged_records.append(WineDeal(**deal_payload))
+            if record_prices:
+                price_rows.extend(observations_for_deal(deal_payload, checked_at=snapshot_time, run_id=run.id))
             snapshot_payload = {key: value for key, value in deal_payload.items() if key in SNAPSHOT_FIELDS}
             snapshot_records.append(
                 WineDealSnapshot(
@@ -975,6 +981,7 @@ def import_data(
         session.execute(delete(WineDeal))
         session.add_all(merged_records)
         session.add_all(snapshot_records)
+        recorded_prices = record_observations(session, price_rows) if record_prices else 0
 
         deleted_snapshots = 0
         if settings.history_retention_days > 0:
@@ -991,6 +998,7 @@ def import_data(
             f"(+{len(vivino_rows_override)} overrides) into {len(merged_records)} current deals and "
             f"{len(snapshot_records)} snapshots (vivino: {match_summary}); "
             f"{incomplete_count} shown with data gaps; "
+            f"recorded {recorded_prices} daily prices; "
             f"quarantined {len(quarantine_records)} rows without a Platinum price; "
             f"pruned {deleted_snapshots} snapshots (retention {settings.history_retention_days or 'unlimited'} days)."
         )
@@ -1082,6 +1090,11 @@ def main() -> None:
             "(default: 20 on Railway web service, otherwise 0)."
         ),
     )
+    parser.add_argument(
+        "--record-prices",
+        action="store_true",
+        help="Record today's prices in the permanent price history (fresh scrapes only).",
+    )
     args = parser.parse_args()
     if args.skip_if_fresh > 0 and _db_has_fresh_data(args.skip_if_fresh):
         return
@@ -1089,6 +1102,7 @@ def main() -> None:
         args.comparison, args.vivino, args.vivino_overrides,
         market_prices_path=args.market_prices,
         quarantine_path=args.quarantine_output,
+        record_prices=args.record_prices,
     )
 
 

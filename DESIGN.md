@@ -25,5 +25,11 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 - Bottle photos are hotlinked from the shop. A drawn bottle silhouette replaces a missing or broken image.
 - Phones (900px and below): each offer becomes a card with Platinum, Grand Cru and Vivino side by side above the Buy button. Sort by the select, not the table headers.
 
+## Price history
+- Each offer keeps one price per source per Singapore day (`price_observations`), never pruned. Platinum and Grand Cru come from the daily check; Vivino from the dated page reads (about weekly), drawn as dots on their check dates. A new source (a retailer feed) is a new `source` value and draws as another line with no code change.
+- All history is per 750 ml, and the chart says so. Lines are step lines; a missing day is a gap, never interpolated. Points before daily tracking began come from saved price lists (Platinum only, dated by commit) and are drawn hollow.
+- Row line: a 90-day sparkline (Platinum solid, Grand Cru dashed) plus one plain sentence ("Up S$3 since 24 Oct", "Same Platinum price at every check since 29 Jul"). Claims about the past need at least 14 days of history; otherwise the row says "Tracked since <date>".
+- Series colours: Platinum `--src-platinum #8e2340`, Grand Cru `--src-grand-cru #2f6db5` (dashed), Vivino `--src-vivino #9a7608`. Validated together as a set. A fourth source draws in ink with a dotted line and a direct label rather than a new hue.
+
 ## States
 Loading: four skeleton rows. Empty after filtering: "No offers match these filters." with Clear all filters. Empty data set: says the list is empty or refreshing. Error: "The offers could not load." with Try again. Stale data: the check time turns warn-coloured and says the daily check is late.

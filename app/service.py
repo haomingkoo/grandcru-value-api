@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.deal_insights import compute_deal_insights
 from app.models import IngestionRun, WineDeal, WineDealSnapshot
+from app.price_history import per_750, volume_ml
 
 VIVINO_UNRESOLVED_EXPORT_FIELDS = (
     "name_plat",
@@ -93,6 +94,8 @@ def _normalize_sort_by(sort_by: str) -> str:
         "rating": "vivino_rating",
         "ratings": "vivino_num_ratings",
         "price": "price_platinum",
+        "per_750": "price_per_750",
+        "price_platinum_per_750": "price_per_750",
         "name": "wine_name",
     }
     return aliases.get(normalized, normalized)
@@ -166,6 +169,9 @@ def _deal_sort_expressions(sort_by: str, sort_order: str) -> list:
 
 def _apply_response_fields(deals: list[WineDeal]) -> None:
     for deal in deals:
+        ml = volume_ml(deal.volume)
+        setattr(deal, "volume_ml", ml)
+        setattr(deal, "price_platinum_per_750", per_750(deal.price_platinum, deal.quantity, ml))
         pct = getattr(deal, "price_diff_pct", None)
         setattr(deal, "price_diff_pct_abs", round(abs(pct), 2) if pct is not None else None)
         insights = compute_deal_insights(deal)
@@ -348,6 +354,16 @@ def list_deals(
         offering_type=offering_type,
         producer=producer,
     )
+    if _normalize_sort_by(sort_by) == "price_per_750":
+        # Bottle size is text, so this sort runs in Python; the full list is a few hundred rows.
+        deals = list(session.scalars(stmt.order_by(*_deal_sort_expressions("deal_score", "desc"))).all())
+        _apply_response_fields(deals)
+        priced = [d for d in deals if d.price_platinum_per_750 is not None]
+        unpriced = [d for d in deals if d.price_platinum_per_750 is None]
+        priced.sort(key=lambda d: d.price_platinum_per_750, reverse=(sort_order or "").lower() == "desc")
+        deals = (priced + unpriced)[offset:offset + min(limit, 500)]
+        _apply_price_change_fields(session, deals)
+        return deals
     stmt = stmt.order_by(*_deal_sort_expressions(sort_by, sort_order))
     stmt = stmt.offset(offset).limit(min(limit, 500))
     deals = list(session.scalars(stmt).all())

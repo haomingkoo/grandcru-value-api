@@ -1,6 +1,6 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Float, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -115,6 +115,28 @@ class WineDealSnapshot(Base):
     vivino_num_ratings: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vivino_match_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     deal_score: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+
+
+class PriceObservation(Base):
+    """One price for one offer from one source on one Singapore day. Never pruned."""
+
+    __tablename__ = "price_observations"
+    __table_args__ = (
+        Index("ix_price_observations_offer_source_day", "wine_name", "source", "observed_on", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    wine_name: Mapped[str] = mapped_column(String(255), index=True)
+    source: Mapped[str] = mapped_column(String(32))
+    price: Mapped[float] = mapped_column(Float)
+    currency: Mapped[str] = mapped_column(String(3), default="SGD")
+    volume_ml: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    observed_on: Mapped[date] = mapped_column(Date)
+    url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    origin: Mapped[str] = mapped_column(String(32), default="daily_check")
+    ingestion_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class AppState(Base):
