@@ -85,6 +85,7 @@ class DealOut(BaseModel):
     platinum_trend_30d: str = "unknown"
     grand_cru_trend_30d: str = "unknown"
     volume_ml: int | None = Field(default=None, description="Bottle size in ml, parsed from volume.")
+    vivino_price_held: str | None = Field(default=None, description="Why a Vivino price was read but not shown (held for review).")
     first_seen_on: date | None = Field(default=None, description="Sold-out offers: first day a daily check saw this listing.")
     sold_out_since: date | None = Field(
         default=None,
@@ -124,6 +125,12 @@ class HealthOut(BaseModel):
     vivino_status: str = "ok"
     vivino_ok: bool = True
     vivino_last_success_at: datetime | None = None
+    vivino_resolver: dict | None = Field(
+        default=None,
+        description="Last Vivino matching run: searched, resolved, api_calls, cache_hits, unresolved, never_searched, waiting_to_retry.",
+    )
+    vivino_fetch_last_run: dict | None = Field(default=None, description="Last polite Vivino page-read run.")
+    vivino_match_audit: dict | None = Field(default=None, description="Weekly self-audit of stored Vivino matches: checked and flagged counts.")
 
 
 class LegalOut(BaseModel):

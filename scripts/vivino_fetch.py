@@ -35,6 +35,8 @@ ROBOTS_URL = "https://www.vivino.com/robots.txt"
 FETCH_STATE_KEY = "vivino_fetch"
 FACTS_KEY = "vivino_facts"
 REFRESH_AFTER = timedelta(days=7)
+# Vivino shows no SGD price for some wines; looking again weekly wastes the polite budget.
+NO_PRICE_REFRESH_AFTER = timedelta(days=30)
 DEFAULT_BACKOFF = timedelta(hours=24)
 MAX_BACKOFF = timedelta(days=7)
 
@@ -130,7 +132,8 @@ def is_fact_fresh(fact: dict[str, Any] | None, now: datetime) -> bool:
         checked = datetime.fromisoformat(fact["checked_at"])
     except ValueError:
         return False
-    return now - checked < REFRESH_AFTER
+    window = REFRESH_AFTER if fact.get("price") is not None else NO_PRICE_REFRESH_AFTER
+    return now - checked < window
 
 
 class VivinoBlocked(Exception):
@@ -310,6 +313,50 @@ class PoliteFetcher:
             self.state["last_run"] = summary
             self._save(FETCH_STATE_KEY, self.state)
         return summary
+
+
+def identity_drift(offer_name: str, fact: dict[str, Any] | None) -> str | None:
+    """Why a Vivino page no longer looks like this offer (vintage or producer differ), else None."""
+    page_name = _plain(str((fact or {}).get("name") or ""))
+    if not page_name:
+        return None
+    offer = _plain(offer_name)
+    offer_year = re.match(r"^((?:19|20)\d{2})\b", offer)
+    page_years = set(re.findall(r"\b((?:19|20)\d{2})\b", page_name))
+    if offer_year and page_years and offer_year.group(1) not in page_years:
+        return f"vintage {offer_year.group(1)} vs page {'/'.join(sorted(page_years))}"
+    parts = [p.strip() for p in offer.split(" - ")]
+    producer = re.sub(r"^((?:19|20)\d{2}|nv)\s+", "", parts[0]).strip()
+    # Hudelot - Baillet comes from the Platinum name as two parts; Vivino writes "Hudelot-Baillet".
+    if len(parts) > 2 and parts[1] and parts[1].split()[0] not in _COLOURS and len(parts[1].split()) == 1:
+        producer = f"{producer} {parts[1]}"
+        label = parts[2] if len(parts) > 2 else ""
+    else:
+        label = parts[1] if len(parts) > 1 else ""
+    producer_words = _words(producer)
+    present = [w for w in producer_words if w in page_name]
+    if producer_words and len(present) == len(producer_words):
+        return None
+    if producer_words and present:
+        return f"only part of producer '{producer}' in page name"
+    label_hits = [w for w in _words(label) if w in page_name]
+    if producer_words and len(label_hits) < 2:
+        return f"producer '{producer}' not in page name"
+    return None
+
+
+_COLOURS = {"red", "white", "rose", "sparkling", "orange"}
+_GENERIC = {"domaine", "chateau", "bodegas", "cantina", "wines", "winery", "estate", "tenuta", "champagne", "brut", "rose", "rouge", "blanc"}
+
+
+def _words(text: str) -> list[str]:
+    return [w for w in re.findall(r"[a-z0-9]+", text) if len(w) >= 4 and w not in _GENERIC]
+
+
+def _plain(text: str) -> str:
+    import unicodedata
+
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
 
 
 def fetch_facts(
