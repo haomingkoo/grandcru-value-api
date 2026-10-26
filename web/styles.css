@@ -134,17 +134,28 @@ a:hover {
 .header-inner {
   display: flex;
   align-items: center;
-  gap: 24px;
-  min-height: 56px;
+  gap: 32px;
+  min-height: 64px;
 }
 
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-family: var(--display);
-  font-size: var(--fs-heading);
+  font-size: 28px;
+  line-height: 1;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text);
   text-decoration: none;
   white-space: nowrap;
+}
+
+.wordmark-mark {
+  width: 32px;
+  height: 32px;
+  flex: none;
 }
 
 .wordmark:hover {
@@ -160,7 +171,7 @@ a:hover {
 .header-nav a {
   color: var(--text-2);
   text-decoration: none;
-  font-size: var(--fs-small);
+  font-size: var(--fs-body);
   font-weight: 500;
   padding-block: 8px;
 }
@@ -1063,6 +1074,31 @@ input[type="checkbox"] {
 @media (max-width: 420px) {
   .header-cta {
     padding-inline: 12px;
+  }
+
+  .header-inner {
+    gap: 12px;
+  }
+
+  .wordmark {
+    gap: 8px;
+    font-size: 22px;
+  }
+
+  .wordmark-mark {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+@media (max-width: 374px) {
+  .wordmark {
+    font-size: 20px;
+  }
+
+  .wordmark-mark {
+    width: 24px;
+    height: 24px;
   }
 
   .deal-row {
