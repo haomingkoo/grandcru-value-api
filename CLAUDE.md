@@ -27,6 +27,9 @@ CI (`.github/workflows/ci.yml`) runs the same checks plus pytest on Python 3.11.
 - Railway app storage is ephemeral. Resolver state, its query cache, accepted
   overrides, Vivino facts and the fetch budget live in the `app_state` table
   (`app/durable_state.py`); never rely on files under `data/` or `seed/` surviving.
+- The Vivino refresh runs only on Railway (`daily-ingest` daily, about 80 page fetches;
+  `weekly-ingest` re-resolves everything). There is no local or launchd job; never add one
+  that pushes to `main`.
 - Vivino safeguards: every Vivino request goes through `scripts/vivino_fetch.py`
   (honest UA, robots.txt, wine pages only, ~80 fetches/day with 6-10 s jittered
   delay, weekly re-fetch per wine/vintage, stop and back off on 403/429); `/health`
