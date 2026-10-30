@@ -183,16 +183,57 @@ _SWEET_MARKERS = (
     "moscato spumante",
 )
 
+# Colour of every grape or blend label a guess can return. A rule whose grapes do not fit the
+# wine's colour is skipped, so a guess never gives a red wine white grapes or the reverse.
+GRAPE_COLOURS = {
+    **dict.fromkeys(
+        (
+            "Aglianico", "Alicante Bouschet", "Baga", "Barbera", "Cabernet Franc", "Cabernet Sauvignon", "Carmenere",
+            "Dolcetto", "Freisa", "Gamay", "Grenache", "Grenache Blend", "Malbec", "Merlot", "Montepulciano",
+            "Mourvedre", "Nebbiolo", "Negroamaro", "Nero d'Avola", "Petit Verdot", "Pinot Meunier", "Pinot Noir",
+            "Primitivo", "Raboso", "Red Blend", "Sangiovese", "Shiraz", "Syrah", "Tempranillo", "Touriga Nacional",
+            "Zinfandel",
+        ),
+        "red",
+    ),
+    **dict.fromkeys(
+        (
+            "Albarino", "Aligote", "Ansonica", "Chardonnay", "Chenin Blanc", "Gewurztraminer", "Glera",
+            "Gruner Veltliner", "Moscato Bianco", "Muscat", "Nascetta", "Pecorino", "Pinot Bianco", "Pinot Grigio",
+            "Rhone White Blend", "Riesling", "Sauvignon Blanc", "Timorasso", "Vermentino", "Viognier", "White Blend",
+        ),
+        "white",
+    ),
+    **dict.fromkeys(("Rose Blend", "Sparkling Rose Blend"), "rose"),
+}
+# Wine types each grape colour can make. White sparkling is often made from black grapes.
+_COLOUR_FITS = {
+    "red": {"Red", "Rose", "Sparkling", "Sparkling Rose"},
+    "white": {"White", "Sparkling", "Orange"},
+    "rose": {"Rose", "Sparkling Rose"},
+}
+# The usual grape where a region makes a colour almost entirely from one grape.
+_REGION_GRAPES = {
+    ("Burgundy", "Red"): "Pinot Noir",
+    ("Burgundy", "White"): "Chardonnay",
+}
+
+
+def grapes_fit(grapes: str, wine_type: str | None) -> bool:
+    if wine_type is None:
+        return True
+    return all(wine_type in _COLOUR_FITS[GRAPE_COLOURS[g.strip()]] for g in grapes.split(",") if g.strip() in GRAPE_COLOURS)
+
+
 _GRAPE_RULES: tuple[GrapeRule, ...] = (
     GrapeRule(("grenache shiraz mourvedre",), "Grenache, Shiraz, Mourvedre"),
     GrapeRule(("cabernet sauvignon",), "Cabernet Sauvignon"),
     GrapeRule(("sauvignon blanc",), "Sauvignon Blanc"),
     GrapeRule(("pinot noir",), "Pinot Noir"),
-    GrapeRule(("gevrey chambertin", "chambolle musigny", "bonnes mares", "charmes chambertin", "volnay"), "Pinot Noir", source="regional_inference", confidence="medium"),
     GrapeRule(("blanc de noirs",), "Pinot Noir, Pinot Meunier", source="style_inference", confidence="medium"),
     GrapeRule(("blanc de blancs",), "Chardonnay", source="style_inference", confidence="medium"),
     GrapeRule(("chardonnay",), "Chardonnay"),
-    GrapeRule(("corton charlemagne", "puligny montrachet", "meursault", "chassagne montrachet", "auxey duresses", "saint romain", "bourgogne hautes cotes de nuits blanc"), "Chardonnay", source="regional_inference", confidence="medium"),
+    GrapeRule(("aligote",), "Aligote"),
     GrapeRule(("pinot grigio",), "Pinot Grigio"),
     GrapeRule(("pecorino",), "Pecorino"),
     GrapeRule(("viognier",), "Viognier"),
@@ -226,8 +267,8 @@ _GRAPE_RULES: tuple[GrapeRule, ...] = (
     GrapeRule(("caballo loco grand cru limari", "grand cru limari"), "Syrah", source="vivino", confidence="high"),
     GrapeRule(("caballo loco grand cru apalta", "grand cru apalta"), "Carmenere, Cabernet Sauvignon, Syrah", source="retailer_inference", confidence="medium"),
     GrapeRule(("caballo loco grand cru sagrada familia", "sagrada familia"), "Merlot, Petit Verdot, Cabernet Sauvignon, Cabernet Franc, Malbec", source="vivino", confidence="high"),
-    GrapeRule(("chateauneuf du pape", "gigondas"), "Grenache Blend", source="regional_inference", confidence="medium"),
-    GrapeRule(("cotes du rhone",), "Rhone White Blend", source="regional_inference", confidence="medium"),
+    GrapeRule(("chateauneuf du pape", "cotes du rhone"), "Rhone White Blend", source="regional_inference", confidence="medium"),
+    GrapeRule(("chateauneuf du pape", "gigondas", "cotes du rhone"), "Grenache Blend", source="regional_inference", confidence="medium"),
     GrapeRule(("cotes de provence", "fleur de miraval", "rose alie"), "Rose Blend", source="style_inference", confidence="medium"),
     GrapeRule(("todos", "fenix", "langhe rosso", "red wine", "coleccion de la familia"), "Red Blend", source="style_inference", confidence="medium"),
 )
@@ -290,10 +331,12 @@ def _detect_wine_type(text: str, color: str | None) -> str | None:
     return None
 
 
-def _detect_grapes(text: str, wine_type: str | None) -> tuple[str | None, str | None, str | None]:
+def _detect_grapes(text: str, wine_type: str | None, region: str | None) -> tuple[str | None, str | None, str | None]:
     for rule in _GRAPE_RULES:
-        if any(pattern in text for pattern in rule.patterns):
+        if any(pattern in text for pattern in rule.patterns) and grapes_fit(rule.grapes, wine_type):
             return rule.grapes, rule.source, rule.confidence
+    if (region, wine_type) in _REGION_GRAPES:
+        return _REGION_GRAPES[(region, wine_type)], "regional_inference", "medium"
 
     if wine_type == "Rose":
         return "Rose Blend", "style_inference", "medium"
@@ -390,7 +433,7 @@ def derive_wine_metadata(
     origin = _detect_origin(combined_text)
     wine_type = _detect_wine_type(combined_text, color)
     style_family = _detect_style_family(combined_text, wine_type, origin)
-    grapes, grape_source, grape_confidence = _detect_grapes(combined_text, wine_type)
+    grapes, grape_source, grape_confidence = _detect_grapes(combined_text, wine_type, origin.region if origin else None)
 
     # Champagne catch-all: if style is Champagne and no grape rule fired,
     # fall back to the typical assemblage blend. Blanc de Blancs / Blanc de
