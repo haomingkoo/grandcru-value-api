@@ -47,6 +47,7 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 - The daily scrape keeps every Platinum listing, including sold-out ones. The page shows in-stock offers by default, with "Include sold out (N)" among the quick filters, and the line "Platinum lists 237 wines: 69 in stock, 168 sold out." from the full list.
 - A sold-out row is muted (grey Platinum dot, faded bottle). It says "Sold out since <date>" when a daily check saw it in stock before, otherwise "Sold out when we first saw it, <date>", and in both cases that the listed price is shown. Its action is a plain "View on Platinum" button, never "Buy".
 - On the value map, sold-out wines appear only when included, as faded dots, with a legend note.
+- Under the details line, a wine note names the grape and how that grape usually tastes (`app/wine_notes.py`). Notes are written once per grape and never come from Vivino reviews or shop copy. A guessed grape reads "Likely". A grape that does not fit the wine's colour, a low-confidence guess or a catch-all label such as "Red Blend" gets no line.
 
 ## Price history
 - Each offer keeps one price per source per Singapore day (`price_observations`), never pruned. Platinum and Grand Cru come from the daily check; Vivino from the dated page reads (about weekly), drawn as dots on their check dates. A new source (a retailer feed) is a new `source` value and draws as another line with no code change.

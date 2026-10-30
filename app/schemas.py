@@ -80,6 +80,10 @@ class DealOut(BaseModel):
     grape_source: str | None = None
     grape_confidence: str | None = None
     metadata_confidence: str | None = None
+    wine_note: str | None = Field(
+        default=None,
+        description="One line: the grape and how that grape usually tastes. Written per grape, not from reviews.",
+    )
     platinum_trend_7d: str = "unknown"
     grand_cru_trend_7d: str = "unknown"
     platinum_trend_30d: str = "unknown"

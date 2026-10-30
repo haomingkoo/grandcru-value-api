@@ -248,6 +248,7 @@ def test_mobile_offer_card_shows_prices_before_actions(browser_app_url, mobile_b
     assert "Grand Cru S$150" in platinum_cell.text
     assert "S$30 (20%) less than Grand Cru" in platinum_cell.text
     row_text = first_row.text
+    assert "Pinot Noir. Light to medium body, red fruit and soft tannins." in row_text
     assert "Butter-bomb" not in row_text
     assert "stable" not in row_text
     assert "Buy on Platinum" in links.text

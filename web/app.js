@@ -823,6 +823,7 @@ function renderOfferRow(deal, family) {
           <div class="wine-main">
             <p class="wine-title">${escapeHtml(displayName(deal))}</p>
             <p class="wine-meta">${escapeHtml(meta)}</p>
+            ${deal.wine_note ? `<p class="wine-note">${escapeHtml(deal.wine_note)}</p>` : ""}
             <p class="verdict tone-${escapeHtml(verdict.tone)}">${escapeHtml(verdict.label)}</p>
             ${grouped}
           </div>

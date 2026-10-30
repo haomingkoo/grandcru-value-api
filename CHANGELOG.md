@@ -4,6 +4,18 @@ All notable changes to grandcru-value-api are recorded here. Format: what change
 
 ---
 
+## [Unreleased] Wine notes
+
+**What:** Each offer row shows a one-line wine note under the details line, for example "Nebbiolo. Pale but high in tannin and acidity; Barolo's grape, built to age." `/deals` returns it as `wine_note`. Notes are written per grape in `app/wine_notes.py`, with separate notes for blanc de blancs, blanc de noirs, the Champagne blend and Prosecco. A guessed grape starts with "Likely". Blends list their grapes without a note. There is no line for low-confidence guesses, catch-all labels such as "Red Blend", or a grape that does not fit the wine's colour. On 30 Oct 2026, 170 of 237 live offers got a line.
+
+**Why:** Shoppers asked for a short description of each wine, and the row never showed the grape. Notes describe the grape in general, so nothing is copied from Vivino reviews or retailer text.
+
+**Known data issue:** the grape guess tags some red Burgundy villages (Chassagne-Montrachet Rouge, Saint-Romain) as Chardonnay, Coudoulet de Beaucastel Rouge as a white Rhone blend, and Silk & Spice White Blend with red grapes. The colour check hides these notes. The guesses themselves are not fixed here.
+
+**Changed files:** `app/wine_notes.py`, `app/service.py`, `app/schemas.py`, `web/app.js`, `web/styles.css`, `tests/test_wine_notes.py`, `tests/test_frontend_browser.py`, `DESIGN.md`
+
+---
+
 ## [Unreleased] Origin map returns
 
 **What:** Brought back the world map from before the offers-first redesign as "Where the wines come from", between the basket and the offers, with a "Map" link in the header. It shows one bubble per country from `/deals/map`, sized by offer count. A bubble or a country chip filters the offer list to that country and lists its regions as chips, and a region chip narrows further. Leaflet 1.9.4 is served from `/static/vendor/leaflet` (checked against the official SRI hashes), tiles come from OpenStreetMap, and the map loads only when scrolled near. CSP `img-src` allows `tile.openstreetmap.org`, and `/privacy` says the map fetches tiles from OpenStreetMap. Tile seams use the half-pixel overlap from #60 with Leaflet's `plus-lighter` blend turned off, which otherwise drew white lines.
