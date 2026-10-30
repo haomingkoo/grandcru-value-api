@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from app.wine_metadata import GRAPE_COLOURS
 from app.wine_notes import GRAPE_NOTES, wine_note
 
 
@@ -8,7 +9,7 @@ def note(grapes, style, source=None, confidence=None):
 
 
 def test_single_grape_gets_its_style_note():
-    assert note("Pinot Noir", "Red", "listing_keyword", "high") == f"Pinot Noir. {GRAPE_NOTES['Pinot Noir'][1]}"
+    assert note("Pinot Noir", "Red", "listing_keyword", "high") == f"Pinot Noir. {GRAPE_NOTES['Pinot Noir']}"
 
 
 def test_grape_without_a_written_note_still_names_the_grape():
@@ -57,7 +58,7 @@ def test_generic_blend_labels_get_no_line():
 
 
 def test_named_blend_uses_the_grape_note():
-    assert note("Grenache Blend", "Red", "listing_keyword", "high") == f"Grenache blend. {GRAPE_NOTES['Grenache'][1]}"
+    assert note("Grenache Blend", "Red", "listing_keyword", "high") == f"Grenache blend. {GRAPE_NOTES['Grenache']}"
 
 
 def test_missing_grape_or_style():
@@ -66,8 +67,8 @@ def test_missing_grape_or_style():
 
 
 def test_every_note_is_short_and_has_a_known_colour():
-    for grape, (colour, text) in GRAPE_NOTES.items():
-        assert colour in {"red", "white"}, grape
+    for grape, text in GRAPE_NOTES.items():
+        assert GRAPE_COLOURS.get(grape) in {"red", "white"}, grape
         assert len(text) <= 90, grape
         assert "—" not in text, grape
 

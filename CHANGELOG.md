@@ -14,13 +14,21 @@ All notable changes to grandcru-value-api are recorded here. Format: what change
 
 ---
 
+## [Unreleased] Grape guesses match the wine's colour
+
+**What:** `app/wine_metadata.py` now has one colour table, `GRAPE_COLOURS`, for every grape or blend label a guess can return. A grape rule whose grapes do not fit the wine's colour is skipped, and matching moves on to the next rule. Burgundy reds without a named grape guess Pinot Noir and Burgundy whites guess Chardonnay, from the detected region. This replaces the two village lists that ignored colour. The Rhone rules list a white blend first and a Grenache blend second for Cotes du Rhone and Chateauneuf du Pape, so each colour lands on its own rule. An "aligote" rule keeps Aligote out of the Chardonnay fallback. `app/wine_notes.py` reads the same colour table. A test fails when a rule returns a grape with no colour.
+
+**Why:** The guesses tagged red Chassagne-Montrachet and Saint-Romain as Chardonnay, Coudoulet de Beaucastel Rouge as a white Rhone blend, and Silk & Spice White Blend with red grapes. Checking colour inside the guesser fixes this class of error for future rules too. Against the 237 live wines on 30 Oct 2026, exactly these 5 change; the saved grapes update at the next ingest.
+
+**Changed files:** `app/wine_metadata.py`, `app/wine_notes.py`, `tests/test_grape_colours.py`, `tests/test_wine_notes.py`
+
+---
+
 ## [Unreleased] Wine notes
 
 **What:** Each offer row shows a one-line wine note under the details line, for example "Nebbiolo. Pale but high in tannin and acidity; Barolo's grape, built to age." `/deals` returns it as `wine_note`. Notes are written per grape in `app/wine_notes.py`, with separate notes for blanc de blancs, blanc de noirs, the Champagne blend and Prosecco. A guessed grape starts with "Likely". Blends list their grapes without a note. There is no line for low-confidence guesses, catch-all labels such as "Red Blend", or a grape that does not fit the wine's colour. On 30 Oct 2026, 170 of 237 live offers got a line.
 
 **Why:** Shoppers asked for a short description of each wine, and the row never showed the grape. Notes describe the grape in general, so nothing is copied from Vivino reviews or retailer text.
-
-**Known data issue:** the grape guess tags some red Burgundy villages (Chassagne-Montrachet Rouge, Saint-Romain) as Chardonnay, Coudoulet de Beaucastel Rouge as a white Rhone blend, and Silk & Spice White Blend with red grapes. The colour check hides these notes. The guesses themselves are not fixed here.
 
 **Changed files:** `app/wine_notes.py`, `app/service.py`, `app/schemas.py`, `web/app.js`, `web/styles.css`, `tests/test_wine_notes.py`, `tests/test_frontend_browser.py`, `DESIGN.md`
 
