@@ -78,10 +78,10 @@ function setupBasket() {
         </ul>
         <dl class="basket-money">
           <div><dt>Pay at checkout</dt><dd>${money(b.pay_at_checkout)}${b.free_delivery ? "" : ` <span>incl. ${money(b.delivery_fee)} delivery</span>`}</dd></div>
-          <div><dt>Back on your Amex statement</dt><dd>${b.credit_back ? `${money(b.credit_back)} <span>after payment</span>` : (data.rules.credit.active ? "None (under S$300)" : "None (credit not running)")}</dd></div>
+          <div><dt>Back on your Amex statement</dt><dd>${b.credit_back ? `${money(b.credit_back)} <span>after payment</span>` : (data.rules.credit.active ? `None (under ${money(data.rules.credit.min_spend)})` : "None (credit not running)")}</dd></div>
           <div><dt>Cost after the credit</dt><dd>${money(b.net_after_credit)}</dd></div>
           <div><dt>Delivery</dt><dd>${b.free_delivery ? "Free" : `${money(b.delivery_fee)}`}</dd></div>
-          ${b.promo_eligible ? `<div><dt>Shop promotion</dt><dd>S$50 off may apply <span>check at checkout</span></dd></div>` : ""}
+          ${b.promo_eligible ? `<div><dt>Shop promotion</dt><dd>${money(data.rules.promo.amount)} off may apply <span>check at checkout</span></dd></div>` : ""}
           <div><dt>Against Grand Cru</dt><dd>${b.grand_cru_known
             ? `${b.grand_cru_difference >= 0.5 ? `${money(b.grand_cru_difference)} less here` : b.grand_cru_difference <= -0.5 ? `${money(-b.grand_cru_difference)} more here` : "Same total"} <span>for the ${b.grand_cru_known} of ${b.items.length} also sold there</span>`
             : "None of these are sold there"}</dd></div>
