@@ -4,6 +4,16 @@ All notable changes to grandcru-value-api are recorded here. Format: what change
 
 ---
 
+## [Unreleased] Section links land on their section
+
+**What:** `web/anchor.js` holds the section named in the URL hash in place while the page grows, and lets go on the first wheel, touch, pointer or key event. It runs on page load and on every `hashchange`, so it covers every `#section` link, including ones added later.
+
+**Why:** A link such as `/#offers` jumped before the basket, map and offers loaded, and that content then pushed the section down. With the seed data, sections ended up 800 to 1,250 px below the header on desktop and up to 5,650 px on a phone. They now land at the header's scroll padding (72 px). A section near the end of the page stops where the page ends.
+
+**Changed files:** `web/anchor.js`, `web/index.html`, `tests/test_frontend_browser.py`
+
+---
+
 ## [Unreleased] Wine notes
 
 **What:** Each offer row shows a one-line wine note under the details line, for example "Nebbiolo. Pale but high in tannin and acidity; Barolo's grape, built to age." `/deals` returns it as `wine_note`. Notes are written per grape in `app/wine_notes.py`, with separate notes for blanc de blancs, blanc de noirs, the Champagne blend and Prosecco. A guessed grape starts with "Likely". Blends list their grapes without a note. There is no line for low-confidence guesses, catch-all labels such as "Red Blend", or a grape that does not fit the wine's colour. On 30 Oct 2026, 170 of 237 live offers got a line.
