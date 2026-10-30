@@ -533,3 +533,31 @@ def test_origin_map_filters_offers_by_country_and_region(browser_app_url, deskto
     desktop_browser.execute_script("document.querySelector('#originPanel [data-country=\"Italy\"]').click()")
     WebDriverWait(desktop_browser, 10).until(lambda driver: _origin_view(driver)["heading"] == "Italy")
     assert _origin_view(desktop_browser)["country"] == "Italy"
+
+
+@pytest.mark.parametrize("section", ["offers", "scoring", "sources"])
+def test_section_link_lands_on_its_section_after_content_loads(browser_app_url, desktop_browser, section) -> None:
+    _block_map_tiles(desktop_browser)
+    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}#{section}")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: driver.find_elements(By.CSS_SELECTOR, ".deal-row"))
+    time.sleep(1.5)
+
+    top = desktop_browser.execute_script(f"return document.getElementById('{section}').getBoundingClientRect().top")
+    padding = desktop_browser.execute_script("return parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop)")
+    at_bottom = desktop_browser.execute_script(
+        "return window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1"
+    )
+    # A section near the end of a short page stops where the page ends.
+    assert abs(top - padding) <= 4 or (at_bottom and top > padding), f"#{section} sits at {top}px, expected {padding}px"
+
+
+def test_section_link_lets_go_once_the_visitor_scrolls(browser_app_url, desktop_browser) -> None:
+    _block_map_tiles(desktop_browser)
+    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}#sources")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: driver.find_elements(By.CSS_SELECTOR, ".deal-row"))
+    time.sleep(1)
+
+    desktop_browser.execute_script("window.dispatchEvent(new WheelEvent('wheel', { deltaY: -400 })); window.scrollTo({ top: 0, behavior: 'instant' })")
+    desktop_browser.execute_script("document.body.appendChild(Object.assign(document.createElement('div'), { style: 'height: 500px' }))")
+    time.sleep(0.5)
+    assert desktop_browser.execute_script("return window.scrollY") == 0

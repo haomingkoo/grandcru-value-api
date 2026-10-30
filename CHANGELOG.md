@@ -4,6 +4,16 @@ All notable changes to grandcru-value-api are recorded here. Format: what change
 
 ---
 
+## [Unreleased] Section links land on their section
+
+**What:** `web/anchor.js` holds the section named in the URL hash in place while the page grows, and lets go on the first wheel, touch, pointer or key event. It runs on page load and on every `hashchange`, so it covers every `#section` link, including ones added later.
+
+**Why:** A link such as `/#offers` jumped before the basket, map and offers loaded, and that content then pushed the section down. With the seed data, sections ended up 800 to 1,250 px below the header on desktop and up to 5,650 px on a phone. They now land at the header's scroll padding (72 px). A section near the end of the page stops where the page ends.
+
+**Changed files:** `web/anchor.js`, `web/index.html`, `tests/test_frontend_browser.py`
+
+---
+
 ## [Unreleased] Grape guesses match the wine's colour
 
 **What:** `app/wine_metadata.py` now has one colour table, `GRAPE_COLOURS`, for every grape or blend label a guess can return. A grape rule whose grapes do not fit the wine's colour is skipped, and matching moves on to the next rule. Burgundy reds without a named grape guess Pinot Noir and Burgundy whites guess Chardonnay, from the detected region. This replaces the two village lists that ignored colour. The Rhone rules list a white blend first and a Grenache blend second for Cotes du Rhone and Chateauneuf du Pape, so each colour lands on its own rule. An "aligote" rule keeps Aligote out of the Chardonnay fallback. `app/wine_notes.py` reads the same colour table. A test fails when a rule returns a grape with no colour.
