@@ -7,6 +7,7 @@ from app.config import settings
 from app.deal_insights import compute_deal_insights
 from app.models import IngestionRun, WineDeal, WineDealSnapshot
 from app.price_history import per_750, stock_dates, volume_ml
+from app.wine_notes import wine_note
 
 VIVINO_UNRESOLVED_EXPORT_FIELDS = (
     "name_plat",
@@ -205,6 +206,7 @@ def _apply_response_fields(deals: list[WineDeal]) -> None:
         setattr(deal, "grape_source", insights.grape_source)
         setattr(deal, "grape_confidence", insights.grape_confidence)
         setattr(deal, "metadata_confidence", insights.metadata_confidence)
+        setattr(deal, "wine_note", wine_note(deal))
         setattr(deal, "platinum_trend_7d", insights.platinum_trend_7d)
         setattr(deal, "grand_cru_trend_7d", insights.grand_cru_trend_7d)
         setattr(deal, "platinum_trend_30d", insights.platinum_trend_30d)

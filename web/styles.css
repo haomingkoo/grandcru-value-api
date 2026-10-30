@@ -1670,6 +1670,14 @@ input[type="checkbox"] {
   line-height: 1.4;
 }
 
+.wine-note {
+  max-width: 60ch;
+  margin-top: 2px;
+  color: var(--text);
+  font-size: var(--fs-small);
+  line-height: 1.45;
+}
+
 .verdict {
   font-size: var(--fs-small);
   font-weight: 600;
