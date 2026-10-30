@@ -21,7 +21,8 @@ def test_frontend_sets_security_headers() -> None:
     assert "unpkg" not in csp
     assert "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com;" in csp
     assert "connect-src 'self' https://cloudflareinsights.com;" in csp
-    assert "img-src 'self' data: https://*.app.netsuite.com;" in csp
+    # Map tiles for the origin map come from OpenStreetMap; Leaflet itself is served from /static.
+    assert "img-src 'self' data: https://*.app.netsuite.com https://tile.openstreetmap.org;" in csp
     assert "font-src 'self';" in csp
     assert "media-src 'self';" in csp
     assert "googleapis" not in csp and "gstatic" not in csp
@@ -132,3 +133,12 @@ def test_tour_video_is_linked_and_served_with_ranges() -> None:
     assert len(response.content) == 100
     assert client.get("/static/media/wine.webm", headers={"Range": "bytes=0-0"}).headers["content-type"] == "video/webm"
     assert client.get("/static/media/wine-poster.jpg").headers["content-type"] == "image/jpeg"
+
+
+def test_leaflet_is_served_from_our_own_domain() -> None:
+    page = client.get("/").text
+    assert 'src="/static/vendor/leaflet/leaflet.js' in page
+    assert "unpkg.com" not in page
+    response = client.get("/static/vendor/leaflet/leaflet.js")
+    assert response.status_code == 200
+    assert "Leaflet 1.9.4" in response.text[:200]

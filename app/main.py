@@ -86,7 +86,7 @@ CONTENT_SECURITY_POLICY = (
     "object-src 'none'; "
     "frame-ancestors 'none'; "
     "form-action 'self'; "
-    "img-src 'self' data: https://*.app.netsuite.com; "
+    "img-src 'self' data: https://*.app.netsuite.com https://tile.openstreetmap.org; "
     "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; "
     "style-src 'self' 'unsafe-inline'; "
     "font-src 'self'; "

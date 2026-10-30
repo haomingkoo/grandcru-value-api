@@ -4,6 +4,16 @@ All notable changes to grandcru-value-api are recorded here. Format: what change
 
 ---
 
+## [Unreleased] Origin map returns
+
+**What:** Brought back the world map from before the offers-first redesign as "Where the wines come from", between the basket and the offers, with a "Map" link in the header. It shows one bubble per country from `/deals/map`, sized by offer count. A bubble or a country chip filters the offer list to that country and lists its regions as chips, and a region chip narrows further. Leaflet 1.9.4 is served from `/static/vendor/leaflet` (checked against the official SRI hashes), tiles come from OpenStreetMap, and the map loads only when scrolled near. CSP `img-src` allows `tile.openstreetmap.org`, and `/privacy` says the map fetches tiles from OpenStreetMap. Tile seams use the half-pixel overlap from #60 with Leaflet's `plus-lighter` blend turned off, which otherwise drew white lines.
+
+**Why:** The map was a popular way to browse and was removed in #64. Exploring by country and region gives another way into the list besides search, filters and the price chart.
+
+**Changed files:** `web/originmap.js`, `web/vendor/leaflet/*`, `web/index.html`, `web/app.js`, `web/styles.css`, `web/privacy.html`, `app/main.py`, `tests/test_frontend_browser.py`, `tests/test_seo_security.py`, `DESIGN.md`
+
+---
+
 ## [Unreleased] Basket promotions check themselves
 
 **What:** Each basket rule carries `checked_on` and `ends_on`. The daily and weekly ingest now read the Platinum Wine Club home page (`scripts/check_promos.py`) and store which promotion lines are still there in `app_state`. The shop's S$50 off turns off when its banner goes. The Amex S$200 credit turns off after its end date (31 Dec 2026); a missing home-page line for it only warns, since Amex's terms decide it. A failed read keeps the last good reading. `/health` gains `promo_ok`, `promo_status` and `promo_checked_at`, and warns 30 days before a rule ends. `/basket` returns each rule's `active` and `note`, refuses a spend level whose rule has ended, and stops counting the credit or promo in the totals; `GET /basket/rules` serves the same states. The page greys out ended spend levels with the reason, hides the "S$200 back" button and rewrites the basket intro when the credit ends. The promo text now mentions the free product the cart lists at S$600.

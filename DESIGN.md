@@ -11,7 +11,7 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 ## Tokens (see `web/styles.css` `:root`)
 - Ground `--bg #faf6f0`, surface `#fffdf9`, table head `#f3ece2`, hairline `#e6dbcd`, control border `#8f7d74` (3:1 on paper).
 - Ink `#2a1a1e`; secondary `#6b5b5f` (5.4:1 or better on every surface).
-- One accent, wine red `#8e2340`: the Buy button, links, focus ring, the lead number in the summary. Nothing else.
+- One accent, wine red `#8e2340`: the Buy button, links, focus ring, the lead number in the summary, the selected country on the origin map. Nothing else.
 - Status: good `#2e6b3f` (Platinum cheaper), bad `#a6361b` (Platinum dearer), warn `#8a5a00` (stale, out of stock). Used as text colour only, never as fills or pills.
 - Type: Lora 600 for the page title, section titles, wine names and the wordmark. Figtree for everything else. Sizes 13 / 15 / 18 / 24 / 40, plus the hero headline at 50 (34 on phones). Tabular numerals on prices, ratings and scores in tables and axes; stat figures use proportional numerals.
 - Radius 6 controls, 10 table and panels. No shadows on content.
@@ -53,6 +53,9 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 - All history is per 750 ml, and the chart says so. Lines are step lines; a missing day is a gap, never interpolated. Points before daily tracking began come from saved price lists (Platinum only, dated by commit) and are drawn hollow.
 - Row line: a 90-day sparkline (Platinum solid, Grand Cru dashed) plus one plain sentence ("Up S$3 since 24 Oct", "Same Platinum price at every check since 29 Jul"). Claims about the past need at least 14 days of history; otherwise the row says "Tracked since <date>".
 - Series colours: Platinum `--src-platinum #8e2340`, Grand Cru `--src-grand-cru #2f6db5` (dashed), Vivino `--src-vivino #9a7608`. Validated together as a set. A fourth source draws in ink with a dotted line and a direct label rather than a new hue.
+
+## Origin map
+"Where the wines come from" sits between the basket and the offers: Leaflet (served from `/static/vendor/leaflet`) on OpenStreetMap tiles, greyed to sit under the paper theme. One bubble per country, sized by offer count, in secondary ink; the selected country is wine red. Country chips under the map do the same as the bubbles, and a picked country lists its regions as chips. The map ignores the country and region filters so every country stays pickable. It loads only when scrolled near; on phones one finger scrolls the page, not the map. The tile host is disclosed on `/privacy`.
 
 ## Paging
 The offer list shows 5 wines per page by default; readers can choose 10 or 25. Pages count wine families, so a family is never split. Page and size are kept in the URL; any filter or sort change returns to page 1.
