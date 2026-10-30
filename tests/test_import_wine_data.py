@@ -643,9 +643,19 @@ class ImportWineDataPersistenceTests(unittest.TestCase):
         self.assertIsNotNone(deal.deal_score)
         self.assertEqual((deal.country, deal.region, deal.grapes), ("Italy", "Tuscany", "Sangiovese"))
 
-    def test_quarantine_only_hides_rows_without_platinum_price(self) -> None:
-        self.assertEqual(import_wine_data_module._quarantine_reasons({"price_platinum": None}), ["missing_price_platinum"])
-        self.assertEqual(import_wine_data_module._quarantine_reasons({"price_platinum": 90.0, "country": None}), [])
+    def test_quarantine_hides_rows_without_platinum_price_or_wine_type(self) -> None:
+        reasons = import_wine_data_module._quarantine_reasons
+        self.assertEqual(reasons({"price_platinum": None, "wine_type": "Red"}), ["missing_price_platinum"])
+        # Other gaps are shown as gaps.
+        self.assertEqual(reasons({"price_platinum": 90.0, "wine_type": "Red", "country": None}), [])
+        # Glassware and other accessories have no wine colour in the listing.
+        self.assertEqual(reasons({"price_platinum": 125.0, "wine_type": None}), ["not_a_wine"])
+
+    def test_glassware_listing_is_not_a_wine(self) -> None:
+        metadata = import_wine_data_module.derive_wine_metadata(
+            wine_name="Wine Glass - Italesse Masterclass 70 720ml (Bundle of 6)", quantity=6, volume="720ml"
+        )
+        self.assertIsNone(metadata.wine_type)
 
 
 if __name__ == "__main__":
