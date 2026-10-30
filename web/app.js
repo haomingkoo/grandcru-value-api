@@ -564,6 +564,7 @@ async function loadOffers() {
     renderActiveFilters()
     if (valueMap) valueMap.setVisible(deals.map((d) => d.id), styleFilterList(), state.includeSoldOut)
     loadSplit()
+    refreshOriginMap()
     if (pendingHighlight) {
       const target = deals.find((d) => d.id === pendingHighlight)
       pendingHighlight = null

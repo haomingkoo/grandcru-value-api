@@ -80,6 +80,9 @@ def browser_app_url(tmp_path, extra_deals, monkeypatch):
                     deal_score=61.0,
                     country="France",
                     region="Burgundy",
+                    origin_label="Burgundy, France",
+                    origin_latitude=47.05,
+                    origin_longitude=4.84,
                     wine_type="Red",
                     style_family="Red",
                     grapes="Pinot Noir",
@@ -120,6 +123,9 @@ def browser_app_url(tmp_path, extra_deals, monkeypatch):
                     deal_score=44.0,
                     country="France",
                     region="Burgundy",
+                    origin_label="Burgundy, France",
+                    origin_latitude=47.05,
+                    origin_longitude=4.84,
                     wine_type="Red",
                     style_family="Red",
                     grapes="Pinot Noir",
@@ -143,6 +149,9 @@ def browser_app_url(tmp_path, extra_deals, monkeypatch):
                     deal_score=35.0,
                     country="Italy",
                     region="Piedmont",
+                    origin_label="Piedmont, Italy",
+                    origin_latitude=44.7,
+                    origin_longitude=8.0,
                     wine_type="White",
                     style_family="White",
                     grapes="Timorasso",
@@ -466,3 +475,60 @@ def test_pager_hides_when_no_offers_match(browser_app_url, desktop_browser) -> N
         lambda driver: driver.find_element(By.CSS_SELECTOR, "#tableState:not([hidden])")
     )
     assert desktop_browser.find_element(By.ID, "pager").get_attribute("hidden") is not None
+
+
+def _block_map_tiles(driver) -> None:
+    driver.execute_cdp_cmd("Network.enable", {})
+    driver.execute_cdp_cmd("Network.setBlockedURLs", {"urls": ["*tile.openstreetmap.org*"]})
+
+
+def _origin_view(driver) -> dict:
+    return driver.execute_script(
+        """
+        return {
+          markers: [...document.querySelectorAll('#originMap path.origin-marker')].map((el) => el.dataset.country || el.getAttribute('class')),
+          countries: [...document.querySelectorAll('#originPanel [data-country]')].map((el) => el.innerText.replace(/\\s+/g, ' ').trim()),
+          regions: [...document.querySelectorAll('#originPanel [data-region]')].map((el) => el.innerText.replace(/\\s+/g, ' ').trim()),
+          heading: document.querySelector('#originPanel h3')?.innerText || '',
+          country: document.querySelector('#countrySelect').value,
+          region: document.querySelector('#regionSelect').value,
+          titles: [...document.querySelectorAll('.deal-row .wine-title')].map((el) => el.innerText),
+          search: window.location.search,
+        }
+        """
+    )
+
+
+def test_origin_map_filters_offers_by_country_and_region(browser_app_url, desktop_browser) -> None:
+    _block_map_tiles(desktop_browser)
+    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: driver.find_elements(By.CSS_SELECTOR, ".deal-row"))
+    # The map loads when scrolled near, as a visitor would.
+    desktop_browser.execute_script("document.getElementById('originMap').scrollIntoView()")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: len(_origin_view(driver)["markers"]) == 2)
+
+    view = _origin_view(desktop_browser)
+    assert view["countries"] == ["France 2", "Italy 1"]
+    assert view["regions"] == []
+
+    france = desktop_browser.find_element(By.CSS_SELECTOR, "#originMap path.origin-marker-france")
+    desktop_browser.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}))", france)
+    WebDriverWait(desktop_browser, 10).until(lambda driver: _origin_view(driver)["heading"] == "France")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: len(_origin_view(driver)["titles"]) == 1)
+    view = _origin_view(desktop_browser)
+    assert view["country"] == "France"
+    assert view["regions"] == ["Burgundy 2"]
+    assert all("Burgundy" in title for title in view["titles"])
+
+    desktop_browser.execute_script("document.querySelector('#originPanel [data-region=\"Burgundy\"]').click()")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: _origin_view(driver)["region"] == "Burgundy")
+    assert "region=Burgundy" in _origin_view(desktop_browser)["search"]
+
+    desktop_browser.execute_script("document.querySelector('#originPanel [data-origin-clear]').click()")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: len(_origin_view(driver)["titles"]) == 2)
+    view = _origin_view(desktop_browser)
+    assert (view["country"], view["region"], view["heading"]) == ("", "", "")
+
+    desktop_browser.execute_script("document.querySelector('#originPanel [data-country=\"Italy\"]').click()")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: _origin_view(driver)["heading"] == "Italy")
+    assert _origin_view(desktop_browser)["country"] == "Italy"
