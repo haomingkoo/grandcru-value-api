@@ -642,6 +642,12 @@ def main() -> None:
         help="Fail post-import validation on documented warnings as well as errors.",
     )
     parser.add_argument(
+        "--check-promos",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Read the Platinum home page and record which basket promotions it still advertises.",
+    )
+    parser.add_argument(
         "--validate-retailer-price-math",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -957,6 +963,9 @@ def main() -> None:
         )
 
     run_import(comparison_path, vivino_path, vivino_overrides_path, env)
+
+    if args.check_promos:
+        run_step("promo check", [sys.executable, str(ROOT / "scripts" / "check_promos.py")], env)
 
     if args.validate_completeness:
         run_completeness_validation(strict=args.validate_completeness_strict, env=env)

@@ -4,6 +4,16 @@ All notable changes to grandcru-value-api are recorded here. Format: what change
 
 ---
 
+## [Unreleased] Basket promotions check themselves
+
+**What:** Each basket rule carries `checked_on` and `ends_on`. The daily and weekly ingest now read the Platinum Wine Club home page (`scripts/check_promos.py`) and store which promotion lines are still there in `app_state`. The shop's S$50 off turns off when its banner goes. The Amex S$200 credit turns off after its end date (31 Dec 2026); a missing home-page line for it only warns, since Amex's terms decide it. A failed read keeps the last good reading. `/health` gains `promo_ok`, `promo_status` and `promo_checked_at`, and warns 30 days before a rule ends. `/basket` returns each rule's `active` and `note`, refuses a spend level whose rule has ended, and stops counting the credit or promo in the totals; `GET /basket/rules` serves the same states. The page greys out ended spend levels with the reason, hides the "S$200 back" button and rewrites the basket intro when the credit ends. The promo text now mentions the free product the cart lists at S$600.
+
+**Why:** The S$50 promo and the Amex credit were typed into `app/basket.py` by hand, so the page would keep promising them after they ended.
+
+**Changed files:** `app/promos.py`, `app/basket.py`, `app/main.py`, `app/schemas.py`, `scripts/check_promos.py`, `scripts/refresh_pipeline.py`, `web/basket.js`, `web/styles.css`, `tests/test_promos.py`, `CLAUDE.md`
+
+---
+
 ## [Unreleased] Offer list pages
 
 **What:** The offer list shows 5 wines per page, with 10 or 25 in a "Per page" picker, Previous and Next buttons, and a "1–5 of N wines" line. Pages split wine families, never single offers. The page and page size live in the URL (`page`, `per_page`), changing a filter or sort returns to page 1, and "Show in list" from the value map, stat strip or basket opens the page holding that offer. Browser tests now get a fresh rate limiter each, so more of them can run without throttling each other.

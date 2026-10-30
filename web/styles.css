@@ -719,6 +719,10 @@ a:hover {
 }
 
 /* Basket builder */
+.basket-cta[hidden] {
+  display: none;
+}
+
 .basket-cta {
   margin-top: 20px;
 }
@@ -795,6 +799,19 @@ a:hover {
   background: var(--surface);
   color: var(--text-2);
   font-size: var(--fs-small);
+}
+
+.mode.is-off {
+  cursor: default;
+}
+
+.mode.is-off > span {
+  border-color: var(--hairline);
+  background: var(--surface-2);
+}
+
+.mode-note {
+  color: var(--warn);
 }
 
 .mode strong {
