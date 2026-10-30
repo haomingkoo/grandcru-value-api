@@ -188,7 +188,7 @@ _SWEET_MARKERS = (
 GRAPE_COLOURS = {
     **dict.fromkeys(
         (
-            "Aglianico", "Alicante Bouschet", "Baga", "Barbera", "Cabernet Franc", "Cabernet Sauvignon", "Carmenere",
+            "Aglianico", "Alicante Bouschet", "Baga", "Barbera", "Bordeaux Blend", "Corvina", "Corvina Blend", "Cabernet Franc", "Cabernet Sauvignon", "Carmenere",
             "Dolcetto", "Freisa", "Gamay", "Grenache", "Grenache Blend", "Malbec", "Merlot", "Montepulciano",
             "Mourvedre", "Nebbiolo", "Negroamaro", "Nero d'Avola", "Petit Verdot", "Pinot Meunier", "Pinot Noir",
             "Primitivo", "Raboso", "Red Blend", "Sangiovese", "Shiraz", "Syrah", "Tempranillo", "Touriga Nacional",
@@ -267,6 +267,8 @@ _GRAPE_RULES: tuple[GrapeRule, ...] = (
     GrapeRule(("caballo loco grand cru limari", "grand cru limari"), "Syrah", source="vivino", confidence="high"),
     GrapeRule(("caballo loco grand cru apalta", "grand cru apalta"), "Carmenere, Cabernet Sauvignon, Syrah", source="retailer_inference", confidence="medium"),
     GrapeRule(("caballo loco grand cru sagrada familia", "sagrada familia"), "Merlot, Petit Verdot, Cabernet Sauvignon, Cabernet Franc, Malbec", source="vivino", confidence="high"),
+    GrapeRule(("amarone", "valpolicella", "ripasso"), "Corvina Blend", source="regional_inference", confidence="medium"),
+    GrapeRule(("bordeaux blend",), "Bordeaux Blend"),
     GrapeRule(("chateauneuf du pape", "cotes du rhone"), "Rhone White Blend", source="regional_inference", confidence="medium"),
     GrapeRule(("chateauneuf du pape", "gigondas", "cotes du rhone"), "Grenache Blend", source="regional_inference", confidence="medium"),
     GrapeRule(("cotes de provence", "fleur de miraval", "rose alie"), "Rose Blend", source="style_inference", confidence="medium"),

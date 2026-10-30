@@ -28,6 +28,11 @@ def grapes_of(name):
         # A producer rule that only fits one colour leaves the other colour unguessed.
         ("2023 Silk & Spice - Red Blend - Red - 750 ml - Standard Bottle", "Baga, Alicante Bouschet, Touriga Nacional"),
         ("2024 Silk & Spice - White Blend - White - 750 ml - Standard Bottle", None),
+        # Appellations whose rules fix the grapes.
+        ("2021 Feudo Italia - Amarone della Valpolicella DOCG - Red - 750 ml - Standard Bottle", "Corvina Blend"),
+        ("2018 Tommaso Bussola - Valpolicella Classico Superiore TB - Red - 750 ml - Standard Bottle", "Corvina Blend"),
+        ("2020 Tommaso Bussola - Valpolicella Superiore Ripasso Ca' del Laito - Red - 750 ml - Standard Bottle", "Corvina Blend"),
+        ("2022 Stonyridge Vineyard - Blossom Bordeaux Blend - Red - 750 ml - Standard Bottle", "Bordeaux Blend"),
         # Sparkling whites from black grapes still fit.
         ("NV Coutier - Blanc de Noirs Grand Cru - White - 750 ml - Standard Bottle", "Pinot Noir, Pinot Meunier"),
     ],

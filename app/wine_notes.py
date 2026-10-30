@@ -21,6 +21,7 @@ GRAPE_NOTES = {
     "Carmenere": "Dark fruit with a green-pepper note; Chile's signature grape.",
     "Chardonnay": "Crisp and citrusy, or rich and buttery when aged in oak.",
     "Chenin Blanc": "High acidity, apple and honey; made from dry to sweet.",
+    "Corvina": "Cherry and bright acidity; Amarone dries it first for a richer, stronger wine.",
     "Dolcetto": "Soft, dark-fruited and low in acidity, with a bitter-almond finish.",
     "Freisa": "Piedmont red with raspberry and firm tannins.",
     "Gewurztraminer": "Very aromatic, with lychee, rose and spice; low acidity.",
