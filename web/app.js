@@ -59,6 +59,8 @@ const SIDES = [
 
 const STYLE_ORDER = ["Red", "White", "Champagne", "Sparkling", "Rose", "Sweet / Dessert", "Orange"]
 
+const PAGE_SIZES = [5, 10, 25]
+
 const state = { ...defaultState }
 let filterOptions = null
 let priceHistory = null
@@ -71,6 +73,11 @@ let requestSerial = 0
 let lastDeals = null
 let splitSerial = 0
 let searchDebounce = 0
+// Pages split wine families, not single offers, so a family never straddles two pages.
+let lastFamilies = []
+let page = 1
+let pendingPage = 1
+let perPage = PAGE_SIZES[0]
 const els = {}
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -97,6 +104,7 @@ function captureElements() {
     "splitBar", "quickFilters",
     "resultsMeta", "activeFilters", "dealTableBody", "tableState", "freshness", "marketNotice",
     "statStrip", "priceMinRange", "priceMaxRange", "priceMinInput", "priceMaxInput", "priceFilter",
+    "pager", "perPageSelect",
   ]) {
     els[id] = document.getElementById(id)
   }
@@ -185,6 +193,20 @@ function bindEvents() {
   els.dealTableBody.addEventListener("click", (event) => {
     const toggle = event.target.closest(".history-toggle")
     if (toggle) toggleHistory(toggle)
+  })
+
+  els.pager.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-page]")
+    if (!button || button.disabled) return
+    page += button.dataset.page === "next" ? 1 : -1
+    renderPage()
+    document.querySelector(".table-wrap").scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" })
+  })
+
+  els.perPageSelect.addEventListener("change", (event) => {
+    perPage = Number(event.target.value)
+    page = 1
+    renderPage()
   })
 
   els.sortButtons.forEach((button) => {
@@ -347,6 +369,11 @@ function prefersReducedMotion() {
 }
 
 function showDealInList(deal) {
+  const index = lastFamilies.findIndex((family) => family.offers.some((offer) => offer.id === deal.id))
+  if (index >= 0 && Math.floor(index / perPage) + 1 !== page) {
+    page = Math.floor(index / perPage) + 1
+    renderPage()
+  }
   const row = els.dealTableBody.querySelector(`[data-offer-ids~="${deal.id}"]`)
   if (!row) return
   const group = row.nextElementSibling?.classList.contains("history-row") ? row.nextElementSibling.nextElementSibling : row.nextElementSibling
@@ -522,6 +549,8 @@ async function loadFilterOptions() {
 
 async function loadOffers() {
   const requestId = ++requestSerial
+  page = pendingPage
+  pendingPage = 1
   writeStateToUrl()
   document.querySelector(".table-wrap").setAttribute("aria-busy", "true")
 
@@ -598,6 +627,9 @@ function hydrateStateFromUrl() {
   state.priceMin = params.get("min_price_per_750") || ""
   state.priceMax = params.get("max_price_per_750") || ""
   state.includeSoldOut = params.get("sold_out") === "include"
+  const size = Number(params.get("per_page"))
+  perPage = PAGE_SIZES.includes(size) ? size : PAGE_SIZES[0]
+  pendingPage = Math.max(1, Number.parseInt(params.get("page"), 10) || 1)
 }
 
 function writeStateToUrl() {
@@ -606,6 +638,8 @@ function writeStateToUrl() {
   if (state.includeSoldOut) params.set("sold_out", "include")
   if (state.sortBy !== defaultState.sortBy) params.set("sort_by", state.sortBy)
   if (state.sortOrder !== defaultState.sortOrder) params.set("sort_order", state.sortOrder)
+  if (perPage !== PAGE_SIZES[0]) params.set("per_page", perPage)
+  if (page > 1) params.set("page", page)
   const query = params.toString()
   window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`)
 }
@@ -703,6 +737,7 @@ function showTableState(html) {
   els.dealTableBody.innerHTML = ""
   els.tableState.innerHTML = html
   els.tableState.hidden = false
+  els.pager.hidden = true
   document.querySelector(".table-wrap").hidden = true
 }
 
@@ -718,8 +753,27 @@ function renderTable(families) {
          <p>The Platinum Wine Club list is empty or being refreshed. Check back later today.</p>`)
     return
   }
-  els.dealTableBody.innerHTML = families.map(renderFamily).join("")
+  lastFamilies = families
+  renderPage()
+}
+
+function renderPage() {
+  const pageCount = Math.max(1, Math.ceil(lastFamilies.length / perPage))
+  page = Math.min(Math.max(page, 1), pageCount)
+  const start = (page - 1) * perPage
+  const shown = lastFamilies.slice(start, start + perPage)
+  els.dealTableBody.innerHTML = shown.map(renderFamily).join("")
   fillHistorySlots()
+
+  const total = lastFamilies.length
+  els.pager.querySelector(".pager-range").textContent = `${formatInteger(start + 1)}–${formatInteger(start + shown.length)} of ${formatInteger(total)} ${plural(total, "wine", "wines")}`
+  els.pager.querySelector(".pager-nav").hidden = pageCount === 1
+  els.pager.querySelector(".pager-count").textContent = `Page ${page} of ${pageCount}`
+  els.pager.querySelector('[data-page="prev"]').disabled = page === 1
+  els.pager.querySelector('[data-page="next"]').disabled = page === pageCount
+  els.perPageSelect.value = String(perPage)
+  els.pager.hidden = false
+  writeStateToUrl()
 }
 
 function renderErrorState() {

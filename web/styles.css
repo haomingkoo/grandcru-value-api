@@ -2216,6 +2216,41 @@ input[type="checkbox"] {
   margin-top: 8px;
 }
 
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-top: 16px;
+  color: var(--text-2);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.pager[hidden],
+.pager-nav[hidden] {
+  display: none;
+}
+
+.pager-nav,
+.pager-size {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pager .button:disabled {
+  border-color: var(--hairline);
+  color: var(--text-2);
+  cursor: default;
+}
+
+.pager-size select {
+  width: auto;
+  min-width: 72px;
+}
+
 /* Scoring and sources */
 .prose-section {
   padding-block: 0 48px;

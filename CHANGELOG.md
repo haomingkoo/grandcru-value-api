@@ -4,6 +4,16 @@ All notable changes to grandcru-value-api are recorded here. Format: what change
 
 ---
 
+## [Unreleased] Offer list pages
+
+**What:** The offer list shows 5 wines per page, with 10 or 25 in a "Per page" picker, Previous and Next buttons, and a "1–5 of N wines" line. Pages split wine families, never single offers. The page and page size live in the URL (`page`, `per_page`), changing a filter or sort returns to page 1, and "Show in list" from the value map, stat strip or basket opens the page holding that offer. Browser tests now get a fresh rate limiter each, so more of them can run without throttling each other.
+
+**Why:** All live offers rendered at once, which made the list too long to scan.
+
+**Changed files:** `web/app.js`, `web/index.html`, `web/styles.css`, `tests/test_frontend_browser.py`, `DESIGN.md`
+
+---
+
 ## [Unreleased] Design system: offers first
 
 **What:** Rebuilt the page as one price sheet. The offer list sits right under a one-sentence summary counted from live data. Removed the world map, the readout circles, the price-position chart, the best-value, regions and styles sections, eyebrow labels and most pills. Light paper theme with one wine-red accent, Lora and Figtree self-hosted (Oswald retired). Each offer shows Platinum, Grand Cru and Vivino prices with the difference written out, one Buy button and plain links. Designed loading, empty, filtered-empty and error states, plus a bottle silhouette when a photo fails. Added a favicon, a PNG social card, `/privacy` and `/terms`, the shared footer and `DESIGN.md`. CSP no longer allows unpkg or OpenStreetMap tiles.
