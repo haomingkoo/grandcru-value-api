@@ -4,6 +4,16 @@ All notable changes to grandcru-value-api are recorded here. Format: what change
 
 ---
 
+## [Unreleased] Glassware leaves the offer list
+
+**What:** The import sets aside any Platinum listing without a wine type, with the reason `not_a_wine`, next to the existing `missing_price_platinum`. The run summary now counts quarantined rows by reason, for example "quarantined 2 rows (not_a_wine=2)".
+
+**Why:** Every Platinum wine listing names its colour. On 30 Oct 2026 the only two listings without one were wine glasses ("Wine Glass - Conterno Symphony" and "Wine Glass - Italesse Masterclass 70 720ml (Bundle of 6)"), and they showed as offers and counted in "237 wines".
+
+**Changed files:** `scripts/import_wine_data.py`, `tests/test_import_wine_data.py`
+
+---
+
 ## [Unreleased] Section links land on their section
 
 **What:** `web/anchor.js` holds the section named in the URL hash in place while the page grows, and lets go on the first wheel, touch, pointer or key event. It runs on page load and on every `hashchange`, so it covers every `#section` link, including ones added later.

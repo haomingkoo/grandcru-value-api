@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import unicodedata
+from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from difflib import SequenceMatcher
@@ -613,9 +614,15 @@ def _fill_from_platinum_listing(metadata, row: dict[str, str]):
 
 
 def _quarantine_reasons(payload: dict[str, object]) -> list[str]:
-    """Only a missing Platinum price hides an offer; other gaps are shown as gaps."""
+    """A missing Platinum price or wine type hides an offer; other gaps are shown as gaps.
+
+    Every Platinum wine listing names its colour, so a listing without one is glassware or
+    another accessory.
+    """
     if payload.get("price_platinum") in (None, ""):
         return ["missing_price_platinum"]
+    if payload.get("wine_type") in (None, ""):
+        return ["not_a_wine"]
     return []
 
 
@@ -996,13 +1003,15 @@ def import_data(
         run.finished_at = datetime.now(UTC)
         run.merged_rows = len(merged_records)
         match_summary = ", ".join(f"{k}={v}" for k, v in sorted(match_counts.items()))
+        quarantine_counts = Counter(r["reasons"] for r in quarantine_records)
+        quarantine_summary = ", ".join(f"{k}={v}" for k, v in sorted(quarantine_counts.items()))
         run.details = (
             f"Loaded {len(comparison_rows)} comparison rows and {len(vivino_rows_base)} vivino rows "
             f"(+{len(vivino_rows_override)} overrides) into {len(merged_records)} current deals and "
             f"{len(snapshot_records)} snapshots (vivino: {match_summary}); "
             f"{incomplete_count} shown with data gaps; "
             f"recorded {recorded_prices} daily prices; "
-            f"quarantined {len(quarantine_records)} rows without a Platinum price; "
+            f"quarantined {len(quarantine_records)} rows ({quarantine_summary or 'none'}); "
             f"pruned {deleted_snapshots} snapshots (retention {settings.history_retention_days or 'unlimited'} days)."
         )
         session.commit()
