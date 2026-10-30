@@ -1,5 +1,6 @@
 import csv
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 import hmac
 from io import StringIO
 import logging
@@ -21,6 +22,7 @@ from app.database import Base, SessionLocal, engine, ensure_column, ensure_deal_
 from app.basket import MODES as BASKET_MODES, RULES as BASKET_RULES, STYLE_GROUPS as BASKET_STYLES, candidate_items, suggest
 from app.price_history import build_price_history, run_backfills
 from app.durable_state import load_state
+from app.promos import PROMO_CHECK_KEY, rule_states, summarize as summarize_promos
 from app.ops import RefreshRunner, diagnostics_payload, locked_vivino_override_names
 from app.schemas import (
     DealHistoryOut,
@@ -566,6 +568,11 @@ def health(session: Session = Depends(get_session)) -> HealthOut:
     except SQLAlchemyError:
         logger.exception("vivino_status_unavailable")
         vivino = {"vivino_status": "unknown: state unreadable", "vivino_ok": False}
+    try:
+        promos = summarize_promos(BASKET_RULES, load_state(PROMO_CHECK_KEY, {}, session=session), datetime.now(UTC))
+    except SQLAlchemyError:
+        logger.exception("promo_status_unavailable")
+        promos = {"promo_status": "unknown: state unreadable", "promo_ok": False}
     return HealthOut(
         status="ok",
         db_ok=True,
@@ -577,6 +584,7 @@ def health(session: Session = Depends(get_session)) -> HealthOut:
         ingestion_stale=stale,
         latest_ingestion=latest,
         **vivino,
+        **promos,
     )
 
 
@@ -630,6 +638,21 @@ def get_deal_map(
     return [DealMapPointOut(**point) for point in get_deal_map_points(session, **filters)]
 
 
+def _live_basket_rules(session: Session) -> dict:
+    """Basket rules with whether each is still running, from end dates and the daily home-page check."""
+    states = rule_states(BASKET_RULES, load_state(PROMO_CHECK_KEY, {}, session=session), datetime.now(UTC))
+    return {key: {**rule, **states[key]} for key, rule in BASKET_RULES.items()}
+
+
+# Which rule each preset spend level exists for; delivery still applies when the credit has ended.
+BASKET_MODE_RULE = {"credit": "credit", "promo": "promo"}
+
+
+@app.get("/basket/rules")
+def get_basket_rules(session: Session = Depends(get_session)) -> dict:
+    return _live_basket_rules(session)
+
+
 @app.get("/basket")
 def get_basket(
     mode: str = Query(default="credit", pattern="^(credit|delivery|promo|custom)$"),
@@ -650,15 +673,28 @@ def get_basket(
     wanted = set()
     for key in (styles or "").split(","):
         wanted |= BASKET_STYLES.get(key.strip().lower(), set())
+    rules = _live_basket_rules(session)
+    blocking = rules.get(BASKET_MODE_RULE.get(mode, ""))
+    unavailable = blocking["note"] if blocking and not blocking["active"] else None
     deals = list_deals(session, limit=500, availability="in_stock")
     items = candidate_items(deals, styles=wanted or None, include_unrated=include_unrated)
+    baskets = [] if unavailable else suggest(
+        items,
+        target=goal,
+        strict=strict,
+        max_bottles=max_bottles,
+        prefer=prefer,
+        credit_active=rules["credit"]["active"],
+        promo_active=rules["promo"]["active"],
+    )
     return {
         "mode": mode,
         "target": goal,
         "strict": strict,
         "candidates": len(items),
-        "rules": BASKET_RULES,
-        "baskets": suggest(items, target=goal, strict=strict, max_bottles=max_bottles, prefer=prefer),
+        "rules": rules,
+        "unavailable": unavailable,
+        "baskets": baskets,
     }
 
 

@@ -38,6 +38,9 @@ CI (`.github/workflows/ci.yml`) runs the same checks plus pytest on Python 3.11.
   prices come only from dated facts (`vivino_checked_at`); no review text is stored.
 - `DATABASE_URL` is rewritten to the psycopg 3 driver by
   `app.config.normalize_database_url`; any new engine must go through it.
+- Basket rules (`RULES` in `app/basket.py`) switch off after `ends_on`. When Amex or the shop
+  publishes new terms, update the rule and its `checked_on`/`ends_on`; `/health` `promo_status`
+  warns 30 days ahead. The shop's S$50 off is tracked by `scripts/check_promos.py` (ingest step).
 - `scripts/data_quality_rules.py` is the allowlist for accepted data gaps. Rows in
   `vivino_overrides.csv` without a URL deliberately block wrong fuzzy matches.
 

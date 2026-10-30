@@ -124,6 +124,9 @@ class HealthOut(BaseModel):
     vivino_status: str = "ok"
     vivino_ok: bool = True
     vivino_last_success_at: datetime | None = None
+    promo_status: str = "ok"
+    promo_ok: bool = True
+    promo_checked_at: datetime | None = None
 
 
 class LegalOut(BaseModel):

@@ -35,8 +35,30 @@ function setupBasket() {
     return p
   }
 
+  // Rules that have ended (by date) or that the shop stopped advertising come back with active: false.
+  const applyRules = (r) => {
+    const off = (mode, note) => {
+      const input = form.querySelector(`input[name='mode'][value='${mode}']`)
+      input.disabled = true
+      input.closest("label").classList.add("is-off")
+      input.nextElementSibling.insertAdjacentHTML("beforeend", `<span class="mode-note">${basketEscape(note)}</span>`)
+      if (input.checked) form.querySelector("input[value='delivery']").checked = true
+    }
+    if (!r.credit.active) {
+      off("credit", r.credit.note)
+      form.querySelector("input[value='delivery']").nextElementSibling.lastChild.textContent = "Free delivery"
+      document.querySelector(".basket-cta")?.setAttribute("hidden", "")
+      document.querySelector(".basket-head p").textContent = `The Amex Platinum wine credit is not running. ${r.credit.note} These baskets still reach a spend level with as little extra as possible, from wines in stock today.`
+    }
+    if (!r.promo.active) off("promo", r.promo.note)
+  }
+
   const render = (data) => {
     const money = WineCharts.money
+    if (data.unavailable) {
+      results.innerHTML = `<div class="basket-empty"><p class="state-title">This spend level is not running.</p><p>${basketEscape(data.unavailable)}</p></div>`
+      return
+    }
     if (!data.baskets.length) {
       results.innerHTML = `<div class="basket-empty"><p class="state-title">No mix of in-stock wines reaches ${money(data.target)} with these choices.</p><p>Allow more styles or more bottles, or include wines not rated yet.</p></div>`
       return
@@ -56,7 +78,7 @@ function setupBasket() {
         </ul>
         <dl class="basket-money">
           <div><dt>Pay at checkout</dt><dd>${money(b.pay_at_checkout)}${b.free_delivery ? "" : ` <span>incl. ${money(b.delivery_fee)} delivery</span>`}</dd></div>
-          <div><dt>Back on your Amex statement</dt><dd>${b.credit_back ? `${money(b.credit_back)} <span>after payment</span>` : "None (under S$300)"}</dd></div>
+          <div><dt>Back on your Amex statement</dt><dd>${b.credit_back ? `${money(b.credit_back)} <span>after payment</span>` : (data.rules.credit.active ? "None (under S$300)" : "None (credit not running)")}</dd></div>
           <div><dt>Cost after the credit</dt><dd>${money(b.net_after_credit)}</dd></div>
           <div><dt>Delivery</dt><dd>${b.free_delivery ? "Free" : `${money(b.delivery_fee)}`}</dd></div>
           ${b.promo_eligible ? `<div><dt>Shop promotion</dt><dd>S$50 off may apply <span>check at checkout</span></dd></div>` : ""}
@@ -80,10 +102,11 @@ function setupBasket() {
       render(data)
       if (!rules.dataset.filled) {
         const r = data.rules
+        const note = (rule) => (rule.active ? "" : ` <strong>${basketEscape(rule.note)}</strong>`)
         rules.innerHTML = `
-          ${basketEscape(r.credit.text)} ${basketEscape(r.credit.conditions)} <a href="${basketEscape(r.credit.source_url)}" target="_blank" rel="noopener noreferrer">${basketEscape(r.credit.source_label)}</a>.
+          ${basketEscape(r.credit.text)} ${basketEscape(r.credit.conditions)}${note(r.credit)} <a href="${basketEscape(r.credit.source_url)}" target="_blank" rel="noopener noreferrer">${basketEscape(r.credit.source_label)}</a>.
           ${basketEscape(r.delivery.text)} <a href="${basketEscape(r.delivery.source_url)}" target="_blank" rel="noopener noreferrer">${basketEscape(r.delivery.source_label)}</a>.
-          ${basketEscape(r.promo.text)} <a href="${basketEscape(r.promo.source_url)}" target="_blank" rel="noopener noreferrer">${basketEscape(r.promo.source_label)}</a>.
+          ${basketEscape(r.promo.text)}${note(r.promo)} <a href="${basketEscape(r.promo.source_url)}" target="_blank" rel="noopener noreferrer">${basketEscape(r.promo.source_label)}</a>.
           Prices change; baskets use today&rsquo;s listed prices for in-stock wines only.`
         rules.dataset.filled = "true"
       }
@@ -123,6 +146,14 @@ function setupBasket() {
       }
     }
   })
+  fetch("/basket/rules", { headers: { Accept: "application/json" } })
+    .then((response) => {
+      if (!response.ok) throw new Error(String(response.status))
+      return response.json()
+    })
+    .then(applyRules)
+    .catch((error) => console.error("basket rules could not load", error))
+
   // Load when the section comes near the screen, so the first view stays fast.
   const observer = new IntersectionObserver((entries) => {
     if (entries.some((e) => e.isIntersecting)) {

@@ -12,7 +12,8 @@ from typing import Iterable
 
 from app.price_history import per_750, volume_ml
 
-# Facts checked on 26 Oct 2026; each is quoted with its source on the page.
+# Each fact is quoted with its source on the page. checked_on is when a person last read the
+# source; ends_on switches a rule off on its own (app/promos.py), so new terms need a code change.
 RULES = {
     "credit": {
         "amount": 200.0,
@@ -21,6 +22,8 @@ RULES = {
         "conditions": "Save the benefit to your Platinum Card first. Basic Card Members only. Once per half-year (January to June, July to December). Ends 31 Dec 2026.",
         "source_label": "American Express Platinum terms (2026), Platinum Wine Credit",
         "source_url": "https://www.americanexpress.com/content/dam/amex/en-sg/benefits/the-platinum-card/2026_Platinum_TermsandConditions.pdf",
+        "checked_on": "2026-10-26",
+        "ends_on": "2026-12-31",
     },
     "delivery": {
         "free_over": 350.0,
@@ -28,13 +31,17 @@ RULES = {
         "text": "Free delivery in Singapore on orders over S$350; otherwise S$30 per trip.",
         "source_label": "Platinum Wine Club terms and conditions",
         "source_url": "https://platwineclub.wineportal.com/terms-and-conditions",
+        "checked_on": "2026-10-26",
+        "ends_on": None,
     },
     "promo": {
         "amount": 50.0,
         "min_spend": 600.0,
-        "text": "The shop advertises an extra S$50 off at S$600 or more. Its terms say promotions cannot be combined with other offers, and it is unclear whether that affects the Amex credit, so check at checkout.",
+        "text": "The shop advertises an extra S$50 off at S$600 or more. Its terms say promotions cannot be combined with other offers, and it is unclear whether that affects the Amex credit, so check at checkout. The cart also lists a free product at S$600 or more.",
         "source_label": "Platinum Wine Club home page",
         "source_url": "https://platwineclub.wineportal.com/",
+        "checked_on": "2026-10-30",
+        "ends_on": None,
     },
 }
 
@@ -144,7 +151,16 @@ def _avg_rating(items: list[Item], chosen: tuple[int, ...]) -> float:
     return sum(r * w for r, w in rated) / weight if weight else 0.0
 
 
-def suggest(items: list[Item], *, target: float, strict: bool, max_bottles: int | None = None, prefer: str = "value") -> list[dict]:
+def suggest(
+    items: list[Item],
+    *,
+    target: float,
+    strict: bool,
+    max_bottles: int | None = None,
+    prefer: str = "value",
+    credit_active: bool = True,
+    promo_active: bool = True,
+) -> list[dict]:
     """Up to three different baskets at or above the target, closest first."""
     floor = int(round(target * 100)) + (1 if strict else 0)
     states = search(items, limit_cents=floor + int(MARGIN * 100), max_bottles=max_bottles)
@@ -170,16 +186,29 @@ def suggest(items: list[Item], *, target: float, strict: bool, max_bottles: int 
     else:
         add("best_value", near, key=lambda o: (-o[1][0], o[0]))
         add("best_rated", [o for o in wider if o[1][1] >= 2], key=lambda o: (-_avg_rating(items, o[1][2]), o[0]))
-    return [describe(kind, total, basket, items, target=target, strict=strict) for kind, total, basket in picks]
+    return [
+        describe(kind, total, basket, items, target=target, strict=strict, credit_active=credit_active, promo_active=promo_active)
+        for kind, total, basket in picks
+    ]
 
 
-def describe(kind: str, total_cents: int, basket: tuple, items: list[Item], *, target: float, strict: bool) -> dict:
+def describe(
+    kind: str,
+    total_cents: int,
+    basket: tuple,
+    items: list[Item],
+    *,
+    target: float,
+    strict: bool,
+    credit_active: bool = True,
+    promo_active: bool = True,
+) -> dict:
     chosen = [items[i] for i in basket[2]]
     total = total_cents / 100
     credit = RULES["credit"]
     delivery = RULES["delivery"]
     promo = RULES["promo"]
-    gets_credit = total >= credit["min_spend"]
+    gets_credit = credit_active and total >= credit["min_spend"]
     free_delivery = total > delivery["free_over"]
     gc_known = [i for i in chosen if i.grand_cru]
     return {
@@ -193,7 +222,7 @@ def describe(kind: str, total_cents: int, basket: tuple, items: list[Item], *, t
         "credit_back": credit["amount"] if gets_credit else 0.0,
         "delivery_fee": 0.0 if free_delivery else delivery["fee"],
         "free_delivery": free_delivery,
-        "promo_eligible": total >= promo["min_spend"],
+        "promo_eligible": promo_active and total >= promo["min_spend"],
         "pay_at_checkout": round(total + (0.0 if free_delivery else delivery["fee"]), 2),
         "net_after_credit": round(total + (0.0 if free_delivery else delivery["fee"]) - (credit["amount"] if gets_credit else 0.0), 2),
         "grand_cru_difference": round(sum(i.grand_cru - i.price for i in gc_known), 2) if gc_known else None,
