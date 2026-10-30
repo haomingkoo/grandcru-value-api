@@ -251,6 +251,22 @@
           <tbody id="dealTableBody"></tbody>
         </table>
       </div>
+      <nav id="pager" class="pager" aria-label="Offer pages" hidden>
+        <p class="pager-range"></p>
+        <div class="pager-nav">
+          <button class="button" type="button" data-page="prev">Previous</button>
+          <span class="pager-count"></span>
+          <button class="button" type="button" data-page="next">Next</button>
+        </div>
+        <label class="pager-size">
+          <span>Per page</span>
+          <select id="perPageSelect">
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="25">25</option>
+          </select>
+        </label>
+      </nav>
       <div id="tableState" class="table-state" hidden></div>
     </section>
 

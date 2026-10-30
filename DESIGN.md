@@ -54,5 +54,8 @@ A wine merchant's price list on good paper. Plain, factual, no "intelligence" th
 - Row line: a 90-day sparkline (Platinum solid, Grand Cru dashed) plus one plain sentence ("Up S$3 since 24 Oct", "Same Platinum price at every check since 29 Jul"). Claims about the past need at least 14 days of history; otherwise the row says "Tracked since <date>".
 - Series colours: Platinum `--src-platinum #8e2340`, Grand Cru `--src-grand-cru #2f6db5` (dashed), Vivino `--src-vivino #9a7608`. Validated together as a set. A fourth source draws in ink with a dotted line and a direct label rather than a new hue.
 
+## Paging
+The offer list shows 5 wines per page by default; readers can choose 10 or 25. Pages count wine families, so a family is never split. Page and size are kept in the URL; any filter or sort change returns to page 1.
+
 ## States
 Loading: four skeleton rows. Empty after filtering: "No offers match these filters." with Clear all filters. Empty data set: says the list is empty or refreshing. Error: "The offers could not load." with Try again. Stale data: the check time turns warn-coloured and says the daily check is late.

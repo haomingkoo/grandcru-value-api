@@ -16,9 +16,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import uvicorn
 
+from app import main as main_module
 from app.database import Base, get_session
 from app.main import app
 from app.models import IngestionRun, WineDeal, WineDealSnapshot
+from app.security import InMemoryRateLimiter
 
 
 def _free_port() -> int:
@@ -28,7 +30,15 @@ def _free_port() -> int:
 
 
 @pytest.fixture()
-def browser_app_url(tmp_path):
+def extra_deals() -> list[dict]:
+    """More offers for one test; parametrize this name to add them."""
+    return []
+
+
+@pytest.fixture()
+def browser_app_url(tmp_path, extra_deals, monkeypatch):
+    # Each page load makes many requests; a fresh limiter keeps tests from throttling each other.
+    monkeypatch.setattr(main_module, "_rate_limiter", InMemoryRateLimiter(main_module.settings.rate_limit_requests_per_minute))
     engine = create_engine(
         f"sqlite:///{tmp_path / 'browser.db'}",
         connect_args={"check_same_thread": False},
@@ -143,6 +153,7 @@ def browser_app_url(tmp_path):
                 ),
             ]
         )
+        session.add_all([WineDeal(**row) for row in extra_deals])
         session.commit()
 
     def override_session():
@@ -367,3 +378,91 @@ def test_filter_with_no_results_shows_empty_state_and_clears(browser_app_url, de
     desktop_browser.execute_script("arguments[0].click()", state.find_element(By.CSS_SELECTOR, "[data-action='clear']"))
     WebDriverWait(desktop_browser, 10).until(lambda driver: driver.find_elements(By.CSS_SELECTOR, ".deal-row"))
     assert desktop_browser.find_element(By.ID, "searchInput").get_attribute("value") == ""
+
+
+PAGER_DEALS = [
+    {
+        "wine_name": f"2021 Pager Estate {index:02d} Red",
+        "platinum_url": f"https://example.com/pager-{index}",
+        "price_platinum": 50.0 + index,
+        "cheaper_side": "No Match",
+        "platinum_in_stock": True,
+        "vivino_rating": 4.0,
+        "vivino_num_ratings": 200,
+        "deal_score": 90.0 - index,
+        "country": "Spain",
+        "region": "Rioja",
+        "wine_type": "Red",
+        "style_family": "Red",
+        "offering_type": "Single Bottle",
+        "producer": f"Pager Estate {index:02d}",
+        "label_name": "Red",
+        "volume": "750ml",
+        "quantity": 1,
+    }
+    for index in range(1, 11)
+]
+
+
+def _pager_view(driver) -> dict:
+    return driver.execute_script(
+        """
+        const pager = document.querySelector('#pager')
+        return {
+          titles: [...document.querySelectorAll('.deal-row .wine-title')].map((el) => el.innerText),
+          hidden: pager.hidden,
+          range: pager.querySelector('.pager-range')?.innerText || '',
+          prevDisabled: pager.querySelector('[data-page="prev"]')?.disabled,
+          nextDisabled: pager.querySelector('[data-page="next"]')?.disabled,
+          navHidden: pager.querySelector('.pager-nav')?.hidden,
+          perPage: pager.querySelector('#perPageSelect')?.value,
+          perPageOptions: [...pager.querySelectorAll('#perPageSelect option')].map((o) => o.value),
+          search: window.location.search,
+        }
+        """
+    )
+
+
+@pytest.mark.parametrize("extra_deals", [PAGER_DEALS])
+def test_offer_list_pages_five_wines_and_offers_ten_or_twenty_five(browser_app_url, desktop_browser) -> None:
+    desktop_browser.get(f"{browser_app_url}/?e2e={time.time_ns()}#offers")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: len(_pager_view(driver)["titles"]) == 5)
+
+    view = _pager_view(desktop_browser)
+    assert view["hidden"] is False
+    assert view["range"] == "1–5 of 12 wines"
+    assert view["titles"][0].endswith("Pager Estate 01 Red")
+    assert view["prevDisabled"] is True and view["nextDisabled"] is False
+    assert view["perPage"] == "5" and view["perPageOptions"] == ["5", "10", "25"]
+    assert "page=" not in view["search"] and "per_page=" not in view["search"]
+
+    desktop_browser.execute_script("document.querySelector('#pager [data-page=\"next\"]').click()")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: _pager_view(driver)["range"] == "6–10 of 12 wines")
+    view = _pager_view(desktop_browser)
+    assert view["titles"][0].endswith("Pager Estate 06 Red")
+    assert view["prevDisabled"] is False
+    assert "page=2" in view["search"]
+
+    Select(desktop_browser.find_element(By.ID, "perPageSelect")).select_by_value("25")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: len(_pager_view(driver)["titles"]) == 12)
+    view = _pager_view(desktop_browser)
+    assert view["range"] == "1–12 of 12 wines"
+    assert view["navHidden"] is True
+    assert "per_page=25" in view["search"] and "page=" not in view["search"].replace("per_page=", "")
+
+    desktop_browser.get(f"{browser_app_url}/?per_page=10&page=2&e2e={time.time_ns()}#offers")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: _pager_view(driver)["range"] == "11–12 of 12 wines")
+    assert len(_pager_view(desktop_browser)["titles"]) == 2
+    assert _pager_view(desktop_browser)["nextDisabled"] is True
+
+    Select(desktop_browser.find_element(By.ID, "countrySelect")).select_by_value("Spain")
+    WebDriverWait(desktop_browser, 10).until(lambda driver: _pager_view(driver)["range"] == "1–10 of 10 wines")
+    assert "page=" not in _pager_view(desktop_browser)["search"].replace("per_page=", "")
+
+
+def test_pager_hides_when_no_offers_match(browser_app_url, desktop_browser) -> None:
+    desktop_browser.get(f"{browser_app_url}/?search=zzzz-no-such-wine&e2e={time.time_ns()}")
+    WebDriverWait(desktop_browser, 10).until(
+        lambda driver: driver.find_element(By.CSS_SELECTOR, "#tableState:not([hidden])")
+    )
+    assert desktop_browser.find_element(By.ID, "pager").get_attribute("hidden") is not None
