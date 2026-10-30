@@ -57,6 +57,10 @@ def test_generic_blend_labels_get_no_line():
         assert note(label, "Red", "regional_inference", "medium") is None
 
 
+def test_corvina_blend_gets_the_corvina_note():
+    assert note("Corvina Blend", "Red", "regional_inference", "medium") == f"Likely Corvina blend. {GRAPE_NOTES['Corvina']}"
+
+
 def test_named_blend_uses_the_grape_note():
     assert note("Grenache Blend", "Red", "listing_keyword", "high") == f"Grenache blend. {GRAPE_NOTES['Grenache']}"
 

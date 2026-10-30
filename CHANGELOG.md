@@ -4,6 +4,16 @@ All notable changes to grandcru-value-api are recorded here. Format: what change
 
 ---
 
+## [Unreleased] Valpolicella and Bordeaux blend grapes
+
+**What:** Amarone, Valpolicella and Ripasso listings guess "Corvina Blend" (regional inference, medium), since the appellation rules make Corvina the main grape. Listings that say "Bordeaux Blend" keep that label. Both are red in `GRAPE_COLOURS`, and Corvina has a wine note.
+
+**Why:** On 30 Oct 2026, 29 live offers had no grape. These rules fill 7 of them and change no existing guess.
+
+**Changed files:** `app/wine_metadata.py`, `app/wine_notes.py`, `tests/test_grape_colours.py`, `tests/test_wine_notes.py`
+
+---
+
 ## [Unreleased] Glassware leaves the offer list
 
 **What:** The import sets aside any Platinum listing without a wine type, with the reason `not_a_wine`, next to the existing `missing_price_platinum`. The run summary now counts quarantined rows by reason, for example "quarantined 2 rows (not_a_wine=2)".
