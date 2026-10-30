@@ -14,11 +14,20 @@ from app.price_history import per_750, volume_ml
 
 # Each fact is quoted with its source on the page. checked_on is when a person last read the
 # source; ends_on switches a rule off on its own (app/promos.py), so new terms need a code change.
+# The amounts below are the only copy: the page, the preset spend levels and the home-page check read them.
+def sgd(amount: float) -> str:
+    return f"S${amount:,.0f}"
+
+
+CREDIT_BACK, CREDIT_MIN = 200.0, 300.0
+FREE_DELIVERY_OVER, DELIVERY_FEE = 350.0, 30.0
+PROMO_OFF, PROMO_MIN = 50.0, 600.0
+
 RULES = {
     "credit": {
-        "amount": 200.0,
-        "min_spend": 300.0,
-        "text": "S$200 back on your Amex statement after you pay, for a single purchase of S$300 or more.",
+        "amount": CREDIT_BACK,
+        "min_spend": CREDIT_MIN,
+        "text": f"{sgd(CREDIT_BACK)} back on your Amex statement after you pay, for a single purchase of {sgd(CREDIT_MIN)} or more.",
         "conditions": "Save the benefit to your Platinum Card first. Basic Card Members only. Once per half-year (January to June, July to December). Ends 31 Dec 2026.",
         "source_label": "American Express Platinum terms (2026), Platinum Wine Credit",
         "source_url": "https://www.americanexpress.com/content/dam/amex/en-sg/benefits/the-platinum-card/2026_Platinum_TermsandConditions.pdf",
@@ -26,18 +35,18 @@ RULES = {
         "ends_on": "2026-12-31",
     },
     "delivery": {
-        "free_over": 350.0,
-        "fee": 30.0,
-        "text": "Free delivery in Singapore on orders over S$350; otherwise S$30 per trip.",
+        "free_over": FREE_DELIVERY_OVER,
+        "fee": DELIVERY_FEE,
+        "text": f"Free delivery in Singapore on orders over {sgd(FREE_DELIVERY_OVER)}; otherwise {sgd(DELIVERY_FEE)} per trip.",
         "source_label": "Platinum Wine Club terms and conditions",
         "source_url": "https://platwineclub.wineportal.com/terms-and-conditions",
         "checked_on": "2026-10-26",
         "ends_on": None,
     },
     "promo": {
-        "amount": 50.0,
-        "min_spend": 600.0,
-        "text": "The shop advertises an extra S$50 off at S$600 or more. Its terms say promotions cannot be combined with other offers, and it is unclear whether that affects the Amex credit, so check at checkout. The cart also lists a free product at S$600 or more.",
+        "amount": PROMO_OFF,
+        "min_spend": PROMO_MIN,
+        "text": f"The shop advertises an extra {sgd(PROMO_OFF)} off at {sgd(PROMO_MIN)} or more. Its terms say promotions cannot be combined with other offers, and it is unclear whether that affects the Amex credit, so check at checkout. The cart also lists a free product at {sgd(PROMO_MIN)} or more.",
         "source_label": "Platinum Wine Club home page",
         "source_url": "https://platwineclub.wineportal.com/",
         "checked_on": "2026-10-30",
@@ -45,11 +54,27 @@ RULES = {
     },
 }
 
-MODES = {
-    "credit": {"target": 300.0, "strict": False, "label": "S$300 or more: S$200 back"},
-    "delivery": {"target": 350.0, "strict": True, "label": "Over S$350: S$200 back and free delivery"},
-    "promo": {"target": 600.0, "strict": False, "label": "S$600 or more: shop's extra S$50 off"},
-}
+
+def modes() -> dict[str, dict]:
+    """Preset spend levels, built from RULES so a rule change moves them too."""
+    credit, delivery, promo = RULES["credit"], RULES["delivery"], RULES["promo"]
+    return {
+        "credit": {"target": credit["min_spend"], "strict": False},
+        "delivery": {"target": delivery["free_over"], "strict": True},
+        "promo": {"target": promo["min_spend"], "strict": False},
+    }
+
+
+def page_values() -> dict[str, str]:
+    """Placeholders in web/index.html, filled when the page is served."""
+    return {
+        "__CREDIT_BACK__": sgd(RULES["credit"]["amount"]),
+        "__CREDIT_MIN__": sgd(RULES["credit"]["min_spend"]),
+        "__FREE_DELIVERY_OVER__": sgd(RULES["delivery"]["free_over"]),
+        "__PROMO_OFF__": sgd(RULES["promo"]["amount"]),
+        "__PROMO_MIN__": sgd(RULES["promo"]["min_spend"]),
+    }
+
 
 STYLE_GROUPS = {
     "red": {"Red"},

@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine, ensure_column, ensure_deal_score_nullable, get_session
-from app.basket import MODES as BASKET_MODES, RULES as BASKET_RULES, STYLE_GROUPS as BASKET_STYLES, candidate_items, suggest
+from app.basket import RULES as BASKET_RULES, STYLE_GROUPS as BASKET_STYLES, candidate_items, modes as basket_modes, page_values, suggest
 from app.price_history import build_price_history, run_backfills
 from app.durable_state import load_state
 from app.promos import PROMO_CHECK_KEY, rule_states, summarize as summarize_promos
@@ -390,6 +390,8 @@ def _asset_version() -> str:
 
 def _render_page(path: Path) -> HTMLResponse:
     html = path.read_text(encoding="utf-8").replace("__ASSET_VERSION__", _asset_version())
+    for placeholder, value in page_values().items():
+        html = html.replace(placeholder, value)
     return HTMLResponse(html, headers={"Cache-Control": "no-store, max-age=0"})
 
 
@@ -669,7 +671,8 @@ def get_basket(
             raise HTTPException(status_code=400, detail="target is required for mode=custom")
         goal, strict = target, False
     else:
-        goal, strict = BASKET_MODES[mode]["target"], BASKET_MODES[mode]["strict"]
+        preset = basket_modes()[mode]
+        goal, strict = preset["target"], preset["strict"]
     wanted = set()
     for key in (styles or "").split(","):
         wanted |= BASKET_STYLES.get(key.strip().lower(), set())

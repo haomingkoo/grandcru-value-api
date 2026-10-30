@@ -4,6 +4,16 @@ All notable changes to grandcru-value-api are recorded here. Format: what change
 
 ---
 
+## [Unreleased] Basket amounts come from one place
+
+**What:** The S$ amounts for the Amex credit, free delivery and the shop's promotion live once, as numbers in `RULES` (`app/basket.py`). The rule texts, the preset spend levels (`modes()`), the shop home-page check (`app/promos.py`) and the page all read them: `web/index.html` uses placeholders such as `__CREDIT_BACK__`, filled when the page is served, and `web/basket.js` reads the amounts from `/basket` data.
+
+**Why:** The same amounts were typed into five files. When Amex or the shop changed its terms, updating `RULES` left the button, the mode labels and the home-page check on the old numbers. A test now fails if the page or script names a rule amount directly.
+
+**Changed files:** `app/basket.py`, `app/promos.py`, `app/main.py`, `web/index.html`, `web/basket.js`, `tests/test_basket_amounts.py`
+
+---
+
 ## [Unreleased] Valpolicella and Bordeaux blend grapes
 
 **What:** Amarone, Valpolicella and Ripasso listings guess "Corvina Blend" (regional inference, medium), since the appellation rules make Corvina the main grape. Listings that say "Bordeaux Blend" keep that label. Both are red in `GRAPE_COLOURS`, and Corvina has a wine note.

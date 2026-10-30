@@ -13,16 +13,20 @@ import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
+from app.basket import RULES
+
 PROMO_CHECK_KEY = "promo_check"
 HOME_URL = "https://platwineclub.wineportal.com/"
 STALE_AFTER = timedelta(days=3)
 ENDING_SOON = timedelta(days=30)
 
-# Wording seen on 30 Oct 2026. Allows "S$" or "$", spacing and up to 80 characters between the two amounts.
-HOME_PATTERNS = {
-    "credit": re.compile(r"S?\$\s?200\s+back\b.{0,80}?S?\$\s?300\b", re.I | re.S),
-    "promo": re.compile(r"S?\$\s?50\s+off\b.{0,80}?S?\$\s?600\b", re.I | re.S),
-}
+# Wording seen on 30 Oct 2026: "S$200 back ... $300", "$50 off ... $600". The amounts come from the rules;
+# allows "S$" or "$", spacing and up to 80 characters between the two amounts.
+HOME_WORDS = {"credit": "back", "promo": "off"}
+
+
+def _home_pattern(amount: float, word: str, min_spend: float) -> re.Pattern[str]:
+    return re.compile(rf"S?\$\s?{amount:.0f}\s+{word}\b.{{0,80}}?S?\$\s?{min_spend:.0f}\b", re.I | re.S)
 # Rules the home page decides. The credit is set by Amex's terms, so it is only watched.
 HOME_DECIDES = {"promo"}
 
@@ -35,7 +39,10 @@ def page_text(html: str) -> str:
 
 def read_home_page(html: str) -> dict[str, bool]:
     text = page_text(html)
-    return {key: bool(pattern.search(text)) for key, pattern in HOME_PATTERNS.items()}
+    return {
+        key: bool(_home_pattern(RULES[key]["amount"], word, RULES[key]["min_spend"]).search(text))
+        for key, word in HOME_WORDS.items()
+    }
 
 
 def _day(value: date) -> str:
