@@ -29,7 +29,7 @@ from scripts.build_comparison_summary import (  # noqa: E402
     prepare_rows,
     year_matches,
 )
-from scripts.llm_utils import cache_key, call_gemini, is_cache_fresh, load_cache, save_cache, _parse_grounding_json  # noqa: E402
+from scripts.llm_utils import cache_key, call_llm, is_cache_fresh, load_cache, save_cache, _parse_grounding_json  # noqa: E402
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -240,7 +240,7 @@ def resolve_rows(
     unresolved_seen = 0
 
     for row in comparison_rows:
-        # Sold-out listings keep the deterministic match only; Gemini calls are for wines people can buy.
+        # Sold-out listings keep the deterministic match only; LLM calls are for wines people can buy.
         if (row.get("url_main") or "").strip() or (row.get("platinum_in_stock") or "").strip().lower() == "false":
             updated_rows.append(row)
             continue
@@ -269,7 +269,7 @@ def resolve_rows(
 
         if suggestion is None:
             prompt = _build_prompt(wine_name, candidates)
-            raw = call_gemini(prompt, api_key)
+            raw = call_llm(prompt, api_key)
             suggestion = _parse_grounding_json(raw)
             cache[cache_key(wine_name)] = {
                 "resolved_at": time.time(),
@@ -292,21 +292,21 @@ def resolve_rows(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Resolve unmatched Grand Cru comparison rows with Gemini")
+    parser = argparse.ArgumentParser(description="Resolve unmatched Grand Cru comparison rows with an LLM (Groq)")
     parser.add_argument("--comparison", type=Path, default=Path("seed/comparison_summary.csv"))
     parser.add_argument("--grandcru", type=Path, default=Path("seed/latest_refresh/grandcru_wines.csv"))
     parser.add_argument("--output", type=Path, default=None, help="Optional output CSV path. Defaults to overwriting --comparison.")
     parser.add_argument("--cache", type=Path, default=Path("data/grandcru_llm_cache.json"))
-    parser.add_argument("--gemini-api-key", default="")
+    parser.add_argument("--groq-api-key", default="")
     parser.add_argument("--limit", type=int, default=0, help="Maximum number of unresolved rows to process (0 = all).")
     parser.add_argument("--max-candidates", type=int, default=8)
     parser.add_argument("--min-confidence", type=float, default=0.75)
-    parser.add_argument("--force", action="store_true", help="Bypass the cache and call Gemini for every row.")
+    parser.add_argument("--force", action="store_true", help="Bypass the cache and call the LLM for every row.")
     args = parser.parse_args()
 
-    api_key = args.gemini_api_key.strip() or os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
+    api_key = args.groq_api_key.strip() or os.getenv("GROQ_API_KEY", "").strip()
     if not api_key:
-        print("[llm-grandcru] skipped: no GEMINI_API_KEY or GOOGLE_API_KEY set")
+        print("[llm-grandcru] skipped: no GROQ_API_KEY set")
         return
 
     comparison_rows = read_csv_rows(args.comparison)

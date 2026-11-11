@@ -1,12 +1,12 @@
-"""LLM-powered Vivino resolver using Gemini Flash.
+"""LLM-powered Vivino resolver using Groq.
 
-For each unmatched wine, asks Gemini to extract structured identity and
+For each unmatched wine, asks the LLM to extract structured identity and
 generate the best Vivino search query. Brave finds the Vivino page; the
 polite fetcher (scripts/vivino_fetch.py) reads its rating, rating count and
 price within the shared daily budget.
 
 Results are cached with a 30-day TTL — only new or stale wines trigger
-Gemini + Vivino calls.
+LLM + Vivino calls.
 
 Usage:
     python scripts/llm_vivino_resolver.py --all --auto-apply
@@ -41,7 +41,7 @@ from scripts.import_wine_data import (  # noqa: E402
     read_optional_csv_rows,
 )
 from scripts.llm_utils import (  # noqa: E402
-    call_gemini,
+    call_llm,
     cache_key,
     is_cache_fresh,
     load_cache,
@@ -137,7 +137,7 @@ def is_confident_vivino_page_match(
 
 
 def extract_vivino_query(wine_name: str, api_key: str) -> dict:
-    """Ask Gemini to parse a retailer wine name into structured data."""
+    """Ask the LLM to parse a retailer wine name into structured data."""
     prompt = f"""You are a wine expert. Given this wine listing from a retailer:
 
 "{wine_name}"
@@ -153,13 +153,13 @@ Extract the following and respond ONLY with valid JSON (no markdown, no code fen
 }}
 
 For vivino_query, use just: producer + wine name + vintage. Drop color, bottle size, packaging."""
-    raw = call_gemini(prompt, api_key)
+    raw = call_llm(prompt, api_key)
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip())
     cleaned = re.sub(r"\s*```$", "", cleaned)
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        logger.warning("Gemini parse failed for '%s': %s", wine_name, raw[:200])
+        logger.warning("LLM parse failed for '%s': %s", wine_name, raw[:200])
         return {}
 
 
@@ -312,7 +312,7 @@ def write_csv(path: Path, rows: list[dict], fieldnames: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="LLM-powered Vivino resolver using Gemini Flash (with 30-day cache)",
+        description="LLM-powered Vivino resolver using Groq (with 30-day cache)",
     )
     parser.add_argument("--comparison", type=Path, default=ROOT / "seed" / "comparison_summary.csv")
     parser.add_argument("--vivino", type=Path, default=ROOT / "seed" / "vivino_results.csv")
@@ -327,9 +327,9 @@ def main() -> None:
     parser.add_argument("--sleep", type=float, default=2.0, help="Seconds between Vivino requests")
     parser.add_argument("--cache-ttl-days", type=int, default=CACHE_TTL_DAYS, help="Cache TTL in days")
     parser.add_argument(
-        "--gemini-api-key",
-        default=os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", ""),
-        help="Gemini API key (or set GEMINI_API_KEY / GOOGLE_API_KEY env var)",
+        "--groq-api-key",
+        default=os.getenv("GROQ_API_KEY", ""),
+        help="Groq API key (or set GROQ_API_KEY env var)",
     )
     parser.add_argument(
         "--brave-api-key",
@@ -338,9 +338,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if not args.gemini_api_key:
-        print("Error: No API key found. Set GEMINI_API_KEY or GOOGLE_API_KEY in .env")
-        print("Get a free key at: https://aistudio.google.com/apikey")
+    if not args.groq_api_key:
+        print("Error: No API key found. Set GROQ_API_KEY in .env")
+        print("Get a free key at: https://console.groq.com/keys")
         sys.exit(1)
 
     from app.durable_state import load_state, save_state
@@ -411,7 +411,7 @@ def main() -> None:
         try:
             result = resolve_wine(
                 wine_name,
-                args.gemini_api_key,
+                args.groq_api_key,
                 brave_api_key=args.brave_api_key,
                 dry_run=args.dry_run,
                 known_vivino_url=known_url,

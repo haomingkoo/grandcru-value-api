@@ -23,6 +23,7 @@ SENSITIVE_ARG_NAMES = {
     "--api-key",
     "--brave-api-key",
     "--gemini-api-key",
+    "--groq-api-key",
     "--google-api-key",
     "--serper-api-key",
 }
@@ -858,10 +859,10 @@ def main() -> None:
             )
 
     if args.llm_resolve:
-        gemini_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+        llm_key = os.getenv("GROQ_API_KEY", "")
         brave_key = os.getenv("BRAVE_API_KEY", "")
-        if not gemini_key:
-            print("[refresh] Skipping LLM resolver: no GEMINI_API_KEY set", flush=True)
+        if not llm_key:
+            print("[refresh] Skipping LLM resolver: no GROQ_API_KEY set", flush=True)
         else:
             llm_cmd = [
                 sys.executable,
@@ -884,9 +885,9 @@ def main() -> None:
             run_step("llm vivino resolver", llm_cmd, env)
 
     if args.llm_resolve_grandcru:
-        gemini_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
-        if not gemini_key:
-            print("[refresh] Skipping Grand Cru LLM resolver: no GEMINI_API_KEY set", flush=True)
+        llm_key = os.getenv("GROQ_API_KEY", "")
+        if not llm_key:
+            print("[refresh] Skipping Grand Cru LLM resolver: no GROQ_API_KEY set", flush=True)
         else:
             grandcru_csv = (
                 args.scrape_output_dir.resolve() / "grandcru_wines.csv"

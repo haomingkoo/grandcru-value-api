@@ -47,5 +47,5 @@ CI (`.github/workflows/ci.yml`) runs the same checks plus pytest on Python 3.11.
 ## Safety
 
 - `/ops/*` requires the `X-Ops-Key` header (`OPS_API_KEY`); keep public routes read-only.
-- Keys (`GEMINI_API_KEY`, `BRAVE_API_KEY`, ...) go in `.env`, never in commits;
+- Keys (`GROQ_API_KEY`, `BRAVE_API_KEY`, ...) go in `.env`, never in commits;
   `scripts/check_no_plaintext_secrets.py` gates CI.

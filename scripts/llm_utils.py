@@ -1,17 +1,19 @@
-"""Shared LLM utility functions for Gemini API calls and caching.
+"""Shared LLM utility functions for Groq calls and caching.
 
 Extracted from llm_vivino_resolver.py so other scripts can reuse
-the Gemini call helpers and cache logic without importing the full resolver.
+the LLM call helpers and cache logic without importing the full resolver.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sys
 import time
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -132,34 +134,48 @@ def needs_resolution(cache: dict[str, dict], wine_name: str) -> bool:
     return get_identity(cache, wine_name) is None
 
 
-# ── Gemini API ─────────────────────────────────────────────────────────
+# ── LLM (Groq) ─────────────────────────────────────────────────────────
 
 
-def call_gemini(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> str:
-    """Call Gemini API via REST with thinking disabled for fast, clean output."""
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model}:generateContent"
-    )
+GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+LLM_REQUEST_ATTEMPTS = 4
+
+
+def call_llm(prompt: str, api_key: str, model: str = GROQ_MODEL) -> str:
+    """Send one prompt to Groq and return the reply text.
+
+    The free tier rate-limits per minute, so 429 and 5xx responses wait
+    (honouring Retry-After) and retry; any other error is raised.
+    """
     body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": 512,
-            "thinkingConfig": {"thinkingBudget": 0},
-        },
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+        # gpt-oss reasons before answering; a tight cap returns empty content.
+        "max_completion_tokens": 2048,
+        "reasoning_effort": "low",
     }).encode("utf-8")
-    req = Request(url, data=body, method="POST", headers={
-        "Content-Type": "application/json",
-        "x-goog-api-key": api_key,
-    })
-    with urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    candidates = data.get("candidates", [])
-    if not candidates:
+    for attempt in range(1, LLM_REQUEST_ATTEMPTS + 1):
+        req = Request(GROQ_CHAT_URL, data=body, method="POST", headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "minmax-wine-resolver/1.0",
+        })
+        try:
+            with urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            break
+        except HTTPError as e:
+            if (e.code != 429 and e.code < 500) or attempt == LLM_REQUEST_ATTEMPTS:
+                raise
+            wait = float(e.headers.get("retry-after") or 10 * attempt)
+            logger.warning("Groq returned %s (attempt %s/%s); waiting %.0fs", e.code, attempt, LLM_REQUEST_ATTEMPTS, wait)
+            time.sleep(wait)
+    choices = data.get("choices") or []
+    if not choices:
         return ""
-    parts = candidates[0].get("content", {}).get("parts", [])
-    return parts[0].get("text", "") if parts else ""
+    return (choices[0].get("message") or {}).get("content") or ""
 
 
 def call_gemini_with_search(

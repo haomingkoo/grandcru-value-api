@@ -243,7 +243,7 @@ Copy `.env.example` to `.env`.
 | `DATABASE_URL` | No | `sqlite:///./data/wines.db` | PostgreSQL in production |
 | `OPS_API_KEY` | For ops | - | HMAC auth for `/ops/*` |
 | `BRAVE_API_KEY` | For resolver | - | Brave Search API |
-| `GEMINI_API_KEY` | For LLM | - | Google Gemini (falls back to `GOOGLE_API_KEY`) |
+| `GROQ_API_KEY` | For LLM | - | Groq (`GROQ_MODEL` overrides `openai/gpt-oss-120b`) |
 | `CORS_ORIGINS` | No | kooexperience.com | Comma-separated origins |
 | `RATE_LIMIT_REQUESTS_PER_MINUTE` | No | `120` | Per-IP rate limit |
 | `INGESTION_STALE_HOURS` | No | `24` | Hours before health reports stale |
